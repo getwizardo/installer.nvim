@@ -1,0 +1,163 @@
+*installer.txt*          Add plugins to lazy.nvim from inside Neovim
+
+==============================================================================
+CONTENTS                                                   *installer-contents*
+
+  1. Introduction ................................. |installer-introduction|
+  2. Requirements ................................. |installer-requirements|
+  3. Setup ........................................ |installer-setup|
+  4. Commands ..................................... |installer-commands|
+  5. The modal .................................... |installer-modal|
+  6. The GitHub browser ........................... |installer-browser|
+  7. Configuration ................................ |installer-configuration|
+  8. Lua API ...................................... |installer-api|
+  9. How it works ................................. |installer-internals|
+
+==============================================================================
+1. INTRODUCTION                                        *installer-introduction*
+
+installer.nvim lets you add a plugin to a |lazy.nvim| configuration without
+leaving Neovim:
+
+  - open a modal (`:Installer`), fill in the repository and any lazy.nvim
+    spec fields you want (event, cmd, ft, keys, opts, ...),
+  - a `lua/plugins/<name>.lua` spec file is written for you,
+  - lazy.nvim reloads its specs and installs the plugin right away.
+
+You can also browse GitHub for Neovim plugins (`:Installer browse`), preview
+their READMEs and install them with a single key.
+
+==============================================================================
+2. REQUIREMENTS                                        *installer-requirements*
+
+  - Neovim >= 0.8
+  - lazy.nvim (https://github.com/folke/lazy.nvim) with a `{ import = ... }`
+    spec module (the "structured setup" from the lazy.nvim docs).
+  - `curl` for the GitHub browser.
+
+==============================================================================
+3. SETUP                                                      *installer-setup*
+>lua
+  -- lua/plugins/installer.lua
+  return {
+    "getwizardo/installer.nvim",
+    cmd = "Installer",
+    opts = {},
+  }
+<
+==============================================================================
+4. COMMANDS                                                *installer-commands*
+
+:Installer [modal] [owner/repo]                                   *:Installer*
+    Open the modal form, optionally prefilled with a repository.
+
+:Installer browse [query]                                  *:Installer-browse*
+    Open the GitHub browser (see |installer-browser|).
+
+:Installer search [query]                                  *:Installer-search*
+    Search GitHub and pick a result with |vim.ui.select()| (works with
+    telescope/fzf-lua/dressing UIs).
+
+:Installer[!] add {owner/repo}                                *:Installer-add*
+    Write a bare spec `{ "owner/repo" }` and install it immediately.
+    With `!` existing files/plugins are overwritten without asking.
+
+:Installer dir                                                *:Installer-dir*
+    Show the directory spec files are written to.
+
+==============================================================================
+5. THE MODAL                                                  *installer-modal*
+
+Each line of the modal is a field of the lazy.nvim spec. Only `Repository`
+is required. Fields map 1:1 to https://lazy.folke.io/spec:
+
+  Repository     `owner/repo`, `https://github.com/owner/repo` or any git URL
+  File           name of the generated file (default derived from the repo)
+  Name           spec `name`
+  Lazy           spec `lazy` (true/false)
+  Event/Cmd/Ft   comma separated lists -> `event`, `cmd`, `ft`
+  Keys           comma separated lhs values -> `keys`
+  Dependencies   comma separated `owner/repo` -> `dependencies`
+  Version        `version` (`*` for the latest release, `false` for HEAD)
+  Branch/Tag/Commit
+  Priority       number
+  Build          `build` (e.g. `:TSUpdate`, `make`)
+  Opts           a Lua table literal, e.g. `{ theme = "dark" }` -> `opts`
+  Config         `true`, or `function` to generate a `config()` skeleton
+  Pin            `true` -> `pin = true`
+
+Keys inside the modal:
+
+  <CR> / <C-s>      write the file and install
+  <Tab> / <S-Tab>   next / previous field (also <CR>, <Up>, <Down> in insert)
+  <C-b>             browse GitHub and fill the repository field
+  dd                clear the current field
+  q / <Esc>         close
+
+==============================================================================
+6. THE GITHUB BROWSER                                       *installer-browser*
+
+Results come from the GitHub search API, restricted by default to
+repositories tagged with the `neovim-plugin` topic (press `t` to search all
+of GitHub). Typing `owner/repo` looks that repository up directly.
+
+  <CR>        open the modal prefilled with the selected plugin
+  i           quick install with a bare spec
+  K           preview the README
+  o           open the repository in your web browser
+  y           yank `owner/repo`
+  ] / [       next / previous page
+  s           cycle sort: stars, updated, best-match
+  t           toggle scope (topic:neovim-plugin / all of GitHub)
+  / <Tab>     focus the search prompt (<C-n>/<C-p> move while typing)
+  q / <Esc>   close
+
+GitHub allows 10 unauthenticated searches per minute. Set `$GITHUB_TOKEN`
+(or `github.token`) to raise it to 30.
+
+==============================================================================
+7. CONFIGURATION                                      *installer-configuration*
+
+Defaults: >lua
+  require("installer").setup({
+    plugins_dir = nil,          -- auto-detect from lazy.nvim, or a path/function
+    after_write = "install",    -- "install" | "edit" | "none"
+    confirm_overwrite = true,
+    header = true,              -- add a comment header to generated files
+    ui = { border = "rounded", width = 0.6, height = 0.7, winblend = 0 },
+    github = {
+      token = nil,              -- falls back to $GITHUB_TOKEN / $GH_TOKEN
+      topic_query = "topic:neovim-plugin",
+      broad_query = "neovim in:name,description,topics",
+      per_page = 30,
+      sort = "stars",           -- "stars" | "updated" | "best-match"
+      debounce = 450,
+    },
+  })
+<
+==============================================================================
+8. LUA API                                                      *installer-api*
+
+require("installer").open({ repo = "folke/noice.nvim" })    open the modal
+require("installer").browse({ query = "telescope" })        open the browser
+require("installer").search("colorscheme")                  vim.ui.select picker
+require("installer").add({ repo = "...", event = "VeryLazy", opts = "{}" })
+                                                            write + install
+require("installer").preview(form)                          generated source
+require("installer").plugins_dir()                          target directory
+
+==============================================================================
+9. HOW IT WORKS                                           *installer-internals*
+
+lazy.nvim merges every `lua/<module>/*.lua` file for each `{ import = module }`
+entry in your spec. installer.nvim:
+
+  1. reads the import modules from `require("lazy.core.config").spec.modules`
+     and resolves the first one inside |stdpath|("config") (usually
+     `~/.config/nvim/lua/plugins`),
+  2. writes `<file>.lua` returning a single spec table,
+  3. calls `require("lazy.core.plugin").load()` to re-read all specs, then
+     `require("lazy").install({ plugins = { name } })`, which opens the
+     lazy.nvim UI and clones the plugin.
+
+vim:tw=78:ts=8:ft=help:norl:
