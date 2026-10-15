@@ -403,10 +403,9 @@ function M.render_lyrics()
 
   local progress = lyrics and Lyrics.current_line(lyrics, position) or 0
   local _ = progress
-  lines[#lines + 1] = ("  (source: %s%s · %d providers)"):format(
+  lines[#lines + 1] = ("  (source: %s%s)"):format(
     Lyrics.describe(lyrics),
-    current > 0 and (" · line " .. current) or "",
-    #Lyrics.providers()
+    current > 0 and (" · line " .. current) or ""
   )
   return lines
 end

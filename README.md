@@ -167,13 +167,18 @@ anything else — and then *also* plugs into them.
   sense
 - live popup while typing (`CmdlineChanged`, 45 ms debounce), `<Tab>`/`<S-Tab>`
   cycling, and `wildoptions=pum,fuzzy` set for the `:` line
-- `complete.any = true` extends the popup to **every** `:` command (files,
-  buffers, options, events, filetypes, colorschemes, help tags, mappings,
-  environment variables, shell commands, augroups, tags)
+- **every built-in command** knows its own arguments (`:set`/`:setl`, `:au` and
+  augroups, `:colorscheme`, `:help`, `:buffer`, `:lua`, `:syntax`,
+  `:highlight`, `:sign`, `:packadd`, `:command`, `:let`, maps, file commands
+  with `++enc=`/`++ff=`, `:cd`, `:make`/`:grep`, …)
+- `complete.any` (on by default) extends the popup to **any** other `:` command
+  through every `getcompletion` category (files, buffers, options, events,
+  filetypes, colorschemes, help tags, mappings, environment variables, shell
+  commands, augroups, tags) — a superset of Neovim's own `<Tab>`
 
 ```lua
 require("kaeru").setup({
-  complete = { cmdline = true, cmdline_tab = true, items = "dict", any = false },
+  complete = { cmdline = true, cmdline_tab = true, items = "dict", any = true },
 })
 ```
 
@@ -680,7 +685,7 @@ require("kaeru").setup({
   },
   ai = { enabled = false, exclude = {} },
   -- Live `:` autocomplete (see "Autocomplete everything")
-  complete = { cmdline = true, cmdline_tab = true, items = "dict", any = false },
+  complete = { cmdline = true, cmdline_tab = true, items = "dict", any = true },
   -- The Kikru player (`:Kikru`); `music` is accepted as an alias of `kikru`
   kikru = {
     engine = "auto",                 -- auto | mpv | ffplay | vlc | mpd | mpris

@@ -121,9 +121,13 @@ M.defaults = {
     cmdline_tab = true,
     -- "dict" shows descriptions in the popup; use "word" for old Neovim builds.
     items = "dict",
-    -- Also complete *foreign* `:` command lines (files, buffers, options, …)
-    -- through kaeru.nvim's popup. Off by default: Neovim already does that.
-    any = false,
+    -- Also complete *foreign* `:` command lines through kaeru.nvim's popup:
+    -- every built-in command with its own argument shape, then every
+    -- `getcompletion` category (files, buffers, options, events, filetypes,
+    -- colorschemes, help tags, mappings, environment variables, augroups,
+    -- tags, …) — a superset of Neovim's own `<Tab>`. Set to false to leave
+    -- unknown command lines to Neovim itself.
+    any = true,
   },
 
   -- AI coding presets (`:Kaeru ai`). Disabled by default.

@@ -458,11 +458,13 @@ On the `:` command line — for `:Kaeru`, `:Kikru` and `:Clina`:           *:Kae
     directories
   - a live popup while typing, `<Tab>` / `<S-Tab>` cycling, and
     `wildoptions=pum,fuzzy` set for the `:` line
-  - `complete.any = true` extends the popup to every other `:` command
+  - every built-in command is understood (its arguments, files, buffers,
+    options, events, augroups, maps, …) by kaeru.nvim's own engine
+  - `complete.any` (default true) extends the popup to every other `:` command
 
 >lua
   require("kaeru").setup({
-    complete = { cmdline = true, cmdline_tab = true, items = "dict", any = false },
+    complete = { cmdline = true, cmdline_tab = true, items = "dict", any = true },
   })
 <
 
