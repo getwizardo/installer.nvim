@@ -485,6 +485,7 @@ function M.render_help()
     "",
     "  SOURCES        / search (youtube · soundcloud · radio · subsonic · rss)",
     "                 R radio pane · S curated SomaFM channels · y lyrics",
+    "                 W toggle the Cast receiver (phones and apps cast into Kikru)",
     "                 o open the current track on its source page · Y yank path",
     "",
     "  VIEWS          1 main · 2 playlist · 3 radio · 4 search · 5 filters · 6 lyrics",
@@ -789,6 +790,10 @@ local function bindings(buf)
   end)
   UI.map(buf, "r", function()
     act("repeat")
+  end)
+  UI.map(buf, "W", function()
+    require("kaeru.kikru").receiver_toggle()
+    M.render()
   end)
   UI.map(buf, "w", function()
     M.prompt("Save playlist as: ", function(value)
