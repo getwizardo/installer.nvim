@@ -1,0 +1,42 @@
+{
+  "name": "karu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Karu — Google Cast (CASTV2) in TypeScript: advertise Neovim as a Cast target for the YouTube / YouTube Music apps, discover and cast to real Chromecast devices, and bridge everything into Kikru.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "bin": {
+    "karu": "./bin/karu"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "bin",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "node src/cli.ts",
+    "receive": "node src/cli.ts receive",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.2"
+  },
+  "keywords": [
+    "google-cast",
+    "chromecast",
+    "castv2",
+    "mdns",
+    "neovim",
+    "kikru"
+  ]
+}

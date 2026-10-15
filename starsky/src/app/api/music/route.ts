@@ -127,9 +127,9 @@ const STREAMING_SERVICES = [
   },
   {
     id: "youtube",
-    name: "YouTube Music (yt-dlp + mpv)",
+    name: "YouTube Kikru (yt-dlp + mpv)",
     status: "ready",
-    desc: "Stream coding mixes and playlists from YouTube Music",
+    desc: "Stream coding mixes and playlists from YouTube Kikru",
   },
   {
     id: "soundcloud",
@@ -145,9 +145,9 @@ const STREAMING_SERVICES = [
   },
   {
     id: "mpd",
-    name: "MPD (Music Player Daemon)",
+    name: "MPD (Kikru Player Daemon)",
     status: "ready",
-    desc: "Bridge to local or remote Music Player Daemon (`mpc`)",
+    desc: "Bridge to local or remote Kikru Player Daemon (`mpc`)",
   },
 ];
 
@@ -164,7 +164,7 @@ const musicState = {
   devices: [
     {
       id: "nvim-server-1",
-      name: "Neovim Instance #1 (:MusicPlayer server)",
+      name: "Neovim Instance #1 (:Kikru server)",
       role: "server",
       addr: "127.0.0.1:41999",
       pid: 4101,
@@ -173,7 +173,7 @@ const musicState = {
     },
     {
       id: "nvim-client-2",
-      name: "Neovim Instance #2 (:MusicPlayer connect)",
+      name: "Neovim Instance #2 (:Kikru connect)",
       role: "client",
       addr: "127.0.0.1:54812 → :41999",
       pid: 4829,
@@ -182,8 +182,8 @@ const musicState = {
     },
   ] as NeovimMusicDevice[],
   rpcLog: [
-    "[RPC 127.0.0.1:41999] Neovim #1 started :MusicPlayer TCP Server",
-    "[RPC 127.0.0.1:41999] Neovim #2 connected via `:MusicPlayer connect 127.0.0.1:41999`",
+    "[RPC 127.0.0.1:41999] Neovim #1 started :Kikru TCP Server",
+    "[RPC 127.0.0.1:41999] Neovim #2 connected via `:Kikru connect 127.0.0.1:41999`",
     "[RPC Broadcast] Synced 10-band EQ preset `lofi-coding` to all paired Neovim clients",
   ],
 };
@@ -290,7 +290,7 @@ export async function POST(req: NextRequest) {
         id: `nvim-client-${clientNum}`,
         name:
           body.name ||
-          `Neovim Instance #${clientNum} (:MusicPlayer connect 127.0.0.1:${musicState.port})`,
+          `Neovim Instance #${clientNum} (:Kikru connect 127.0.0.1:${musicState.port})`,
         role: "client",
         addr: `127.0.0.1:${55000 + clientNum} → :${musicState.port}`,
         pid: 5000 + clientNum * 37,

@@ -1,0 +1,765 @@
+*kaeru.txt*          Add plugins to lazy.nvim from inside Neovim
+
+==============================================================================
+CONTENTS                                                   *kaeru-contents*
+
+  1. Introduction ................................. |kaeru-introduction|
+  2. Requirements ................................. |kaeru-requirements|
+  3. Setup ........................................ |kaeru-setup|
+  4. Commands ..................................... |kaeru-commands|
+  5. The modal .................................... |kaeru-modal|
+  6. The GitHub browser ........................... |kaeru-browser|
+  7. Configuration ................................ |kaeru-configuration|
+  8. Lua API ...................................... |kaeru-api|
+  9. How it works ................................. |kaeru-internals|
+ 10. GitHub account ............................... |kaeru-account|
+ 11. AI coding plugins ............................ |kaeru-ai|
+ 12. SFTP ......................................... |kaeru-sftp|
+ 13. kaeru.yaml ............................... |kaeru-yaml|
+ 14. Plugin cache ................................. |kaeru-cache|
+ 15. Mason ........................................ |kaeru-mason|
+ 16. Autocomplete .................................. |kaeru-complete|
+ 17. Kikru (the player) ............................ |kaeru-kikru|
+ 18. Casting YouTube & YouTube Music ............... |kaeru-cast|
+ 19. Karu (Google Cast, TypeScript) ................ |kaeru-karu|
+ 20. Lyrics (lrc.red, TTML, karaoke) ............. |kaeru-lyrics|
+ 21. Integrations .................................. |kaeru-integrations|
+
+==============================================================================
+1. INTRODUCTION                                        *kaeru-introduction*
+
+kaeru.nvim lets you add a plugin to a |lazy.nvim| configuration without
+leaving Neovim:
+
+  - open a modal (`:Kaeru`), fill in the repository and any lazy.nvim
+    spec fields you want (event, cmd, ft, keys, opts, ...),
+  - a `lua/plugins/<name>.lua` spec file is written for you,
+  - lazy.nvim reloads its specs and installs the plugin right away.
+
+You can also browse GitHub for Neovim plugins (`:Kaeru browse`), preview
+their READMEs and install them with a single key.
+
+==============================================================================
+2. REQUIREMENTS                                        *kaeru-requirements*
+
+  - Neovim >= 0.8
+  - lazy.nvim (https://github.com/folke/lazy.nvim) with a `{ import = ... }`
+    spec module (the "structured setup" from the lazy.nvim docs).
+  - `curl` for the GitHub browser.
+
+==============================================================================
+3. SETUP                                                      *kaeru-setup*
+>lua
+  -- lua/plugins/kaeru.lua
+  return {
+    "getwizardo/kaeru.nvim",
+    cmd = "Kaeru",
+    opts = {},
+  }
+<
+==============================================================================
+4. COMMANDS                                                *kaeru-commands*
+
+                                                          *:Kaeru* *:Kaeru-pick*
+:Kaeru pick [source]     Open a picker over plugins, mason, sftp, cache, radio,
+                         queue or cast. Uses telescope.nvim, fzf-lua, snacks.nvim,
+                         mini.pick or |vim.ui.select| — whichever is installed.
+:Kaeru complete [text]   Fuzzy-complete *anything* (our subcommands, commands,
+                         files, options, events, colorschemes, help tags, …) in
+                         a picker and run the selected line.
+:Kaeru integrations      Report every detected picker plugin and binary.
+
+:Kaeru [modal] [owner/repo]                                   *:Kaeru*
+    Open the modal form, optionally prefilled with a repository.
+
+:Kaeru browse [query]                                  *:Kaeru-browse*
+    Open the GitHub browser (see |kaeru-browser|).
+
+:Kaeru search [query]                                  *:Kaeru-search*
+    Search GitHub and pick a result with |vim.ui.select()| (works with
+    telescope/fzf-lua/dressing UIs).
+
+:Kaeru[!] add {owner/repo}                                *:Kaeru-add*
+    Write a bare spec `{ "owner/repo" }` and install it immediately.
+    With `!` existing files/plugins are overwritten without asking.
+
+:Kaeru dir                                                *:Kaeru-dir*
+    Show the directory spec files are written to.
+
+:Kaeru ai [preset]                                         *:Kaeru-ai*
+    Curated AI coding plugins (see |kaeru-ai|). Opt-in.
+
+:Kaeru login [gh|token|device]                          *:Kaeru-login*
+:Kaeru logout                                          *:Kaeru-logout*
+:Kaeru whoami                                          *:Kaeru-whoami*
+    GitHub account (see |kaeru-account|).
+
+:Kaeru sftp {action} [args]                              *:Kaeru-sftp*
+    SFTP upload / download / sync and every sftp command (see |kaeru-sftp|).
+
+:Kaeru config [edit|project|reload|show]               *:Kaeru-config*
+    Manage `kaeru.yaml` (see |kaeru-yaml|).
+
+:Kaeru cache [list|pack|restore|remove|clean|dir]       *:Kaeru-cache*
+    Local plugin cache (see |kaeru-cache|).
+
+==============================================================================
+5. THE MODAL                                                  *kaeru-modal*
+
+Each line of the modal is a field of the lazy.nvim spec. Only `Repository`
+is required. Fields map 1:1 to https://lazy.folke.io/spec:
+
+  Repository     `owner/repo`, `https://github.com/owner/repo` or any git URL
+  File           name of the generated file (default derived from the repo)
+  Name           spec `name`
+  Lazy           spec `lazy` (true/false)
+  Event/Cmd/Ft   comma separated lists -> `event`, `cmd`, `ft`
+  Keys           comma separated lhs values -> `keys`
+  Dependencies   comma separated `owner/repo` -> `dependencies`
+  Version        `version` (`*` for the latest release, `false` for HEAD)
+  Branch/Tag/Commit
+  Priority       number
+  Build          `build` (e.g. `:TSUpdate`, `make`)
+  Opts           a Lua table literal, e.g. `{ theme = "dark" }` -> `opts`
+  Config         `true`, or `function` to generate a `config()` skeleton
+  Pin            `true` -> `pin = true`
+
+Keys inside the modal:
+
+  <CR> / <C-s>      write the file and install
+  <Tab> / <S-Tab>   next / previous field (also <CR>, <Up>, <Down> in insert)
+  <C-b>             browse GitHub and fill the repository field
+  dd                clear the current field
+  q / <Esc>         close
+
+==============================================================================
+6. THE GITHUB BROWSER                                       *kaeru-browser*
+
+Results come from the GitHub search API, restricted by default to
+repositories tagged with the `neovim-plugin` topic (press `t` to search all
+of GitHub). Typing `owner/repo` looks that repository up directly.
+
+  <CR>        open the modal prefilled with the selected plugin
+  i           quick install with a bare spec
+  K           preview the README
+  *           star / unstar the repository (needs |:Kaeru-login|)
+  S           toggle a list of your starred repositories
+  o           open the repository in your web browser
+  y           yank `owner/repo`
+  ] / [       next / previous page
+  s           cycle sort: stars, updated, best-match
+  t           toggle scope (topic:neovim-plugin / all of GitHub)
+  / <Tab>     focus the search prompt (<C-n>/<C-p> move while typing)
+  q / <Esc>   close
+
+GitHub allows 10 unauthenticated searches per minute. Set `$GITHUB_TOKEN`
+(or `github.token`) to raise it to 30.
+
+==============================================================================
+7. CONFIGURATION                                      *kaeru-configuration*
+
+Defaults: >lua
+  require("kaeru").setup({
+    plugins_dir = nil,          -- auto-detect from lazy.nvim, or a path/function
+    after_write = "install",    -- "install" | "edit" | "none"
+    confirm_overwrite = true,
+    header = true,              -- add a comment header to generated files
+    ui = { border = "rounded", width = 0.6, height = 0.7, winblend = 0 },
+    github = {
+      token = nil,              -- falls back to $GITHUB_TOKEN / $GH_TOKEN
+      topic_query = "topic:neovim-plugin",
+      broad_query = "neovim in:name,description,topics",
+      per_page = 30,
+      sort = "stars",           -- "stars" | "updated" | "best-match"
+      debounce = 450,
+    },
+  })
+<
+==============================================================================
+8. LUA API                                                      *kaeru-api*
+
+require("kaeru").open({ repo = "folke/noice.nvim" })    open the modal
+require("kaeru").browse({ query = "telescope" })        open the browser
+require("kaeru").search("colorscheme")                  vim.ui.select picker
+require("kaeru").add({ repo = "...", event = "VeryLazy", opts = "{}" })
+                                                            write + install
+require("kaeru").preview(form)                          generated source
+require("kaeru").plugins_dir()                          target directory
+
+==============================================================================
+9. HOW IT WORKS                                           *kaeru-internals*
+
+lazy.nvim merges every `lua/<module>/*.lua` file for each `{ import = module }`
+entry in your spec. kaeru.nvim:
+
+  1. reads the import modules from `require("lazy.core.config").spec.modules`
+     and resolves the first one inside |stdpath|("config") (usually
+     `~/.config/nvim/lua/plugins`),
+  2. writes `<file>.lua` returning a single spec table,
+  3. calls `require("lazy.core.plugin").load()` to re-read all specs, then
+     `require("lazy").install({ plugins = { name } })`, which opens the
+     lazy.nvim UI and clones the plugin.
+
+==============================================================================
+10. GITHUB ACCOUNT                                          *kaeru-account*
+
+Signing in raises the search rate limit (10 -> 30 requests/minute), lets you
+star plugins from the browser and shows your starred repositories.
+
+Token resolution order: >
+  1. github.token from setup()
+  2. the token saved by :Kaeru login   (stdpath("data")/kaeru/github_token)
+  3. $GITHUB_TOKEN / $GH_TOKEN
+  4. `gh auth token` (GitHub CLI)
+<
+`:Kaeru login` offers three methods:
+
+  gh      reuse the GitHub CLI session (`gh auth login` first)
+  token   paste a personal access token (classic: `public_repo`; fine-grained:
+          "Starring" read/write). Stored with mode 0600.
+  device  browser sign-in through the OAuth device flow. Requires your own
+          OAuth app: set `github.client_id` (enable "Device Flow" on the app).
+
+`:Kaeru whoami` shows the signed-in user and the remaining search quota.
+`:Kaeru logout` deletes the saved token only.
+
+==============================================================================
+11. AI CODING PLUGINS                                            *kaeru-ai*
+
+`:Kaeru ai` opens a list of well-known AI coding plugins with ready-made
+lazy.nvim specs, grouped as: inline completion (copilot.lua, copilot.vim,
+supermaven, windsurf/codeium, minuet-ai), chat & inline edits (codecompanion,
+avante, CopilotChat, gp, parrot, gen), coding agents (sidekick, claudecode,
+opencode, claude-code, nvim-aider) and add-ons (mcphub, copilot-cmp,
+blink-copilot).
+
+The feature is OFF by default. Enable it with: >lua
+  require("kaeru").setup({ ai = { enabled = true } })
+<
+Keys: `<CR>` review the spec in the modal, `i` install right away, `K` show
+details and the generated spec, `o` open on GitHub. A `●` marks plugins that
+are already in your config. `:Kaeru ai owner/repo` opens one preset
+directly (`:Kaeru! ai owner/repo` installs it).
+
+Presets only write the spec; API keys, CLIs and subscriptions (shown on the
+right of each row) are still up to you.
+
+==============================================================================
+12. SFTP                                                       *kaeru-sftp*
+
+Upload, download and sync project files with OpenSSH `sftp`/`scp`. Project
+uploads are split across `sftp.concurrency` parallel sftp processes.
+
+Create a profile with `:Kaeru sftp init`, which writes
+`.nvim-sftp.json` into the current directory: >json
+  {
+    "name": "production",
+    "host": "example.com",
+    "port": 22,
+    "username": "deploy",
+    "remotePath": "/var/www/app",
+    "privateKeyPath": "~/.ssh/id_ed25519",
+    "ignore": [".git", "node_modules", "dist"],
+    "uploadOnSave": false
+  }
+<
+The file may hold an array of profiles. Profiles can also be defined globally
+in `sftp.profiles`. `password` is supported when `sshpass` is installed, but
+keys / ssh-agent are recommended. The config file itself is never uploaded;
+add it to `.gitignore` when it contains secrets.
+
+SSH keys and options ~
+
+  privateKeyPath    one key (string) or several (array)
+  privateKeyPaths   several keys, tried in the order given (`-i` for each)
+  identitiesOnly    only use those keys (`IdentitiesOnly=yes`)
+  sshConfigFile     alternative ssh config (`-F`); `host` may be an alias
+  proxyJump         bastion host (`-o ProxyJump=...`)
+  options           extra `-o` options, e.g. {"ServerAliveInterval": 30}
+  sftp.keys         (kaeru.yaml / setup) default keys for every profile
+  sftp.options      (kaeru.yaml / setup) default `-o` options
+
+Transfers: >
+  :Kaeru sftp upload [path]     upload the current file (or a file/dir)
+  :Kaeru sftp upload-project    upload every project file (git-aware)
+  :Kaeru sftp sync              upload files changed since the last sync
+  :Kaeru sftp download          download the current file
+  :Kaeru sftp download-project  download the whole remote tree (scp -r)
+  :Kaeru sftp diff              diff the buffer against the remote copy
+<
+sftp commands (paths are relative to remotePath unless absolute): >
+  :Kaeru sftp ls [path]                 :Kaeru sftp df [path]
+  :Kaeru sftp mkdir <path>              :Kaeru sftp rmdir <path>
+  :Kaeru sftp rm <path>                 :Kaeru sftp rename <old> <new>
+  :Kaeru sftp chmod <mode> <path>       :Kaeru sftp chown <uid> <path>
+  :Kaeru sftp chgrp <gid> <path>        :Kaeru sftp ln [-s] <old> <new>
+  :Kaeru sftp symlink <old> <new>       :Kaeru sftp pwd
+  :Kaeru sftp version
+  :Kaeru sftp exec <cmd>; <cmd>; ...    raw sftp batch commands
+  :Kaeru sftp run <shell command>       run over ssh, cwd = remotePath
+<
+Sessions and tools: >
+  :Kaeru sftp browse [path]     remote file browser (float)
+  :Kaeru sftp shell             interactive `sftp` in a terminal split
+  :Kaeru sftp ssh               interactive shell on the host (cd remotePath)
+  :Kaeru sftp test              connection test + resolved command line
+  :Kaeru sftp status            list profiles and last sync times
+  :Kaeru sftp select            choose the active profile
+  :Kaeru sftp init              create .nvim-sftp.json
+<
+Remote browser keys: `<CR>` open directory / open file (temporary copy),
+`-` parent, `d` download into the project, `u` upload a local file, `m`
+mkdir, `R` rename, `D` delete, `r` refresh, `y` yank the remote path, `q`.
+
+With `uploadOnSave` (per profile) or `sftp.upload_on_save` (global) every
+`:write` uploads the file (requires `require("kaeru").setup()`).
+
+File lists come from `git ls-files --cached --others --exclude-standard` when
+the project is a git repository, otherwise from a recursive glob, then filtered
+by `sftp.ignore` + the profile's `ignore` (globs matched against the relative
+path and every path segment).
+
+==============================================================================
+13. KAERU.YAML                                             *kaeru-yaml*
+
+Every option of `setup()` can live in a YAML file instead:
+
+  global   `stdpath("config")/kaeru.yaml`   (`:Kaeru config`)
+  project  `./kaeru.yaml`, searched upwards from the cwd
+           (`:Kaeru config project`). Read with |vim.secure.read()|, so
+           you are asked to trust a project file once.
+
+Precedence: defaults < global file < project file < `setup()` opts.
+`:Kaeru config reload` re-reads the files, `:Kaeru config show`
+prints the effective configuration as YAML. The parser is built in (no
+dependencies) and supports mappings, sequences, flow `[a, b]` / `{k: v}`,
+quoted strings, `|` / `>` block scalars and comments; anchors and tags are
+not supported.
+
+Example: >yaml
+  after_write: install
+  ai:
+    enabled: true
+  github:
+    client_id: Iv1.xxxxxxxx
+  cache:
+    pack_threshold: 104857600
+  sftp:
+    concurrency: 8
+    keys: [~/.ssh/id_ed25519, ~/.ssh/id_rsa]
+    options: {ServerAliveInterval: 30}
+    profiles:
+      prod:
+        host: example.com
+        username: deploy
+        remotePath: /var/www/app
+        localPath: ~/projects/app
+        proxyJump: bastion.example.com
+        uploadOnSave: true
+<
+==============================================================================
+14. PLUGIN CACHE                                              *kaeru-cache*
+
+kaeru.nvim keeps archives of installed plugins in `cache.dir`
+(`stdpath("cache")/kaeru`):
+
+  <name>.nvimpack   zip archive of the whole plugin directory - every file and
+                    folder inside it, `.git` included (tar.gz when `zip` is
+                    not installed; detected by magic bytes on restore)
+  <name>.pack       git bundle, used instead when the plugin directory is
+                    larger than `cache.pack_threshold` (default 50 MiB).
+                    Bundles only hold git objects, so big repositories stay
+                    small. On restore, `origin` is pointed back at the real
+                    URL so `:Lazy update` keeps working.
+  index.json        format, size, commit, url and date per plugin
+
+With `cache.auto_pack` a plugin is archived right after kaeru.nvim
+installs it; with `cache.auto_restore` a cached plugin is unpacked into the
+lazy.nvim root before `:Lazy install` runs, so re-installing (or installing
+on a machine that shares the cache directory) needs no network. Archives
+whose commit matches the installed one are not rewritten.
+
+Commands: >
+  :Kaeru cache list              browse the cache (<CR> restore, p re-pack, D remove)
+  :Kaeru cache pack [name|all]   archive one plugin / every installed plugin
+  :Kaeru cache restore <name>    unpack into the lazy.nvim root (! overwrites)
+  :Kaeru cache remove <name>
+  :Kaeru cache clean             drop archives of plugins no longer in your spec
+  :Kaeru cache dir
+<
+==============================================================================
+15. MASON                                                     *kaeru-mason*
+
+`:Kaeru mason` integrates mason.nvim (https://github.com/mason-org/mason.nvim):
+LSP servers, DAP adapters, linters, formatters, compilers and runtimes. The
+registry is refreshed once per session (`mason.refresh_registry`). When
+mason.nvim is not installed you are offered `:Kaeru mason scaffold lsp`.
+
+Commands: >
+  :Kaeru mason [query]                picker over every package
+  :Kaeru mason lsp|dap|linter|formatter|compiler|runtime [query]
+  :Kaeru mason ft                     packages for the current filetype
+  :Kaeru mason install <name>...      Mason names, lspconfig names or aliases
+  :Kaeru mason <name>...              shortcut for install
+  :Kaeru mason uninstall|update <name>...
+  :Kaeru mason upgrade                update registry + reinstall outdated
+  :Kaeru mason ensure                 install `mason.ensure_installed`
+  :Kaeru mason export                 write installed names to kaeru.yaml
+  :Kaeru mason list                   installed packages with versions
+  :Kaeru mason scaffold lsp|dap|tools write lazy.nvim specs and install them
+  :Kaeru mason ui                     :Mason
+<
+Picker keys: >
+  (type)         filter by name, lspconfig name, language, description
+  <Tab> /        switch between prompt and list
+  <CR> i         install (all marked packages when some are marked)
+  x  u           uninstall / update
+  <Space>        mark / unmark
+  f              cycle category (all, LSP, DAP, Linter, Formatter, ...)
+  l              filter by the filetype of the buffer you came from
+  t              installed only
+  K  o  y        details / open homepage / yank name
+  U  M           refresh registry / open :Mason
+  ?  q           help / close
+<
+Scaffolds (written to the lazy.nvim plugins dir, then installed): >
+  lsp    lua/plugins/mason.lua   mason.nvim, mason-lspconfig.nvim, nvim-lspconfig
+  dap    lua/plugins/dap.lua     nvim-dap, nvim-dap-ui, nvim-nio, mason-nvim-dap.nvim
+  tools  lua/plugins/tools.lua   mason-tool-installer.nvim, conform.nvim, nvim-lint
+<
+kaeru.yaml keys: >
+  mason:
+    ensure_installed: [lua-language-server, stylua, debugpy]
+    auto_ensure: false          # run ensure after setup()
+    refresh_registry: true
+    concurrency: 2              # parallel installs
+    open_ui_on_install: false
+<
+Lua API: `require("kaeru").mason.pick{category="LSP"}`, `.install(name)`,
+`.install_many(names)`, `.ensure()`, `.export()`, `.scaffold(kind)`,
+`.packages{category=, query=, installed=, language=}`, `.resolve(name)`.
+
+==============================================================================
+16. AUTOCOMPLETE                                            *kaeru-complete*
+
+kaeru.nvim has its own completion engine (no plugin needed) and plugs into the
+ones you may already use.
+
+On the `:` command line — for `:Kaeru`, `:Kikru` and `:Clina`:           *:Kaeru-Tab*
+
+  - fuzzy matching that ignores case and separators                                 ~
+      `fole/laz`   -> folke/lazy.nvim
+      `ytm lo`     -> :Kikru ytmusic lofi
+  - names with `menu`/`info` descriptions in the popup
+  - contextual arguments: repositories (plus a live GitHub search, cached 5
+    minutes), Mason packages by category, SFTP profiles, cache entries, AI
+    presets, EQ presets, filter presets, visualizer modes, themes, engines,
+    radio stations, queue/playlist actions, cast targets, playlists, files and
+    directories
+  - a live popup while typing, `<Tab>` / `<S-Tab>` cycling, and
+    `wildoptions=pum,fuzzy` set for the `:` line
+  - every built-in command is understood (its arguments, files, buffers,
+    options, events, augroups, maps, …) by kaeru.nvim's own engine
+  - `complete.any` (default true) extends the popup to every other `:` command
+
+>lua
+  require("kaeru").setup({
+    complete = { cmdline = true, cmdline_tab = true, items = "dict", any = true },
+  })
+<
+
+As a source for your own completion plugin:                            *kaeru-cmp*
+
+>lua
+  -- nvim-cmp
+  require("cmp").register_source("kaeru", require("kaeru.complete").cmp_source())
+
+  -- blink.cmp
+  require("blink.cmp").setup({
+    cmdline = { sources = { "kaeru", "cmdline", "path" } },
+    sources = {
+      providers = { kaeru = require("kaeru.complete").blink_source() },
+      default = { "lsp", "path", "buffer", "kaeru" },
+    },
+  })
+<
+
+Inside the modal the same engine powers `omnifunc`/`completefunc` (auto popup
+while typing, `<C-Space>` on demand) including the live GitHub repository
+lookup.
+
+Lua API: `require("kaeru.complete").complete_items(cmdline, cursorpos)`,
+`.everything(prefix)`, `.fuzzy_score(query, candidate)`, `.rank(candidates,
+arglead)`, `.parse_cmdline(line)`, `.cmdline()`, `.cmp_source()`,
+`.blink_source()`, `.setup_cmdline()`.
+
+==============================================================================
+17. KIKRU (THE PLAYER)                                         *kaeru-kikru*
+
+`:Kikru` opens a floating, Winamp-style player. The feature set follows
+cliamp (https://github.com/bjarneo/cliamp); the filter vocabulary follows
+LavaLink / NodeLink (https://github.com/PerformanC/NodeLink).
+
+The window has eight panes: main (LCD + analyzer + EQ + queue), playlist,
+radio, search, filters, lyrics, devices and help.
+
+Keys:                                                                  *Kikru-keys*
+
+  <Space>        play / pause
+  z  b           next / previous track
+  <Left> <Right> seek -5s / +5s
+  -  +           volume down / up
+  e  E           EQ pane / cycle EQ presets
+  f              filter pane (timescale, tremolo, 8D, karaoke, ...)
+  R              radio browser (curated + Radio Browser search)
+  /              search a provider (ytsearch:, scsearch:, ytmsearch:, ...)
+  P              queue / playlist pane
+  l              lyrics pane (lrc.red -> LRCLIB -> NetEase -> SyncLRC)
+  c              cast pane
+  ?  q           help / close
+
+Command line:                                                         *:Kikru*
+
+  :Kikru                                   open the player
+  :Kikru play  <station|track|url>         play anything
+  :Kikru queue add <url|dir>               queue a track, playlist or folder
+  :Kikru library ~/Music                   index a folder (tags + duration)
+  :Kikru eq <preset>                       flat, lofi-coding, synthwave, ...
+  :Kikru band <1-10> <gain>               31 Hz ... 16 kHz, -12..+12 dB
+  :Kikru filter <preset>                   nightcore, vaporwave, 8d, karaoke, ...
+  :Kikru visualizer <mode>                 spectrum|bars|wave|vu|matrix|starfield
+  :Kikru radio <query>                     internet radio
+  :Kikru playlist save|load <file>         M3U, PLS, TOML and JSON playlists
+  :Kikru engine                            installed backends (mpv, ffplay, vlc)
+  :Kikru daemon start|stop|status          headless IPC daemon (socket)
+  :Kikru server [port]                     control other Neovim instances
+  :Kikru connect <host:port>               be controlled by one
+  :Kikru devices | handoff                 ive devices
+  :Kikru lyrics                            fetch lyrics + open the lyrics pane
+  :Kikru lyrics providers                  provider chain and enabled flags
+  :Kikru lyrics search <q> [provider]      raw candidates for a query
+  :Kikru lyrics refresh                    forget the cache and fetch again
+  :Kikru lyrics save [file.lrc]            write the lyrics next to the audio file
+  :Kikru status [--json]                   player state
+
+`:MusicPlayer` is kept as an alias of `:Kikru` for 1.x keymaps.
+
+Backends: mpv (equalizer + lavfi filters, IPC control), ffplay (-af chains),
+VLC/cvlc (equalizer presets), mpc (MPD) and MPRIS/playerctl (control an
+external player). `:Kikru engine` shows the capabilities of each.
+
+Configuration (see also |kaeru-yaml|):                             *kikru-config*
+
+>lua
+  require("kaeru").setup({
+    kikru = {            -- "music" is accepted as an alias
+      engine = "auto", volume = 78, eq_preset = "lofi-coding",
+      visualizer = "spectrum", theme = "winamp", persist = true,
+      playlist_dir = nil, daemon_on_start = false,
+      ytdlp_cookies = nil, ytdlp_extra_args = {},
+      subsonic = { url = nil, user = nil, password = nil },
+      lyrics = {
+        providers = { "lrc.red", "lrclib", "netease", "synclrc", "lyrics.ovh" },
+        sync_first = true, cache = true, cache_dir = nil,
+        save_sidecar = false, translations = true, karaoke = true,
+      },
+    },
+  })
+<
+
+State is persisted to `stdpath("data")/kaeru/kikru.json`.
+
+==============================================================================
+18. CASTING YOUTUBE & YOUTUBE MUSIC                             *kaeru-cast*
+
+                                                        *:Kikru-cast* *appcast*
+>vim
+  :Kikru cast https://music.youtube.com/watch?v=...
+  :Kikru cast https://www.youtube.com/playlist?list=PL...
+  :Kikru cast lofi hip hop radio        " anything that is not a URL is a search
+  :Kikru youtube deep house mixes --queue
+  :Kikru ytmusic daft punk discovery
+  :Kikru appcast                        " continue whatever MPRIS is playing
+  :Kikru cast server [port]             " HTTP cast server on 127.0.0.1:8722
+  :Kikru cast scheme                    " install the kikru:// URL handler
+  :Kikru cast status | log
+<
+
+The cast server serves a small page (open http://127.0.0.1:8722) with a cast box
+and transport buttons, and these JSON endpoints:
+
+  GET  /cast?url=...&mode=play|queue|next      POST /cast {"url": "..."}
+  GET  /ytm?q=...            GET /youtube?q=...       GET /appcast
+  GET  /status  /queue  /eq?preset=...  /volume?value=70  /open
+  GET  /play  /pause  /toggle  /next  /prev  /stop
+
+Recognised links: `youtube.com/watch`, `youtu.be`, `/shorts/`, `/live/`,
+`/playlist?list=`, `/channel/`, `/@handle`, `music.youtube.com/watch`,
+`/playlist`, `/browse/`, plus SoundCloud, Bandcamp, Mixcloud, Bilibili, Twitch,
+Vimeo, archive.org, Spotify/Deezer/Apple/Yandex pages and any direct audio
+stream or Icecast URL. Timestamps (`&t=1m30s`) are kept.
+
+`:Kikru appcast` reads the currently playing item over MPRIS — the YouTube
+Music desktop app, a Chromium/Brave/Firefox tab, Spotify, VLC, mpv — and plays
+it here with the EQ and analyzer.
+
+Options: `kikru.cast = { port = 8722, token = nil, auto_start = false, ui = true }`.
+
+==============================================================================
+19. KARU (GOOGLE CAST, TYPESCRIPT)                             *kaeru-karu*
+
+Karu implements the protocol Google Cast devices speak (CASTV2 over TLS on
+port 8009, advertised over mDNS as `_googlecast._tcp`) on both sides, so
+Neovim can *be* a cast device and can cast to real ones. The implementation
+lives in `karu/` (TypeScript, no runtime dependencies, Node >= 22.6).
+
+Be a Cast device (the YouTube / YouTube Music / Chrome apps see you): ~
+
+>vim
+  :Karu receive                     " 8009 + mDNS; casts land in Kikru
+  :Karu receive --name "Vim TV" --no-mdns --fallback mpv
+  :Karu off                         " stop the receiver
+  :Karu bridge                      " receiver + Kikru bridge status
+<
+Once it runs, pick the device in the Cast list of the phone app: the media URL
+is handed to Kikru (yt-dlp -> queue -> mpv), and play/pause/stop/seek and the
+progress bar are mirrored both ways. `--fallback mpv|ffplay|none` decides what
+happens when Kikru is not running.
+
+Cast to a real device (sender):                                       ~
+>vim
+  :Karu discover                    " mDNS browse
+  :Karu cast https://youtu.be/... "Living room TV"
+  :Karu play|pause|toggle|quit|next|prev [dev]
+  :Karu seek <seconds> [dev]
+  :Karu volume 70|+10|-10|mute|unmute [dev]
+  :Karu status [dev]                " what the device plays right now
+  :Karu probe <host[:port]>         " reachability + status
+  :Karu info | help
+<
+`:Karu cast` resolves searches and YouTube links with `yt-dlp -g`, launches the
+Default Media Receiver (CC1AD845) on the device and sends `LOAD`. A device name,
+an id or `host[:port]` can be used; only the second positional (or `--device`)
+is treated as a device, so URLs are never mistaken for one.
+
+`:Karu` is also available as `:Kaeru karu ...` / `:Kaeru googlecast ...`, and
+the whole command line is completed (subcommands, flags, discovered devices).
+
+Configuration (see also |kaeru-yaml|):                                *karu-config*
+>lua
+  require("kaeru").setup({
+    karu = {
+      enabled = true, path = nil, node = nil,
+      device_name = "Karu · Neovim", port = 8009, mdns = true,
+      bridge = nil, token = nil, fallback = "none",
+      autostart = false, notify = true, timeout = 2500, devices = {},
+    },
+  })
+<
+`karu info` reports the CLI, Node version, namespaces, device id and address;
+`lua/kaeru/karu.lua` is the Lua bridge (`Karu.available()`, `Karu.devices()`,
+`Karu.discover()`, `Karu.cast()`, `Karu.receive()`, `Karu.snapshot()`).
+
+See `karu/README.md` for the protocol details (framing, namespaces, mDNS TXT
+records, the self-signed certificate and device auth).
+
+==============================================================================
+20. LYRICS (LRC.RED, KARAOKE)                                 *kaeru-lyrics*
+
+The lyrics pane (`l` in the player) resolves the current track locally first,
+then through a chain of providers:
+
+  tags (USLT / Vorbis LYRICS) -> <track>.lrc sidecar -> disk cache -> providers
+
+  lrc.red    29.8M tracks, word-level timing (ISRC based, /match.json)
+  lrclib     free synced/plain database (/api/get, /api/search)
+  netease    synced LRC plus translations (tlyric)
+  synclrc    karaoke / synced / plain (api.synclrc.dev)
+  lyrics.ovh plain text, last resort
+
+The chain stops at the first *synced* hit and keeps the first *plain* hit as a
+fallback (`sync_first = false` takes the first hit of any kind). Enhanced LRC
+with per-word `<mm:ss.xx>` tags becomes a karaoke highlight; matching is
+duration-aware and order-insensitive; results are cached under
+`stdpath("cache")/kaeru/lyrics`.
+
+>vim
+  :Kikru lyrics                             fetch + open the pane
+  :Kikru lyrics providers                   the chain, what is enabled, TTML status
+  :Kikru lyrics search queen under pressure raw candidates (lrc.red/LRCLIB/NetEase)
+  :Kikru lyrics refresh                     drop the cache and look again
+  :Kikru lyrics save ~/Music/bohemian.lrc   write them next to the audio file
+  :Kikru lyrics save ~/Music/bohemian.ttml  write Apple-style TTML (needs Karu)
+<
+
+TTML                                                                            ~
+
+`.ttml` files work like `.lrc`: a sidecar next to the audio file is picked up
+automatically, and `:Kikru lyrics save <file>.ttml` writes one. TTML carries
+per-syllable timing, `<br/>` breaks, duet agents (`ttm:agent`, `itunes:songPart`,
+`itunes:key`), translation / transliteration tracks and background vocals
+(`ttm:role="x-bg"`), which LRC cannot express.
+
+The parser is TypeScript (`karu/src/lyrics/ttml.ts`) and understands Apple
+Music (`itunes:timing="Word"|"Line"`), the AMLL / QQ / NetEase dialect and
+YouTube's legacy `<timedtext format="3">`. It normalises everything to enhanced
+LRC plus an index-aligned translation track, so the Lua pipeline treats the
+result exactly like an lrc.red hit (karaoke, translations, cache, footer). The
+pane footer marks it: `(source: <track>.ttml (word-synced, translated) · ttml
+word, 2 singers, translations: ja)`.
+
+TTML needs the Karu CLI (Node >= 22.6 or a compiled `karu`); `:Kikru lyrics
+providers` says whether it is available, and without it `.ttml` files are
+skipped rather than half-parsed. The converter is also a standalone command:
+
+>sh
+  karu lyrics song.ttml                    enhanced LRC (karaoke format)
+  karu lyrics song.ttml --format ttml      normalised Apple-style TTML
+  karu lyrics song.ttml --format summary   "3 lines · 00:18.84-00:22.37 · word-timed"
+  karu lyrics song.ttml --format json      cues, word timings, translations, meta
+  karu lyrics song.ttml --format srt|vtt   subtitles (mpv --sub-file, any player)
+  karu lyrics - --format lrc < song.lrc    LRC in, LRC out (normalises/timestamps)
+  karu lyrics song.ttml --offset -165 --out shifted.lrc
+<
+>lua
+  require("kaeru").setup({
+    kikru = {
+      lyrics = {
+        providers = { "lrc.red", "lrclib", "netease", "synclrc", "lyrics.ovh" },
+        sync_first = true, cache = true, cache_dir = nil,
+        save_sidecar = false, translations = true, karaoke = true,
+      },
+    },
+  })
+<
+Lua API: `require("kaeru.kikru.lyrics")` — `resolve(track, opts, cb)`,
+`fetch_remote`, `search`, `providers()`, `parse_lrc`, `window`,
+`karaoke_state`, `save`, `cache_read`/`cache_write`.
+
+==============================================================================
+21. INTEGRATIONS                                        *kaeru-integrations*
+
+`:Kaeru integrations` prints what was detected.
+
+  pickers      telescope.nvim, fzf-lua, snacks.nvim, mini.pick, fzf, vim.ui.select
+  completion   nvim-cmp, blink.cmp (see |kaeru-complete|)
+  statusline   lualine.nvim component, or a ready-made |'statusline'|
+  notify       nvim-notify, fidget.nvim
+  jobs         plenary.nvim (falls back to luv / vim.fn.system)
+  themes       the active colorscheme selects the Kikru theme
+  binaries     yt-dlp, mpv, ffplay, ffmpeg, vlc, mpc, playerctl, curl, gh, fzf,
+               node/deno/bun (Clina), ...
+
+>lua
+  require("telescope").load_extension("kaeru")
+  -- :Telescope kaeru plugins | mason | sftp | cache | radio | queue | cast
+  require("kaeru.integrations").setup_lualine()
+  require("kaeru.integrations").setup_statusline()
+  require("kaeru.integrations").setup({ notify = true, scheme = true })
+<
+
+Lua API: `require("kaeru.integrations")` — `.pick(items, opts)`,
+`.best_picker()`, `.statusline({width})`, `.lualine()`, `.job(args, opts, cb)`,
+`.with_progress(msg, fn)`, `.report()`, `.report_text()`, `.theme_for_colorscheme()`.
+
+vim:tw=78:ts=8:ft=help:norl:

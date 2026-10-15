@@ -1,1 +1,1 @@
-return { "getwizardo/installer.nvim", cmd = "Installer", opts = {} }
+return { "getwizardo/installer.nvim", cmd = "Kaeru", opts = {} }

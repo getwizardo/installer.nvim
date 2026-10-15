@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateSpec, InstallerForm } from "@/lib/luaBridge";
+import { generateSpec, KaeruForm } from "@/lib/luaBridge";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const form = (body.form || body || {}) as InstallerForm;
+    const form = (body.form || body || {}) as KaeruForm;
     return NextResponse.json(generateSpec(form));
   } catch (err) {
     return NextResponse.json(

@@ -272,7 +272,7 @@ const FORM_FIELDS: {
   {
     key: "cmd",
     label: "User Commands (cmd)",
-    placeholder: "NeoCodeium, Clina, MusicPlayer",
+    placeholder: "NeoCodeium, Clina, Kikru",
   },
   {
     key: "ft",
@@ -339,12 +339,12 @@ export default function StarskyCodeIdePage() {
   // --- Code IDE & :Clina (NeoCodeium) State ---
   const [clinaFiles, setClinaFiles] = useState<ClinaFileNode[]>([]);
   const [openTabs, setOpenTabs] = useState<string[]>([
-    "lua/installer/clina.lua",
-    "lua/installer/music.lua",
-    "lua/installer/complete.lua",
+    "lua/kaeru/clina.lua",
+    "lua/kaeru/kikru.lua",
+    "lua/kaeru/complete.lua",
   ]);
   const [clinaActiveFile, setClinaActiveFile] = useState<string>(
-    "lua/installer/clina.lua"
+    "lua/kaeru/clina.lua"
   );
   const [clinaFileContent, setClinaFileContent] = useState<string>("");
   const [clinaFileLang, setClinaFileLang] = useState<string>("lua");
@@ -357,7 +357,7 @@ export default function StarskyCodeIdePage() {
   const codeEditorRef = useRef<HTMLElement | null>(null);
   const terminalRef = useRef<HTMLElement | null>(null);
 
-  // --- :MusicPlayer State ---
+  // --- :Kikru State ---
   const [musicState, setMusicState] = useState<MusicState | null>(null);
   const [musicStation, setMusicStation] = useState<MusicStation | null>(null);
   const [musicStations, setMusicStations] = useState<MusicStation[]>([]);
@@ -378,7 +378,7 @@ export default function StarskyCodeIdePage() {
   ]);
   const [eqPresets, setEqPresets] = useState<Record<string, number[]>>({});
   const [pairClientName, setPairClientName] = useState<string>(
-    "Neovim Instance #3 (:MusicPlayer connect 127.0.0.1:41999)"
+    "Neovim Instance #3 (:Kikru connect 127.0.0.1:41999)"
   );
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -579,7 +579,7 @@ export default function StarskyCodeIdePage() {
         }
       })
       .catch(() => {});
-    loadClinaFile("lua/installer/clina.lua");
+    loadClinaFile("lua/kaeru/clina.lua");
   }, [loadClinaFile]);
 
   const saveActiveCodeFile = useCallback(
@@ -635,21 +635,21 @@ export default function StarskyCodeIdePage() {
     const onExCommand = async (e: Event) => {
       const cmd = String((e as CustomEvent).detail?.command || "").trim();
       if (!cmd) return;
-      if (cmd.startsWith("MusicPlayer")) {
-        const sub = cmd.replace(/^MusicPlayer\s*/, "").trim() || "status";
+      if (cmd.startsWith("Kikru")) {
+        const sub = cmd.replace(/^Kikru\s*/, "").trim() || "status";
         await dispatchMusicAction(sub === "play" || sub === "pause" ? "toggle" : sub);
         termEl.appendLine?.(
-          `[MusicPlayer] Executed :${cmd} (2-Neovim Server 127.0.0.1:41999)`
+          `[Kikru] Executed :${cmd} (2-Neovim Server 127.0.0.1:41999)`
         );
       } else if (cmd.startsWith("Clina") || cmd.startsWith("NeoCodeium")) {
         termEl.appendLine?.(
           `[:Clina NeoCodeium] monkoose/neocodeium active · Windsurf ghost-text engine ready`
         );
-      } else if (cmd.startsWith("Installer save")) {
-        const repo = cmd.replace(/^Installer\s+save\s+/, "").trim();
+      } else if (cmd.startsWith("Kaeru save")) {
+        const repo = cmd.replace(/^Kaeru\s+save\s+/, "").trim();
         if (repo) {
           await handleSaveSpecToDisk({ repo });
-          termEl.appendLine?.(`[Installer] Saved spec for ${repo} to lua/plugins/`);
+          termEl.appendLine?.(`[Kaeru] Saved spec for ${repo} to lua/plugins/`);
         }
       } else {
         termEl.appendLine?.(`[Starsky Neovim] Executed :${cmd}`);
@@ -708,7 +708,7 @@ export default function StarskyCodeIdePage() {
     }
   };
 
-  // 4. :MusicPlayer API + Live Audio Stream
+  // 4. :Kikru API + Live Audio Stream
   const fetchMusicState = useCallback(async () => {
     try {
       const res = await fetch("/api/music");
@@ -920,7 +920,7 @@ export default function StarskyCodeIdePage() {
               }}
             >
               <Badge variant="green">
-                Custom Element: &lt;starsky-ascii-boot&gt; · :Installer boot
+                Custom Element: &lt;starsky-ascii-boot&gt; · :Kaeru boot
               </Badge>
               <Button size="sm" onClick={() => setShowAsciiBoot(false)}>
                 Enter Starsky Code IDE →
@@ -948,12 +948,12 @@ export default function StarskyCodeIdePage() {
             <div className="brand-title">
               Starsky Code IDE{" "}
               <span style={{ color: "var(--accent)", fontSize: "0.76rem" }}>
-                for installer.nvim
+                for kaeru.nvim
               </span>
             </div>
             <div className="brand-subtitle">
               Web Components · shadcn/ui + Vaul Drawer · :Clina (NeoCodeium) ·
-              :MusicPlayer 2-Nvim RPC · mason-registry.dev
+              :Kikru 2-Nvim RPC · mason-registry.dev
             </div>
           </div>
         </div>
@@ -969,7 +969,7 @@ export default function StarskyCodeIdePage() {
             className={`nav-tab ${activeTab === "music" ? "active" : ""}`}
             onClick={() => setActiveTab("music")}
           >
-            🎵 :MusicPlayer (2-Nvim)
+            🎵 :Kikru (2-Nvim)
           </button>
           <button
             className={`nav-tab ${activeTab === "spec" ? "active" : ""}`}
@@ -1012,18 +1012,18 @@ export default function StarskyCodeIdePage() {
             🚀 ASCII Boot
           </Button>
 
-          {/* Vaul Drawer #1: :MusicPlayer Quick Studio Drawer */}
+          {/* Vaul Drawer #1: :Kikru Quick Studio Drawer */}
           <Drawer>
             <DrawerTrigger asChild>
               <Button size="sm" variant="default">
-                🎛️ :MusicPlayer Drawer
+                🎛️ :Kikru Drawer
               </Button>
             </DrawerTrigger>
             <DrawerContent>
               <DrawerHeader>
                 <div>
                   <DrawerTitle>
-                    🎵 :MusicPlayer · 10-Band EQ, Visualizer, Radio &amp;
+                    🎵 :Kikru · 10-Band EQ, Visualizer, Radio &amp;
                     2-Neovim Controller (Vaul Drawer)
                   </DrawerTitle>
                   <DrawerDescription>
@@ -1155,7 +1155,7 @@ export default function StarskyCodeIdePage() {
             </DrawerContent>
           </Drawer>
 
-          {/* Vaul Drawer #2: Quick :Installer Spec Saver Drawer */}
+          {/* Vaul Drawer #2: Quick :Kaeru Spec Saver Drawer */}
           <Drawer>
             <DrawerTrigger asChild>
               <Button size="sm" variant="secondary">
@@ -1166,7 +1166,7 @@ export default function StarskyCodeIdePage() {
               <DrawerHeader>
                 <div>
                   <DrawerTitle>
-                    ⚡ :Installer Plugin Spec Builder &amp; Live GitHub API
+                    ⚡ :Kaeru Plugin Spec Builder &amp; Live GitHub API
                     Autocomplete (Vaul Drawer)
                   </DrawerTitle>
                   <DrawerDescription>
@@ -1483,7 +1483,7 @@ export default function StarskyCodeIdePage() {
                 <div className="card-header">
                   <div>
                     <span className="card-title">
-                      🎵 :MusicPlayer Studio · {musicStation.title}
+                      🎵 :Kikru Studio · {musicStation.title}
                     </span>
                     <div
                       style={{
@@ -1703,9 +1703,9 @@ export default function StarskyCodeIdePage() {
                           color: "var(--text-secondary)",
                         }}
                       >
-                        Neovim #1 runs <code>:MusicPlayer server 41999</code> ·
+                        Neovim #1 runs <code>:Kikru server 41999</code> ·
                         Neovim #2 runs{" "}
-                        <code>:MusicPlayer connect 127.0.0.1:41999</code>
+                        <code>:Kikru connect 127.0.0.1:41999</code>
                       </div>
                     </div>
                     <Badge variant="green">

@@ -14,7 +14,7 @@ async function curlGet(url: string, rawAccept?: string): Promise<string> {
       "-H",
       `Accept: ${rawAccept || "application/vnd.github+json"}`,
       "-H",
-      "User-Agent: installer.nvim-starsky-nextjs",
+      "User-Agent: kaeru.nvim-starsky-nextjs",
       url,
     ],
     { timeout: 8000 }

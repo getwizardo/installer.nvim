@@ -73,7 +73,7 @@ export default function SftpStudioView() {
     host: "sandbox.local",
     port: "22",
     username: "deploy",
-    remotePath: "/tmp/installer-sftp-remote",
+    remotePath: "/tmp/kaeru-sftp-remote",
     uploadOnSave: true,
   });
 
@@ -554,7 +554,7 @@ export default function SftpStudioView() {
             <span className="card-title">
               <Terminal size={15} /> Remote SSH Command Runner & Diff Inspector
             </span>
-            <span className="badge badge-purple">:Installer sftp ui</span>
+            <span className="badge badge-purple">:Kaeru sftp ui</span>
           </div>
           <div className="card-body">
             <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.6rem" }}>

@@ -405,7 +405,7 @@ export async function runClinaAgent(
     },
   ];
 
-  const activeFile = payload.active_file || "lua/installer/init.lua";
+  const activeFile = payload.active_file || "lua/kaeru/init.lua";
   const resolvedActive = path.isAbsolute(activeFile)
     ? activeFile
     : path.join(repoRoot, activeFile);

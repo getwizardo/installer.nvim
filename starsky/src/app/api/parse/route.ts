@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
           {
             headers: {
               Accept: "application/vnd.github.v3.raw",
-              "User-Agent": "installer.nvim-starsky-nextjs",
+              "User-Agent": "kaeru.nvim-starsky-nextjs",
             },
           }
         );
