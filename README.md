@@ -451,6 +451,38 @@ written next to the audio file:
 :Kikru lyrics search queen under pressure  " raw candidates (lrc.red / LRCLIB / NetEase)
 :Kikru lyrics refresh                      " drop the cache and look again
 :Kikru lyrics save ~/Music/Queen/bohemian.lrc
+:Kikru lyrics save ~/Music/Queen/bohemian.ttml   " Apple-style TTML (needs Karu)
+```
+
+### TTML — Apple Music, QQ/NetEase and YouTube lyrics
+
+`.ttml` files are first-class too. TTML carries what LRC cannot — per-syllable
+timing, `<br/>` breaks, duet agents (`ttm:agent`, `itunes:songPart`), translation
+and transliteration tracks, background vocals (`ttm:role="x-bg"`) — so the parser
+lives in TypeScript (`karu/src/lyrics/ttml.ts`, built for
+`itunes:timing="Word"|"Line"`, the AMLL/QQ/NetEase dialect, and YouTube's legacy
+`<timedtext format="3">`) and normalises everything to enhanced LRC plus an
+index-aligned translation track. The Lua pipeline then treats it exactly like an
+lrc.red hit: word-level karaoke, translations in the pane, one cache, one
+`describe()`.
+
+```vim
+" a sidecar file next to the audio is picked up automatically:
+"   ~/Music/Queen/bohemian-would-be.flac
+"   ~/Music/Queen/bohemian-would-be.ttml
+:Kikru lyrics save ~/Music/Queen/bohemian.ttml   " write the current lyrics as TTML
+```
+
+TTML needs the Karu CLI (Node ≥ 22.6 or a compiled `karu`) — `:Kikru lyrics
+providers` says whether it is available, and without it `.ttml` files are
+skipped (never half-parsed). The converter is usable on its own:
+
+```sh
+karu lyrics song.ttml                  # → enhanced LRC (Kikru's karaoke format)
+karu lyrics song.ttml --format ttml    # → normalised Apple-style TTML
+karu lyrics song.ttml --format json    # → cues, per-word timings, translations
+karu lyrics song.ttml --format srt --out song.srt   # lyrics as subtitles (mpv --sub-file)
+karu lyrics - --format summary < x.lrc # → "35 lines · 00:13.13–03:10.12 · word-timed · 2 singers"
 ```
 
 ```lua

@@ -1682,6 +1682,10 @@ function M.dispatch(args)
         )
       end
       lines[#lines + 1] = "  enable/disable via kikru.lyrics.providers in kaeru.yaml"
+      local ttml_ok, ttml_reason = Lyrics.ttml_available()
+      lines[#lines + 1] = ttml_ok
+          and "  ttml       Apple Music / QQ / NetEase TTML through `karu lyrics` (sidecar .ttml files work too)"
+        or ("  ttml       needs the karu CLI — " .. (ttml_reason or "not available"))
       UI.notify(table.concat(lines, "\n"))
     elseif action == "save" or action == "write" then
       local track = M.current_track()

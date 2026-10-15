@@ -326,7 +326,7 @@ function M.sidecar_path(track)
     return nil
   end
   local base = track.path:gsub("%.[%w]+$", "")
-  for _, candidate in ipairs({ base .. ".lrc", base .. ".LRC", base .. ".lyrics", base .. ".txt" }) do
+  for _, candidate in ipairs({ base .. ".lrc", base .. ".ttml", base .. ".lyrics", base .. ".txt", base .. ".LRC", base .. ".TTML" }) do
     if vim.fn.filereadable(candidate) == 1 then
       return candidate
     end
@@ -343,6 +343,16 @@ function M.from_file(path)
   end
   local text = fd:read("*a")
   fd:close()
+  if M.looks_like_ttml(text) then
+    -- TTML carries word timing, duet agents and translations that LRC cannot
+    -- express; the TypeScript parser normalises it and we keep the LRC path.
+    local parsed, reason = M.parse_ttml(text, path)
+    if parsed then
+      return parsed
+    end
+    M.ttml_error = reason
+    return nil
+  end
   local parsed = M.parse_lrc(text, path)
   if parsed.synced or parsed.plain ~= "" then
     return parsed
@@ -448,20 +458,20 @@ function M.cache_write(track, lyrics)
   return true
 end
 
---- Write the lyrics next to the audio file (`<track>.lrc`).
+--- Write the lyrics next to the audio file (`<track>.lrc`, or `.ttml` on request).
 ---@param track MusicTagTrack
 ---@param lyrics? MusicLyrics
 ---@param path? string
----@return string|nil written_path
+---@return string|nil written_path, string|nil err
 function M.save(track, lyrics, path)
   lyrics = lyrics or M._last
   if not lyrics then
-    return nil
+    return nil, "no lyrics to write"
   end
   local target = path
   if not target then
     if not track or not track.path or track.path:match("^%a+://") then
-      return nil
+      return nil, "the track has no file to write next to"
     end
     target = track.path:gsub("%.[%w]+$", "") .. ".lrc"
   end
@@ -477,13 +487,224 @@ function M.save(track, lyrics, path)
     end
     text = table.concat(lines, "\n") .. "\n"
   end
+  if target:match("%.[tT][tT][mM][lL]$") then
+    -- TTML is not LRC: hand the lyrics to the TypeScript writer in Karu.
+    local ok, err = M.save_ttml(lyrics, target)
+    return ok and target or nil, err
+  end
   local fd = io.open(target, "w")
   if not fd then
-    return nil
+    return nil, "cannot write " .. target
   end
   fd:write(text)
   fd:close()
   return target
+end
+
+-- TTML (Apple Music · AMLL/QQ/NetEase · YouTube) ------------------------------------
+--
+-- TTML is the format Apple Music, QQ Music and NetEase serve, and it is richer
+-- than LRC: per-syllable timing, duet agents, `<br/>` breaks, translation and
+-- transliteration tracks. The parser lives in TypeScript (`karu/src/lyrics/
+-- ttml.ts`) and is reached through `karu lyrics <file> --format json`, which
+-- returns enhanced LRC plus the translation track aligned with it. Everything
+-- below therefore still ends in `parse_lrc`, so the karaoke renderer, the cache
+-- and the UI need no TTML knowledge at all.
+--
+-- Requires the Karu CLI (Node ≥ 22 or a compiled `karu`); without it TTML files
+-- are skipped and `M.ttml_error` explains why — never half-parsed.
+
+---@param text string|nil
+---@return boolean
+function M.looks_like_ttml(text)
+  if type(text) ~= "string" then
+    return false
+  end
+  return text:find("<%s*tt[%s>]") ~= nil or text:find("<%s*timedtext[%s>]") ~= nil
+end
+
+--- Karu CLI argv plus the module, or nil + reason.
+local function karu_cli()
+  local ok, Karu = pcall(require, "kaeru.karu")
+  if not ok or type(Karu) ~= "table" then
+    return nil, "karu is not installed"
+  end
+  if Karu.available then
+    local available, reason = Karu.available()
+    if available == false then
+      return nil, reason or "karu is unavailable"
+    end
+  end
+  local cmd = Karu.cli and Karu.cli()
+  if type(cmd) ~= "table" or not cmd[1] then
+    return nil, "karu is not installed (expected karu/bin/karu inside the plugin, or `karu` in $PATH)"
+  end
+  return cmd
+end
+
+--- Is the TTML path usable here (Karu CLI + a synchronous runner)?
+---@return boolean, string|nil
+function M.ttml_available()
+  local cmd, reason = karu_cli()
+  if not cmd then
+    return false, reason
+  end
+  if not (vim.fn and vim.fn.system) then
+    return false, "vim.fn.system is unavailable in this environment"
+  end
+  return true
+end
+
+local function shell_quote(value)
+  return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+end
+
+---@param suffix? string
+---@return string
+local function temp_path(suffix)
+  if vim.fn and vim.fn.tempname then
+    local name = vim.fn.tempname()
+    if type(name) == "string" and name ~= "" then
+      return name .. (suffix or "")
+    end
+  end
+  return (os.tmpname and os.tmpname() or "/tmp/kaeru-lyrics") .. (suffix or "")
+end
+
+local function write_file(path, text)
+  local fd = io.open(path, "w")
+  if not fd then
+    return false
+  end
+  fd:write(text)
+  fd:close()
+  return true
+end
+
+--- Run the Karu CLI and return its stdout.
+---@param args string[]
+---@return string|nil stdout, string|nil err
+local function run_cli(args)
+  local cmd, reason = karu_cli()
+  if not cmd then
+    return nil, reason
+  end
+  if not (vim.fn and vim.fn.system) then
+    return nil, "vim.fn.system is unavailable in this environment"
+  end
+  local parts = {}
+  for _, value in ipairs(cmd) do
+    parts[#parts + 1] = shell_quote(value)
+  end
+  for _, value in ipairs(args) do
+    parts[#parts + 1] = shell_quote(value)
+  end
+  local out = vim.fn.system(table.concat(parts, " "))
+  local code = (vim and vim.v and vim.v.shell_error) or 0
+  if type(out) == "table" then
+    out = table.concat(out, "\n")
+  end
+  if code ~= 0 then
+    local message = (out or ""):gsub("^%s*karu:%s*", ""):gsub("%s+$", "")
+    return nil, message ~= "" and message or ("karu lyrics exited with code " .. tostring(code))
+  end
+  return out
+end
+
+--- Parse TTML text into the same shape `parse_lrc` returns.
+---@param text string
+---@param source? string
+---@return MusicLyrics|nil, string|nil
+function M.parse_ttml(text, source)
+  if not M.looks_like_ttml(text) then
+    return nil, "not a TTML document"
+  end
+  local path = temp_path(".ttml")
+  if not write_file(path, text) then
+    return nil, "cannot write a temporary file"
+  end
+  local out, err = run_cli({ "lyrics", path, "--format", "json" })
+  os.remove(path)
+  if not out then
+    return nil, err or "karu lyrics failed"
+  end
+  local Json = require("kaeru.json")
+  local ok, payload = pcall(Json.decode, out)
+  if not ok or type(payload) ~= "table" then
+    return nil, "karu lyrics returned unreadable JSON"
+  end
+  local lrc = payload.lrc
+  if type(lrc) ~= "string" or lrc == "" then
+    return nil, payload.error or "the TTML document has no timed lines"
+  end
+
+  local parsed = M.parse_lrc(lrc, source or "ttml")
+  parsed.ttml = {
+    timing = payload.timing,
+    wordSync = payload.wordSync,
+    singers = payload.singers,
+    lang = payload.lang,
+    translationLangs = payload.translationLangs,
+    meta = payload.meta,
+  }
+  -- Translations live outside LRC: re-attach them to their line times.
+  local translated, by_line = {}, payload.translationByLine or {}
+  local cues = payload.cues or {}
+  for index, value in ipairs(by_line) do
+    local cue = cues[index]
+    if type(value) == "string" and value ~= "" then
+      translated[#translated + 1] = { time = (cue and cue.start) or -1, text = value }
+    end
+  end
+  if #translated > 0 then
+    parsed.translated = translated
+  end
+  if type(payload.summary) == "string" then
+    parsed.meta = parsed.meta or {}
+    parsed.meta.ttml = payload.summary
+  end
+  return parsed
+end
+
+--- Convert to TTML through Karu (used by `:Kikru lyrics save <file>.ttml`).
+---@param lyrics MusicLyrics
+---@param target string
+---@return boolean ok, string|nil err
+function M.save_ttml(lyrics, target)
+  local available, reason = M.ttml_available()
+  if not available then
+    return false, reason
+  end
+  if rawget(lyrics, "raw") and M.looks_like_ttml(lyrics.raw or "") then
+    return write_file(target, lyrics.raw) or false, "cannot write " .. target
+  end
+  local text = lyrics.raw
+  if not text or text == "" then
+    local lines = {}
+    for _, line in ipairs(lyrics.synced or {}) do
+      local minutes = math.floor(line.time / 60)
+      lines[#lines + 1] = ("[%02d:%05.2f]%s"):format(minutes, line.time - minutes * 60, line.text)
+    end
+    if #lines == 0 then
+      return false, "no timed lyrics to convert"
+    end
+    text = table.concat(lines, "\n") .. "\n"
+  end
+  local source = temp_path(".lrc")
+  if not write_file(source, text) then
+    return false, "cannot write a temporary file"
+  end
+  local _, err = run_cli({ "lyrics", source, "--format", "ttml", "--out", target })
+  os.remove(source)
+  if err then
+    return false, err
+  end
+  local written = io.open(target, "r")
+  if written then
+    written:close()
+    return true
+  end
+  return false, "karu lyrics did not write " .. target
 end
 
 -- Providers -------------------------------------------------------------------------

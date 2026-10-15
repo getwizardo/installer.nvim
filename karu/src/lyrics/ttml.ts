@@ -875,6 +875,37 @@ export function toCues(parsed: LyricsDoc, offsetMs = 0): { start: number; end: n
   });
 }
 
+function subtitleTime(seconds: number, comma = true): string {
+  const total = Math.max(0, Math.round(seconds * 1000));
+  const hours = Math.floor(total / 3_600_000);
+  const minutes = Math.floor((total % 3_600_000) / 60_000);
+  const secs = Math.floor((total % 60_000) / 1000);
+  const millis = total % 1000;
+  const stamp = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}${comma ? "," : "."}${String(millis).padStart(3, "0")}`;
+  return stamp;
+}
+
+/**
+ * Subtitles (`srt`) or WebVTT (`vtt`) — handy for showing lyrics through
+ * `mpv --sub-file`, and the one format every player understands.
+ */
+export function toSubtitles(doc: LyricsDoc, opts: { format?: "srt" | "vtt"; offsetMs?: number; translations?: boolean } = {}): string {
+  const format = opts.format ?? "srt";
+  const shift = (opts.offsetMs ?? 0) / 1000;
+  const blocks = doc.synced.map((line, index) => {
+    const next = doc.synced[index + 1];
+    const start = line.time + shift;
+    const end = (line.end ?? (next ? next.time : line.time + 4)) + shift;
+    const key = line.key ?? doc.keys[index];
+    const translation = opts.translations && key ? doc.translations[key] : undefined;
+    const text = translation && translation !== line.text ? `${line.text}\n${translation}` : line.text;
+    return format === "srt"
+      ? `${index + 1}\n${subtitleTime(start)} --> ${subtitleTime(Math.max(end, start + 0.2))}\n${text}\n`
+      : `${subtitleTime(start, false)} --> ${subtitleTime(Math.max(end, start + 0.2), false)}\n${text}\n`;
+  });
+  return format === "vtt" ? `WEBVTT\n\n${blocks.join("\n")}` : `${blocks.join("\n")}`;
+}
+
 /** Absolute word timings, useful for LRC `/timing` debugging. */
 export function wordTimings(parsed: LyricsDoc): { index: number; text: string; words: { time: number; text: string }[] }[] {
   return parsed.synced.map((line, index) => ({

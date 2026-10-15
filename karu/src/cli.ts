@@ -132,7 +132,7 @@ const HELP = `karu ${VERSION} — Google Cast for Neovim (Kikru)
   karu status [DEVICE] [--json]
   karu info [--json]                          protocol + environment report
 
-  karu lyrics FILE|- [--format lrc|ttml|json|plain|summary] [--lang CODE]
+  karu lyrics FILE|- [--format lrc|ttml|srt|vtt|json|plain|summary] [--lang CODE]
                      [--offset MS] [--out FILE] [--json]
       Parse Apple Music / AMLL (QQ, NetEase) / YouTube TTML and convert it.
       Default output is enhanced LRC — the format Kikru's karaoke renderer
@@ -358,15 +358,19 @@ async function main(): Promise<void> {
             ? JSON.stringify(payload)
             : format === "ttml"
               ? conversion.ttml
-              : format === "plain"
-                ? conversion.plain
-                : format === "summary"
-                  ? conversion.summary
-                  : format === "lrc"
-                    ? conversion.lrc
-                    : undefined;
+              : format === "srt"
+                ? conversion.srt
+                : format === "vtt"
+                  ? conversion.vtt
+                  : format === "plain"
+                    ? conversion.plain
+                    : format === "summary"
+                      ? conversion.summary
+                      : format === "lrc"
+                        ? conversion.lrc
+                        : undefined;
         if (rendered === undefined) {
-          out.error(`unknown --format ${format} (use lrc, ttml, json, plain or summary)`);
+          out.error(`unknown --format ${format} (use lrc, ttml, srt, vtt, json, plain or summary)`);
           return;
         }
         const destination = flagString(args, "out");

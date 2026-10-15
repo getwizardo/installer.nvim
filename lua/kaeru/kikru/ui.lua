@@ -376,6 +376,24 @@ function M.render_filters()
   return lines
 end
 
+--- TTML-only knowledge for the lyrics footer: timing kind, singers, tracks.
+---@param lyrics table|nil
+---@return string badge prefixed with " · ", or ""
+function M.lyrics_badge(lyrics)
+  local ttml = lyrics and lyrics.ttml or nil
+  if not ttml then
+    return ""
+  end
+  local bits = { ttml.wordSync and "word" or "line" }
+  if ttml.singers and ttml.singers > 1 then
+    bits[#bits + 1] = ttml.singers .. " singers"
+  end
+  if ttml.translationLangs and #ttml.translationLangs > 0 then
+    bits[#bits + 1] = "translations: " .. table.concat(ttml.translationLangs, ", ")
+  end
+  return " · ttml " .. table.concat(bits, ", ")
+end
+
 --- Render the lyrics pane (karaoke highlight + translations when available).
 ---@return string[] lines
 function M.render_lyrics()
@@ -394,17 +412,28 @@ function M.render_lyrics()
     lines[#lines + 1] = M.pad(line, inner_width() + 2)
   end
 
-  -- Word-level karaoke bar for the line that is playing right now.
+  -- Word-level karaoke bar for the line that is playing right now: the filled
+  -- part is what has been sung, the split below it shows the exact word.
   local karaoke = settings.karaoke ~= false and Lyrics.karaoke_state(lyrics, position) or nil
   if karaoke and karaoke.sung ~= "" then
-    local bar = M.pad(("      ▶ %s"):format(karaoke.sung), inner_width() + 2)
-    lines[#lines + 1] = bar
+    local width = math.max(10, inner_width() - 10)
+    local done = #karaoke.sung
+    local total = math.max(done + #karaoke.remaining, 1)
+    local filled = math.floor(width * done / total + 0.5)
+    lines[#lines + 1] = M.pad(
+      ("      ▶ %s%s"):format(string.rep("━", filled), string.rep("─", math.max(0, width - filled))),
+      inner_width() + 2
+    )
+    if karaoke.remaining ~= "" then
+      lines[#lines + 1] = M.pad(("        %s│%s"):format(karaoke.sung, karaoke.remaining), inner_width() + 2)
+    end
   end
 
   local progress = lyrics and Lyrics.current_line(lyrics, position) or 0
   local _ = progress
-  lines[#lines + 1] = ("  (source: %s%s)"):format(
+  lines[#lines + 1] = ("  (source: %s%s%s)"):format(
     Lyrics.describe(lyrics),
+    M.lyrics_badge(lyrics),
     current > 0 and (" · line " .. current) or ""
   )
   return lines

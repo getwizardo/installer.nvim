@@ -71,6 +71,10 @@ karu: bridge → Kikru http://127.0.0.1:8722/cast
 | `src/receiver/bridge.ts` | hands `LOAD`/transport to Kikru's HTTP cast server, falls back to mpv/ffplay |
 | `src/sender/client.ts` | one connection to one device: connect, launch, load, transport, volume, status |
 | `src/sender/discovery.ts` | mDNS browse → `{id, name, address, port, model}` |
+| `src/lyrics/xml.ts` | tiny namespace-aware XML scanner (prefixed names, entities, CDATA) |
+| `src/lyrics/ttml.ts` | TTML parser/writer: Apple Music, AMLL/QQ/NetEase, YouTube timedtext |
+| `src/lyrics/lrc.ts` | LRC reader (enhanced, `[offset:]`, metadata) and writer |
+| `src/lyrics/index.ts` | format detection + `convert()` (lrc ⇄ ttml ⇄ plain ⇄ json) |
 | `src/cli.ts` | `karu` command line |
 
 ## Protocol notes
@@ -131,6 +135,8 @@ karu status [DEVICE]
 karu receive [--name N] [--port P] [--address IP] [--no-mdns]
              [--bridge URL] [--token T] [--fallback mpv|ffplay|none]
              [--cert-dir DIR] [--youtube] [--json]
+karu lyrics FILE|- [--format lrc|ttml|srt|vtt|json|plain|summary] [--lang CODE]
+                   [--offset MS] [--out FILE] [--json]
 ```
 
 `DEVICE` is a device name, id, or `host[:port]`; only the *second positional*
@@ -146,6 +152,51 @@ and `KIKRU_CAST_URL` (where the receiver hands media over, default
 device is up (with the *real* port when `--port 0` was used), then one JSON
 line per event (`cast`, `play`, `pause`, `stop`, `seek`, `volume`) and finally
 `{"event":"stopped"}`.
+
+## Lyrics
+
+`karu lyrics` converts between the lyric formats. It exists because TTML —
+what Apple Music, QQ Music and NetEase serve, and what the AMLL project
+archives — carries per-syllable timing, duet agents, background vocals and
+translation/transliteration tracks that LRC cannot express; Kikru's karaoke
+renderer speaks enhanced LRC, so the conversion happens here, once, in
+TypeScript.
+
+```console
+$ karu lyrics song.ttml                          # → enhanced LRC
+[00:18.84]<00:18.84>Is <00:19.36>this <00:19.91>the <00:20.35>real <00:20.84>life?
+$ karu lyrics song.ttml --format summary
+3 lines · 00:18.84–01:00.02 · word-timed · 2 singers · translations: ja
+$ karu lyrics song.ttml --format json | jq '.cues[0], .words[0].words[1]'
+{ "start": 18.84, "end": 22.375, "text": "Is this the real life?" }
+{ "time": 19.362, "text": "this" }
+$ karu lyrics song.ttml --format ttml --out normalised.ttml   # round-trips
+$ karu lyrics song.lrc  --format ttml                         # LRC → TTML
+$ karu lyrics song.ttml --format srt --out song.srt            # subtitles for mpv
+$ karu lyrics song.ttml --format vtt --translations            # WebVTT + translation
+```
+
+What the parser understands:
+
+* **Apple Music** — `itunes:timing="Word" | "Line" | "None"`, `<p begin end
+  itunes:key ttm:agent itunes:songPart>`, word `<span>`s, `<br/>`,
+  `<iTunesMetadata>` with `<translations>` (`<text for="L1">`), `<songwriters>`,
+  `<audio lyricOffset>`, `<transliterations>`, `ttm:role="x-bg"` (and inline
+  `x-translation` spans found in the wild).
+* **AMLL / QQ / NetEase** — the same shape plus `amll:meta` (repeated keys
+  collect into arrays) and syllable-level spans that have to be re-joined
+  (`lit` + `tle`).
+* **YouTube timedtext** — `<timedtext format="3">`, milliseconds `t`/`d`, `<s>`
+  spans with *relative* `t` offsets.
+* Time syntax: `1:23.456`, `0:01:23.456`, `83.456`, `83s`, `1.5m`, `2h`,
+  `120ms`, `300f`, `12t` — all rounded to milliseconds.
+* `parse(toTtml(doc))` is equivalent to `doc` for lines, words, agents,
+  translations and transliterations (asserted by the test-suite against real
+  corpus files from `amll-ttml-db` and DAW-export Apple fixtures).
+
+`karu lyrics` is what `:Kikru lyrics` calls for `.ttml` sidecars: the Lua side
+runs `karu lyrics <file> --format json` and feeds the resulting enhanced LRC
+plus `translationByLine` back into `lua/kaeru/kikru/lyrics.lua`.
 
 ## Neovim integration
 
@@ -198,8 +249,10 @@ The tests cover the protobuf codec (round-trip, unknown fields), the
 `CastMessage` framing, DNS/mDNS encoding *and* decoding of a captured
 `_googlecast._tcp` packet, the X.509 generator (verified with Node's own
 `X509Certificate`), the receiver state machine (connect/launch/load/play/
-pause/stop/seek/volume/idle), the Kikru bridge against a stub HTTP server, and
-a full sender↔receiver session over real TLS sockets on `127.0.0.1`.
+pause/stop/seek/volume/idle), the Kikru bridge against a stub HTTP server, a
+full sender↔receiver session over real TLS sockets on `127.0.0.1`, and the
+lyrics module (XML scanner, TTML parsing for all three dialects, TTML ⇄ LRC
+round-trips, and the `karu lyrics` CLI itself as a child process).
 
 ## Limits
 

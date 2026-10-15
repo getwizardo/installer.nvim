@@ -1241,6 +1241,139 @@ test("kikru json, lyrics and visualizer helpers are pure", function()
   end
 end)
 
+test("kikru lyrics: TTML is parsed through the karu CLI", function()
+  local Json = require("kaeru.json")
+  local L = require("kaeru.kikru.lyrics")
+
+  eq(L.looks_like_ttml('<tt xmlns="http://www.w3.org/ns/ttml"><body/></tt>'), true)
+  eq(L.looks_like_ttml('<?xml version="1.0"?><timedtext format="3"></timedtext>'), true)
+  eq(L.looks_like_ttml("[00:12.00]hello"), false)
+  eq(L.looks_like_ttml(nil), false)
+  assert(not L.looks_like_ttml(""), "empty text is not TTML")
+
+  local saved = {
+    system = vim.fn.system,
+    executable = vim.fn.executable,
+    tempname = vim.fn.tempname,
+  }
+  local saved_v = vim.v
+  local calls = {}
+  -- The stubs below make every binary look installed; they must be undone even
+  -- when an assertion fails, or the rest of the suite sees a different machine.
+  local restore = function()
+    vim.fn.system = saved.system
+    vim.fn.executable = saved.executable
+    vim.fn.tempname = saved.tempname
+    vim.v = saved_v
+  end
+  local ok_run, run_err = pcall(function()
+    local out_path = "/tmp/kaeru-ttml-test-out.ttml"
+    os.remove(out_path)
+    vim.v = { shell_error = 0 }
+    vim.fn.executable = function()
+      return 1
+    end
+    vim.fn.tempname = function()
+      return "/tmp/kaeru-ttml-test"
+    end
+    local payload = {
+      ok = true,
+      kind = "ttml",
+      timing = "Word",
+      wordSync = true,
+      singers = 2,
+      lang = "en",
+      translationLangs = { "ja" },
+      summary = "2 lines · 00:12.00–00:20.50 · word-timed · 2 singers",
+      lrc = "[00:12.00]<00:12.00>Is <00:12.50>this\n[00:20.50]the real life?\n",
+      cues = { { start = 12.0, ["end"] = 15.0, text = "Is this" }, { start = 20.5, ["end"] = 23.5, text = "the real life?" } },
+      translationByLine = { "これは", nil },
+      meta = { title = "Bohemian Rhapsody" },
+    }
+    local last = ""
+    vim.fn.system = function(cmd)
+      local text = type(cmd) == "table" and table.concat(cmd, " ") or tostring(cmd)
+      calls[#calls + 1] = text
+      last = text
+      if text:match("^node ") then
+        return "v22.22.3\n"
+      end
+      local out = text:match("'%-%-out'%s+'([^']+)'")
+      if out then
+        local fd = io.open(out, "w")
+        if fd then
+          fd:write('<tt xmlns:itunes="http://music.apple.com/lyric-ttml-internal" itunes:timing="Word"></tt>\n')
+          fd:close()
+        end
+        return ""
+      end
+      return Json.encode(payload)
+    end
+
+    local available, reason = L.ttml_available()
+    eq(available, true, tostring(reason))
+
+    local parsed, err = L.parse_ttml(payload.lrc == "" and "" or '<tt itunes:timing="Word"><body><div><p begin="0:12.000" end="0:15.000">x</p></div></body></tt>', "song.ttml")
+    eq(err, nil)
+    eq(#parsed.synced, 2)
+    eq(parsed.synced[1].time, 12)
+    eq(#parsed.synced[1].words, 2)
+    assert(parsed.synced[1].words[1].text:match("^Is"), "first word: " .. tostring(parsed.synced[1].words[1].text))
+    eq(parsed.synced[1].words[2].time, 12.5)
+    eq(parsed.source, "song.ttml")
+    eq(parsed.ttml.singers, 2)
+    eq(parsed.ttml.wordSync, true)
+    eq(parsed.translated[1].text, "これは")
+    eq(parsed.translated[1].time, 12)
+    assert(#parsed.translated == 1, "only translated lines are kept")
+    assert(last:find("lyrics", 1, true) and last:find("--format", 1, true), "conversion goes through karu lyrics: " .. last)
+
+    local UI = require("kaeru.kikru.ui")
+    eq(UI.lyrics_badge(nil), "")
+    eq(UI.lyrics_badge({ source = "x.lrc" }), "")
+    eq(
+      UI.lyrics_badge({ source = "x.ttml", ttml = { wordSync = true, singers = 2, translationLangs = { "ja", "en" } } }),
+      " · ttml word, 2 singers, translations: ja, en"
+    )
+    eq(UI.lyrics_badge({ source = "x.ttml", ttml = { wordSync = false } }), " · ttml line")
+
+    -- a .ttml sidecar file next to the audio is picked up by sidecar_path
+    local side = "/tmp/kaeru-ttml-sidecar.ttml"
+    local fd = io.open(side, "w")
+    fd:write('<tt itunes:timing="Word"><body><div><p begin="0:12.000" end="0:15.000">hi</p></div></body></tt>')
+    fd:close()
+    local from_file = L.from_file(side)
+    eq(#from_file.synced, 2)
+    eq(from_file.translated[1].time, 12)
+    eq(L.sidecar_path({ path = "/tmp/kaeru-ttml-sidecar.mp3" }), side)
+    os.remove(side)
+
+    -- saving TTML writes through the CLI; raw TTML is written verbatim
+    local written, write_err = L.save(nil, { raw = "[00:12.00]hello\n" }, out_path)
+    eq(written, out_path, tostring(write_err))
+    local check = io.open(out_path, "r")
+    assert(check and check:read("*a"):find("<tt", 1, true), "TTML output written")
+    if check then
+      check:close()
+    end
+    local raw_path = "/tmp/kaeru-ttml-raw.ttml"
+    local raw_written = L.save(nil, { raw = '<tt itunes:timing="Line"><body/></tt>' }, raw_path)
+    eq(raw_written, raw_path)
+    local raw_check = io.open(raw_path, "r")
+    assert(raw_check and raw_check:read("*a"):find("itunes:timing", 1, true), "raw TTML kept as-is")
+    if raw_check then
+      raw_check:close()
+    end
+    os.remove(raw_path)
+    os.remove(out_path)
+
+  end)
+  restore()
+  if not ok_run then
+    error(run_err)
+  end
+end)
+
 test("kikru daemon frames JSON lines and syncs snapshots", function()
   local Daemon = require("kaeru.kikru.daemon")
   local decoded = Daemon.consume('{"a":1}\n{"b":2}\n{"c":', "")

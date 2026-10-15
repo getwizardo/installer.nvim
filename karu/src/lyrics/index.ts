@@ -5,7 +5,18 @@
  * can be tested and reused by the receiver (e.g. to show a line in the bridge).
  */
 import { buildLrc, parseLrc } from "./lrc.ts";
-import { describe as describeTtml, isTtml, parse as parseTtml, toCues, toLrc, toPlain, toTtml, wordTimings, type LyricsDoc } from "./ttml.ts";
+import {
+  describe as describeTtml,
+  isTtml,
+  parse as parseTtml,
+  toCues,
+  toLrc,
+  toPlain,
+  toSubtitles,
+  toTtml,
+  wordTimings,
+  type LyricsDoc,
+} from "./ttml.ts";
 
 export * from "./ttml.ts";
 export * from "./lrc.ts";
@@ -34,6 +45,8 @@ export interface Conversion {
   lrc: string;
   ttml: string;
   plain: string;
+  srt: string;
+  vtt: string;
   summary: string;
   json: Record<string, unknown>;
 }
@@ -49,6 +62,9 @@ export function convert(text: string, options: ConvertOptions = {}): Conversion 
   // controls whether `plain` interleaves them.
   const ttml = toTtml(doc, { ...(options.lang ? { lang: options.lang } : {}), offsetMs });
   const plain = toPlain(doc, { translations: options.translations === true });
+  const subtitles = { translations: options.translations === true, offsetMs };
+  const srt = toSubtitles(doc, { ...subtitles, format: "srt" });
+  const vtt = toSubtitles(doc, { ...subtitles, format: "vtt" });
   const duration = doc.synced.reduce((max, line) => Math.max(max, line.end ?? line.time), 0);
   return {
     kind,
@@ -56,6 +72,8 @@ export function convert(text: string, options: ConvertOptions = {}): Conversion 
     lrc,
     ttml,
     plain,
+    srt,
+    vtt,
     summary: describeTtml(doc),
     json: {
       ok: true,
@@ -66,6 +84,9 @@ export function convert(text: string, options: ConvertOptions = {}): Conversion 
       lang: doc.lang ?? null,
       translationLangs: doc.translationLangs,
       translations: doc.translations,
+      // Index-aligned with `cues` and `lrc`: what the Lua bridge attaches to
+      // each parsed line (it never sees `itunes:key`).
+      translationByLine: doc.synced.map((line, index) => doc.translations[line.key ?? doc.keys[index] ?? `L${index + 1}`] ?? null),
       transliterations: doc.transliterations.map((track) => ({ lang: track.lang ?? null, lines: Object.keys(track.lines).length })),
       agents: doc.agents,
       singers: new Set(doc.agents.filter((agent) => agent > 0)).size,

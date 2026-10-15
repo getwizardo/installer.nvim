@@ -51,5 +51,6 @@ export {
   encodeCastMessage,
   type CastMessage,
 } from "./protocol/castMessage.ts";
+export * as lyrics from "./lyrics/index.ts";
 export * as messages from "./protocol/messages.ts";
 export * as protobuf from "./protocol/protobuf.ts";

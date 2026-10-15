@@ -14,6 +14,7 @@ import {
   toCues,
   toLrc,
   toPlain,
+  toSubtitles,
   toTtml,
   wordTimings,
 } from "../src/lyrics/ttml.ts";
@@ -315,6 +316,25 @@ test("ttml: toPlain, toCues, wordTimings and translation helpers", () => {
 
 /* ------------------------------ Robustness ------------------------------ */
 
+test("lyrics: toSubtitles writes SRT and WebVTT (with translations on request)", () => {
+  const doc = parse(APPLE_WORD);
+  const srt = toSubtitles(doc);
+  assert.match(srt, /^1\n00:00:18,840 --> 00:00:22,375\nIs this the real life\?\n/);
+  assert.match(srt, /\n2\n00:00:22,540 --> 00:00:24,100\nMama, just killed a man \(uh\)\n/);
+  assert.match(srt, /\n3\n00:01:00,020 --> 00:01:02,000\nMama ooo\u2019s\n$/, "the last cue uses its end attribute");
+
+  const vtt = toSubtitles(doc, { format: "vtt" });
+  assert.match(vtt, /^WEBVTT\n\n00:00:18\.840 --> 00:00:22\.375\nIs this the real life\?\n/);
+  assert.doesNotMatch(vtt, /^1$/m, "vtt has no cue numbers");
+
+  assert.match(toSubtitles(doc, { translations: true }), /Is this the real life\?\nボヘミアン\n/);
+  assert.match(toSubtitles(doc, { offsetMs: -165 }), /^1\n00:00:18,675 --> /);
+
+  const conversion = convert(APPLE_WORD);
+  assert.equal(conversion.vtt.startsWith("WEBVTT"), true);
+  assert.equal(conversion.srt.includes("-->"), true);
+});
+
 test("ttml: minimal documents, whitespace and unknown namespaces", () => {
   const parsed = parse(`<tt xmlns:itunes="x" itunes:timing="Line"><body><div>
     <p begin="1.5s" end="3s">   hello    world   </p>
@@ -438,4 +458,76 @@ test("lyrics: conversion honours offset and translation options", () => {
   assert.equal(words[0]!.words[0]!.time, 18.84, "wordTimings reports document time; --offset only shifts output");
   const noTranslations = toPlain(parse(APPLE_WORD));
   assert.equal(noTranslations.split("\n").length, 3, "plain output drops translations unless asked");
+});
+
+/* --------------------------- CLI, end to end ----------------------------- */
+
+test("cli: `karu lyrics` converts a file, a pipe and writes --out", async () => {
+  const { spawn } = await import("node:child_process");
+  const { mkdtempSync, rmSync, readFileSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const cli = join(here, "..", "src", "cli.ts");
+  const dir = mkdtempSync(join(tmpdir(), "karu-lyrics-"));
+  const source = join(dir, "song.ttml");
+  writeFileSync(source, APPLE_WORD);
+
+  const run = (args: string[], input?: string): Promise<{ code: number | null; stdout: string; stderr: string }> =>
+    new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [cli, ...args], { stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+      let stdout = "";
+      let stderr = "";
+      child.stdout?.on("data", (chunk: Buffer) => (stdout += chunk.toString()));
+      child.stderr?.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+      child.on("error", reject);
+      child.on("close", (code) => resolve({ code, stdout, stderr }));
+      if (input !== undefined) child.stdin!.end(input);
+    });
+
+  try {
+    const converted = await run(["lyrics", source]);
+    assert.equal(converted.code, 0, converted.stderr);
+    assert.match(converted.stdout, /^\[length:01:02\.00\]\n\[00:18\.84\]<00:18\.84>Is /);
+
+    const summary = await run(["lyrics", source, "--format", "summary"]);
+    assert.match(summary.stdout.trim(), /^3 lines · 00:18\.84–01:00\.02 · word-timed/);
+
+    const piped = await run(["lyrics", "-", "--format", "summary"], APPLE_WORD);
+    assert.equal(piped.stdout.trim(), summary.stdout.trim(), "stdin and file agree");
+
+    const json = await run(["lyrics", source, "--format", "json"]);
+    const payload = JSON.parse(json.stdout) as Record<string, unknown>;
+    assert.equal(payload["ok"], true);
+    assert.equal(payload["wordSync"], true);
+    assert.equal(payload["singers"], 2);
+    assert.deepEqual(payload["translationByLine"], ["ボヘミアン", "ママは言った", null]);
+    assert.equal(payload["lang"], "en");
+    assert.equal((payload["words"] as { words: unknown[] }[])[0]!.words.length, 5);
+
+    const out = join(dir, "written.ttml");
+    const written = await run(["lyrics", source, "--format", "ttml", "--out", out]);
+    assert.equal(written.code, 0, written.stderr);
+    assert.match(readFileSync(out, "utf8"), /itunes:timing="Word"/);
+    const reread = await run(["lyrics", out, "--format", "summary"]);
+    assert.match(reread.stdout.trim(), /^3 lines · 00:18\.84–01:00\.02 · word-timed/);
+
+    const bad = await run(["lyrics", source, "--format", "nonsense"]);
+    assert.equal(bad.code, 1);
+    assert.match(bad.stderr, /unknown --format nonsense/);
+
+    const missing = await run(["lyrics", join(dir, "nope.ttml")]);
+    assert.equal(missing.code, 1);
+    assert.match(missing.stderr, /cannot read/);
+
+    const lrcOut = await run(["lyrics", source]);
+    const backToTtml = join(dir, "back.ttml");
+    writeFileSync(join(dir, "round.lrc"), lrcOut.stdout);
+    await run(["lyrics", join(dir, "round.lrc"), "--format", "ttml", "--out", backToTtml]);
+    const again = await run(["lyrics", backToTtml, "--format", "summary"]);
+    assert.match(again.stdout.trim(), /^3 lines · 00:18\.84/, "TTML → LRC → TTML keeps the lines");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
