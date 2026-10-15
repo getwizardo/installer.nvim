@@ -29,10 +29,10 @@ const BOOT_STEPS = [
   "Mounting lazy.nvim Spec Engine & Safe Validator ............... [  OK  ]",
   "Connecting GitHub Live Repository Autocomplete API ............ [  OK  ]",
   "Indexing https://mason-registry.dev (601 pkgs / 296 LSPs) ..... [  OK  ]",
-  "Binding :Clina -> NeoCodeium (monkoose/neocodeium) ............ [  OK  ]",
+  "Linking Neovim AI plugins (NeoCodeium, CodeCompanion) ......... [  OK  ]",
   "Starting :Kikru 10-Band EQ & 2-Neovim TCP RPC ........... [  OK  ]",
   "Initializing Dual-Pane SFTP Studio & Custom Web Components .... [  OK  ]",
-  "Mounting shadcn/ui + Vaul Drawer & Code IDE Workspace ......... [READY ]",
+  "Mounting remote Neovim editor & minimal web IDE .............. [READY ]",
 ];
 
 export function registerStarskyWebComponents(): void {
@@ -170,7 +170,7 @@ export function registerStarskyWebComponents(): void {
           </style>
           <div class="neocodeium-bar">
             <div>
-              <span class="nc-badge">⚡ :Clina · NeoCodeium (monkoose/neocodeium)</span>
+              <span class="nc-badge">NeoCodeium · Neovim plugin (monkoose/neocodeium)</span>
               <span class="nc-ghost-preview" id="ghost-text"></span>
             </div>
             <div class="nc-actions">
@@ -413,7 +413,7 @@ export function registerStarskyWebComponents(): void {
             .step.pending { color: #48546e; }
           </style>
           <pre class="logo">${ASCII_LOGO_LINES.join("\n")}</pre>
-          <div class="subtitle">★ STARSKY OS · INSTALLER.NVIM · NEOCODEIUM (:CLINA) · MASON-REGISTRY.DEV · :MUSICPLAYER ★</div>
+          <div class="subtitle">★ STARSKY OS · INSTALLER.NVIM · NEOCODEIUM · MASON-REGISTRY.DEV · :MUSICPLAYER ★</div>
           <div class="progress">BOOTING SUBSYSTEMS [${bar}] ${pct}%</div>
           <div>${stepRows}</div>
         `;
@@ -593,10 +593,10 @@ export function registerStarskyWebComponents(): void {
             }
           </style>
           <div class="term-out" id="term-out">[Starsky Neovim Ex-Command Terminal · Custom Web Component &lt;starsky-terminal&gt;]
-Type :Kaeru, :Clina, :NeoCodeium auth, :Kikru server, or :Mason and press Enter.</div>
+Type :e file, :w, :ls, :Kaeru save owner/repo, :Kikru play or :help and press Enter.</div>
           <div class="term-in-row">
             <span class="prompt-char">:</span>
-            <input id="term-in" placeholder="Clina status | Kikru server 41999 | Kaeru save folke/noice.nvim" />
+            <input id="term-in" placeholder=":e lua/kaeru/init.lua | :Kaeru save folke/noice.nvim | :help" />
           </div>
         `;
       }

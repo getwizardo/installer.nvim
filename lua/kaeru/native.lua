@@ -1,6 +1,6 @@
 -- kaeru.nvim · completion for every command Neovim itself has.
 --
--- `complete.lua` knows our own commands (`:Kaeru`, `:Kikru`, `:Clina`). This
+-- `complete.lua` knows our own commands (`:Kaeru`, `:Kikru`, `:Karu`). This
 -- module knows *every other* `:` command: for each of them the argument
 -- position decides what can follow, exactly like Neovim's own `<Tab>` but with
 -- fuzzy ranking, descriptions and a single flat item list.

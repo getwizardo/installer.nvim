@@ -1,4 +1,4 @@
--- Starsky for Neovim Webclient integration (`:Kaeru starsky` / `:Clina web`).
+-- Starsky for Neovim Webclient integration (`:Kaeru starsky` / `:Kaeru web`).
 --
 -- Manages the SvelteKit (Vite + TypeScript, mobile-first) webclient located in
 -- `starsky/` inside the kaeru.nvim repository (or a custom directory configured
@@ -170,6 +170,166 @@ function M.status()
     ("  status:    %s"):format(M.running() and ("running at " .. M.url()) or "stopped"),
   }
   UI.notify(table.concat(lines, "\n"))
+end
+
+-- `:Kaeru starsky info` -----------------------------------------------------
+
+-- 5x5 pixel glyphs; "1" is a lit pixel. Each pixel is drawn 2x2 characters.
+M.pixel_font = {
+  K = { "10001", "10010", "11100", "10010", "10001" },
+  I = { "11111", "00100", "00100", "00100", "11111" },
+  T = { "11111", "00100", "00100", "00100", "00100" },
+  ["3"] = { "11110", "00001", "01110", "00001", "11110" },
+}
+
+-- Colors picked at random for the "KIT" splash.
+M.info_palette = { "#ff5f87", "#5fd7ff", "#ffd75f", "#87ff5f", "#d787ff", "#ff8700", "#5fffd7" }
+
+M.info_frame_ms = 160
+
+--- Draw one glyph as 10 rows of text. `scan` is a pixel row (1..5) that is
+--- drawn brighter, which is how the animated "3" sweeps down.
+---@param ch string
+---@param scan? integer
+---@return string[]
+function M.pixel_glyph(ch, scan)
+  local rows = {}
+  for r, bits in ipairs(M.pixel_font[ch]) do
+    local line = {}
+    for c = 1, #bits do
+      if bits:sub(c, c) == "1" then
+        line[#line + 1] = (scan == r) and "▓▓" or "██"
+      else
+        line[#line + 1] = "  "
+      end
+    end
+    local text = table.concat(line)
+    rows[#rows + 1] = text
+    rows[#rows + 1] = text
+  end
+  return rows
+end
+
+--- Join glyph rows side by side with `gap` spaces between glyphs.
+---@param glyphs string[][]
+---@param gap integer
+---@return string[]
+local function join_glyphs(glyphs, gap)
+  local out = {}
+  local spacer = string.rep(" ", gap)
+  for r = 1, #glyphs[1] do
+    local parts = {}
+    for i, g in ipairs(glyphs) do
+      parts[#parts + 1] = g[r]
+      if i < #glyphs then
+        parts[#parts + 1] = spacer
+      end
+    end
+    out[#out + 1] = table.concat(parts)
+  end
+  return out
+end
+
+--- Lines of the splash for animation frame `frame` (0-based).
+---@param frame integer
+---@return string[]
+function M.info_lines(frame)
+  local scan = (frame % 5) + 1
+  local kit = join_glyphs({ M.pixel_glyph("K"), M.pixel_glyph("I"), M.pixel_glyph("T") }, 2)
+  local three = M.pixel_glyph("3", scan)
+
+  local lines = { "" }
+  for _, row in ipairs(kit) do
+    lines[#lines + 1] = "  " .. row .. "    "
+  end
+  -- The animated "3" sits to the right of KIT, aligned with its top row.
+  for i, row in ipairs(three) do
+    lines[i + 1] = lines[i + 1] .. row
+  end
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "  STARSKY · KIT · NEOCODEIUM"
+  lines[#lines + 1] = "  q / <Esc> to close"
+  return lines
+end
+
+--- Open the "KIT" splash: a floating window with a random color and an animated
+--- pixel "3". The animation timer stops when the window or buffer goes away.
+function M.info()
+  local uv = vim.uv or vim.loop
+  math.randomseed(math.floor(uv.hrtime() % 2147483647))
+  local color = M.info_palette[math.random(#M.info_palette)]
+  local hl = "KaeruStarskyInfo"
+  vim.api.nvim_set_hl(0, hl, { fg = color, bold = true })
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].swapfile = false
+  vim.bo[buf].filetype = "kaeru-starsky-info"
+
+  local function draw(frame)
+    if not vim.api.nvim_buf_is_valid(buf) then
+      return false
+    end
+    vim.bo[buf].modifiable = true
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, M.info_lines(frame))
+    vim.bo[buf].modifiable = false
+    return true
+  end
+
+  local lines = M.info_lines(0)
+  local width = 0
+  for _, l in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(l))
+  end
+  local height = #lines
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = math.min(width + 2, vim.o.columns - 2),
+    height = math.min(height, vim.o.lines - 4),
+    row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1),
+    col = math.max(0, math.floor((vim.o.columns - width) / 2)),
+    style = "minimal",
+    border = "rounded",
+  })
+  vim.wo[win].winhighlight = "Normal:" .. hl .. ",FloatBorder:" .. hl
+  draw(0)
+
+  local timer = uv.new_timer()
+  local frame = 0
+  local function stop()
+    if timer and not timer:is_closing() then
+      timer:stop()
+      timer:close()
+    end
+    timer = nil
+  end
+  timer:start(
+    M.info_frame_ms,
+    M.info_frame_ms,
+    vim.schedule_wrap(function()
+      frame = frame + 1
+      if not draw(frame) then
+        stop()
+      end
+    end)
+  )
+
+  local function close()
+    stop()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  vim.api.nvim_create_autocmd({ "BufWipeout", "BufUnload" }, {
+    buffer = buf,
+    once = true,
+    callback = stop,
+  })
+  for _, lhs in ipairs({ "q", "<Esc>" }) do
+    vim.keymap.set("n", lhs, close, { buffer = buf, nowait = true, desc = "close kaeru starsky info" })
+  end
+  return win
 end
 
 return M

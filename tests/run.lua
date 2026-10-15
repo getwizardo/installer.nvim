@@ -49,6 +49,11 @@ if not vim then
       stdpath = function()
         return "/tmp/kaeru-test"
       end,
+      strdisplaywidth = function(str)
+        -- count code points: every byte that is not a UTF-8 continuation byte
+        local _, continuation = str:gsub("[\128-\191]", "")
+        return #str - continuation
+      end,
     },
     tbl_keys = function(t)
       local out = {}
@@ -901,15 +906,14 @@ test("complete field & cmdline completion", function()
 
   -- Command-line completion
   local subs = Complete.cmdline("", "Kaeru ", 10)
-  assert(Compat.tbl_contains(subs, "parse") and Compat.tbl_contains(subs, "starsky") and Compat.tbl_contains(subs, "mason") and Compat.tbl_contains(subs, "save") and Compat.tbl_contains(subs, "clina"))
+  assert(Compat.tbl_contains(subs, "parse") and Compat.tbl_contains(subs, "starsky") and Compat.tbl_contains(subs, "mason") and Compat.tbl_contains(subs, "save") and not Compat.tbl_contains(subs, "clina"))
   local m_lsps = Complete.cmdline("lua_ls", "Kaeru mason install lua_ls", 30)
   eq(m_lsps[1], "lua_ls")
   local sftp_acts = Complete.cmdline("up", "Kaeru sftp up", 17)
   eq(sftp_acts[1], "upload")
   local sftp_ui = Complete.cmdline("ui", "Kaeru sftp ui", 17)
   eq(sftp_ui[1], "ui")
-  local clina_acts = Complete.clina_cmdline("", "Clina ", 6)
-  assert(Compat.tbl_contains(clina_acts, "ide") and Compat.tbl_contains(clina_acts, "agent") and Compat.tbl_contains(clina_acts, "mcp"))
+  eq(Complete.clina_cmdline, nil, ":Clina completion was removed")
 end)
 
 -- Spec saving & validation fixes -----------------------------------------------
@@ -949,25 +953,23 @@ test("spec validation with uninstalled require/vim.cmd and saving spec to disk",
   os.remove(saved_path)
 end)
 
--- SFTP UI, Clina NeoCodeium, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
-test("sftp ui helpers and clina neocodeium integration", function()
+-- SFTP UI, NeoCodeium AI preset, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
+test("sftp ui helpers and the NeoCodeium AI preset", function()
   local Sftp = require("kaeru.sftp")
   assert(type(Sftp.ui) == "function", "Sftp.ui must be a function")
   assert(type(Sftp.list_local_dir) == "function", "Sftp.list_local_dir must be a function")
 
-  local Clina = require("kaeru.clina")
-  eq(Clina.NEOCODEIUM_REPO, "monkoose/neocodeium")
-  eq(Clina.providers[1].id, "neocodeium")
-  local nc_spec = Clina.neocodeium_spec()
-  eq(nc_spec.repo, "monkoose/neocodeium")
-  eq(nc_spec.cmd, "NeoCodeium")
-  local gen = assert(Spec.generate(nc_spec, { header = false }))
+  -- NeoCodeium is a plain Neovim plugin now (no :Clina wrapper): it lives in the AI presets
+  local Ai = require("kaeru.ai")
+  local nc
+  for _, preset in ipairs(Ai.presets) do
+    if preset.repo == "monkoose/neocodeium" then nc = preset end
+  end
+  assert(nc, "NeoCodeium preset missing")
+  eq(nc.form.cmd, "NeoCodeium")
+  local gen = assert(Spec.generate(nc.form, { header = false }))
   assert(gen.source:find('"monkoose/neocodeium"', 1, true))
   assert(loadstring(gen.source), "NeoCodeium spec must be valid Lua")
-
-  local syn = Clina._fallback_synthesize({ prompt = "Configure monkoose/neocodeium", mode = "agent" })
-  eq(syn.ok, true)
-  assert(syn.proposal and syn.proposal.code:find("monkoose/neocodeium", 1, true))
 end)
 
 test("github api dynamic plugin autocomplete, musicplayer 2-nvim & ascii boot", function()
@@ -1073,7 +1075,7 @@ test("parse_cmdline strips ranges, bangs and picks the last pipeline segment", f
   eq(C.parse_cmdline("echo 1 | Kikru play")[1], "Kikru")
   eq(C.detect_command("Kae"), "Kaeru")
   eq(C.detect_command("Kik"), "Kikru")
-  eq(C.detect_command("Cli"), "Clina")
+  eq(C.detect_command("Cli"), nil)
   eq(C.detect_command("zzz"), nil)
   local _, empty_command = C.parse_cmdline("")
   eq(empty_command, "")
@@ -1083,7 +1085,7 @@ test("complete_items covers subcommands, actions and arguments", function()
   local C = require("kaeru.complete")
   local subs = C.complete_items("Kaeru ", 7)
   local sub_words = C.words(subs)
-  for _, want in ipairs({ "add", "save", "parse", "mason", "sftp", "cache", "config", "ai", "clina", "music", "boot" }) do
+  for _, want in ipairs({ "add", "save", "parse", "mason", "sftp", "cache", "config", "ai", "music", "boot" }) do
     assert(Compat.tbl_contains(sub_words, want), "missing subcommand " .. want)
   end
   for _, item in ipairs(subs) do
@@ -1109,8 +1111,7 @@ test("complete_items covers subcommands, actions and arguments", function()
   assert(Compat.tbl_contains(C.words(C.complete_items("Kikru cast ", 12)), "youtube"), "cast targets")
   assert(Compat.tbl_contains(C.words(C.complete_items("Kikru cast server ", 19)), "8722"), "cast port")
 
-  local clina = C.words(C.complete_items("Clina ", 7))
-  assert(Compat.tbl_contains(clina, "ask") and Compat.tbl_contains(clina, "login"))
+  eq(C.detect_command("Clina "), nil, ":Clina is no longer one of our commands")
 
   -- partial arglead filters instead of erroring
   assert(Compat.tbl_contains(C.words(C.complete_items("Kaeru ma", 9)), "mason"))
@@ -1744,14 +1745,14 @@ test("complete.everything covers commands, files and every native category", fun
     elseif category == "color" then
       return { "tokyonight", "catppuccin" }
     elseif category == "command" then
-      return { "Kaeru", "Kikru", "Clina", "Lazy" }
+      return { "Kaeru", "Kikru", "Lazy" }
     end
     return {}
   end
   local items = C.everything("")
   local words = C.words(items)
   assert(#words > 60, "expected a big candidate list, got " .. #words)
-  for _, want in ipairs({ "Kaeru", "Kikru", "Clina", "Kaeru add", "Kikru cast", "lua/kaeru/init.lua", "tokyonight" }) do
+  for _, want in ipairs({ "Kaeru", "Kikru", "Kaeru add", "Kikru cast", "lua/kaeru/init.lua", "tokyonight" }) do
     assert(Compat.tbl_contains(words, want), "everything() missing " .. want)
   end
   local file_matches = C.words(C.everything("complete.lua"))
@@ -1764,10 +1765,11 @@ test("complete.everything covers commands, files and every native category", fun
   vim.fn.getcompletion = nil
 end)
 
-test("plugin/kaeru.lua registers :Kaeru, :Kikru, :Clina and the legacy alias", function()
+test("plugin/kaeru.lua registers :Kaeru, :Kikru, :Karu and the legacy alias (no :Clina)", function()
   dofile("plugin/kaeru.lua")
   local commands = vim.api._commands
-  for _, name in ipairs({ "Kaeru", "Kikru", "Clina", "Karu", "MusicPlayer" }) do
+  eq(commands["Clina"], nil, ":Clina must not be registered")
+  for _, name in ipairs({ "Kaeru", "Kikru", "Karu", "MusicPlayer" }) do
     assert(commands[name], "missing command " .. name)
     eq(type(commands[name].fn), "function")
     eq(type(commands[name].opts.complete), "function", name .. " needs completion")
@@ -2327,6 +2329,53 @@ test("starsky: the CLI commands run Vite and the npm build, not yarn/next", func
   eq(table.concat(Starsky.build_command(), " "), "npm run build")
   assert(not table.concat(dev, " "):find("yarn", 1, true), "no yarn")
   assert(not table.concat(dev, " "):find("next", 1, true), "no next")
+end)
+
+test("starsky info: KIT and the animated pixel 3 render as a fixed-width splash", function()
+  local Starsky = require("kaeru.starsky")
+  local f0 = Starsky.info_lines(0)
+  local f1 = Starsky.info_lines(1)
+  assert(#f0 >= 12, "splash has the 10 pixel rows plus a caption")
+  local joined = table.concat(f0, "\n")
+  assert(joined:find("████", 1, true), "KIT is drawn with lit pixels")
+  -- the 3 is drawn at the right of KIT, so every pixel row of KIT carries it
+  eq(f0[2]:find("█", 1, true) ~= nil, true, "KIT row 1 is lit")
+  -- the animation moves the highlighted scan row between frames
+  assert(table.concat(f0, "\n") ~= table.concat(f1, "\n"), "frames differ")
+  assert(table.concat(f1, "\n"):find("▓▓", 1, true), "frame 1 highlights a pixel row of the 3")
+  -- the palette offers several colors and the picker stays inside it
+  assert(#Starsky.info_palette >= 3, "palette has colors")
+  eq(Starsky.pixel_glyph("3", 1)[1]:find("██", 1, true) ~= nil or Starsky.pixel_glyph("3", 1)[1]:find("▓▓", 1, true) ~= nil, true, "3 glyph has pixels")
+end)
+
+test("welcome: the logo is centered and the screen is a plain text list", function()
+  local Welcome = require("kaeru.welcome")
+  local lines = Welcome.lines(100)
+  assert(#lines > 8, "logo plus hints")
+  for _, l in ipairs(lines) do
+    assert(type(l) == "string", "every line is a string")
+  end
+  assert(table.concat(lines, "\n"):find("STARSKY", 1, true), "logo/tagline present")
+  -- the first non-empty logo line is indented to center it
+  local first = nil
+  for _, l in ipairs(lines) do
+    if l ~= "" then first = l break end
+  end
+  assert(first and first:match("^%s+"), "logo is indented")
+end)
+
+test("welcome: enabled by default and can be turned off with welcome.enabled = false", function()
+  local Config = require("kaeru.config")
+  eq(Config.defaults.welcome.enabled, true, "default on")
+end)
+
+test("starsky: `info` is a completable :Kaeru starsky action", function()
+  local Complete = require("kaeru.complete")
+  local found = false
+  for _, a in ipairs(Complete.starsky_actions) do
+    if a.word == "info" then found = true end
+  end
+  eq(found, true, "info completion")
 end)
 
 test("starsky: the repository ships a SvelteKit project detected by the status report", function()

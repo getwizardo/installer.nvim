@@ -1,5 +1,6 @@
 import { callNvim, type NvimAction } from "./nvim";
 import fs from "fs";
+import os from "os";
 import path from "path";
 
 export interface KaeruForm {
@@ -53,18 +54,42 @@ export function getRepoRoot(): string {
   if (fs.existsSync(path.join(parent, "lua", "kaeru", "init.lua"))) {
     return parent;
   }
-  return "/home/user/kaeru.nvim";
+  return cwd;
 }
 
-export function getDefaultPluginsDir(customDir?: string): string {
+/**
+ * Default spec directory without asking Neovim: `$XDG_CONFIG_HOME/nvim/lua/plugins`
+ * (lazy.nvim's default). Used when Neovim is not available.
+ */
+export function fallbackPluginsDir(customDir?: string): string {
   if (customDir && customDir.trim() !== "") {
     const trimmed = customDir.trim();
-    if (path.isAbsolute(trimmed)) {
-      return trimmed;
-    }
-    return path.join(getRepoRoot(), trimmed);
+    return path.isAbsolute(trimmed) ? trimmed : path.join(getRepoRoot(), trimmed);
   }
-  return path.join(getRepoRoot(), "lua", "plugins");
+  const xdg = process.env.XDG_CONFIG_HOME?.trim();
+  const configHome = xdg ? xdg : path.join(os.homedir(), ".config");
+  return path.join(configHome, "nvim", "lua", "plugins");
+}
+
+/**
+ * The directory `:Kaeru save` writes to. With Neovim available this asks the
+ * Lua side (`kaeru.lazy`.plugins_dir), the same resolution `:Kaeru save` uses, so
+ * web-saved specs land where lazy.nvim loads them. Otherwise it falls back to
+ * the default config path.
+ */
+export async function resolvePluginsDir(customDir?: string): Promise<string> {
+  if (customDir && customDir.trim() !== "") {
+    return fallbackPluginsDir(customDir);
+  }
+  try {
+    const res = await callNvim<{ ok: boolean; dir?: string }>(getRepoRoot(), "plugins_dir", {});
+    if (res && res.ok && res.dir) {
+      return res.dir;
+    }
+  } catch {
+    // no Neovim on this machine: use the default below
+  }
+  return fallbackPluginsDir();
 }
 
 
@@ -295,9 +320,11 @@ export async function generateSpec(form: KaeruForm): Promise<{
 
 export async function saveSpecToDisk(
   form: KaeruForm,
-  customDir?: string
+  customDir?: string,
+  opts: { overwrite?: boolean } = {}
 ): Promise<{
   ok: boolean;
+  exists?: boolean;
   path?: string;
   relativePath?: string;
   file?: string;
@@ -310,11 +337,20 @@ export async function saveSpecToDisk(
     return { ok: false, error: genRes.error || "Invalid plugin spec" };
   }
 
-  const dir = getDefaultPluginsDir(customDir);
+  const dir = await resolvePluginsDir(customDir);
   try {
     fs.mkdirSync(dir, { recursive: true });
     const filename = `${genRes.generated.file}.lua`;
     const fullPath = path.join(dir, filename);
+    if (fs.existsSync(fullPath) && !opts.overwrite) {
+      return {
+        ok: false,
+        exists: true,
+        path: fullPath,
+        file: genRes.generated.file,
+        error: `${filename} already exists in ${dir}. Overwrite it?`,
+      };
+    }
     fs.writeFileSync(fullPath, genRes.generated.source, "utf8");
     const repoRoot = getRepoRoot();
     const relativePath = fullPath.startsWith(repoRoot)
@@ -327,7 +363,7 @@ export async function saveSpecToDisk(
       relativePath,
       file: genRes.generated.file,
       generated: genRes.generated,
-      savedSpecs: listSavedSpecs(customDir),
+      savedSpecs: await listSavedSpecs(customDir),
     };
   } catch (err) {
     return {
@@ -337,8 +373,8 @@ export async function saveSpecToDisk(
   }
 }
 
-export function listSavedSpecs(customDir?: string): SavedSpecFile[] {
-  const dir = getDefaultPluginsDir(customDir);
+export async function listSavedSpecs(customDir?: string): Promise<SavedSpecFile[]> {
+  const dir = await resolvePluginsDir(customDir);
   if (!fs.existsSync(dir)) {
     return [];
   }
@@ -371,9 +407,9 @@ export function listSavedSpecs(customDir?: string): SavedSpecFile[] {
   return out;
 }
 
-export function deleteSavedSpec(file: string, customDir?: string): boolean {
+export async function deleteSavedSpec(file: string, customDir?: string): Promise<boolean> {
   const clean = file.replace(/\.lua$/, "").replace(/[/\\]/g, "");
-  const fullPath = path.join(getDefaultPluginsDir(customDir), `${clean}.lua`);
+  const fullPath = path.join(await resolvePluginsDir(customDir), `${clean}.lua`);
   if (fs.existsSync(fullPath)) {
     fs.unlinkSync(fullPath);
     return true;

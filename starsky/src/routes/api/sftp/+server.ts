@@ -14,7 +14,7 @@ import {
   executeRemoteSshCommand,
   getTransferHistory,
 } from "#lib/server/sftpEngine";
-import { readWorkspaceFile } from "#lib/server/clina";
+import { readWorkspaceFile } from "#lib/server/workspace";
 
 export const prerender = false;
 

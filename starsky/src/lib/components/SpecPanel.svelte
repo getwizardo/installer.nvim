@@ -3,6 +3,7 @@
 	import { api, type ApiResult } from '#lib/client/api';
 	import type { KaeruForm, GeneratedSpec, SavedSpecFile } from '#lib/server/luaBridge';
 	import { ui } from '#lib/client/ui.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 
 	type Field = {
 		key: keyof KaeruForm;
@@ -252,7 +253,7 @@
 						<div class="name" style:overflow-wrap="anywhere">{spec.repo}</div>
 						<div class="small muted">{spec.relativePath} · {spec.size} B</div>
 					</div>
-					<button type="button" class="danger" aria-label="Delete {spec.file}" onclick={() => remove(spec.file)}>✕</button>
+					<button type="button" class="danger" aria-label="Delete {spec.file}" onclick={() => remove(spec.file)}><Icon name="trash-bin-trash-linear" /></button>
 				</li>
 			{:else}
 				<li class="muted small">No saved specs yet.</li>

@@ -3,6 +3,9 @@ if vim.g.loaded_kaeru_nvim then
 end
 vim.g.loaded_kaeru_nvim = true
 
+-- ASCII welcome screen on startup (see `welcome` in setup()).
+require("kaeru.welcome").attach()
+
 if vim.fn.has("nvim-0.8") ~= 1 then
   vim.notify("kaeru.nvim requires Neovim >= 0.8", vim.log.levels.ERROR)
   return
@@ -79,8 +82,6 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
         end)
       end,
     })
-  elseif sub == "clina" then
-    require("kaeru.clina").dispatch(Compat.list_slice(args, 2), nil, cmd.bang)
   elseif sub == "music" or sub == "kikru" or sub == "player" then
     require("kaeru.kikru").dispatch(Compat.list_slice(args, 2))
     return
@@ -100,9 +101,7 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
     vim.notify("Spec files are written to " .. kaeru.plugins_dir(), vim.log.levels.INFO, { title = "kaeru.nvim" })
   elseif sub == "ai" then
     local ai = require("kaeru.ai")
-    if args[2] == "ide" or args[2] == "clina" then
-      return require("kaeru.clina").dispatch(Compat.list_slice(args, 3))
-    elseif args[2] then
+    if args[2] then
       local preset = ai.get(args[2])
       if not preset then
         return vim.notify("Unknown AI preset: " .. args[2], vim.log.levels.ERROR, { title = "kaeru.nvim" })
@@ -302,6 +301,8 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
       starsky.status()
     elseif action == "build" then
       starsky.build()
+    elseif action == "info" then
+      starsky.info()
     else
       vim.notify("Unknown starsky action: " .. action .. "\nUse: " .. table.concat(starsky_actions, ", "), vim.log.levels.ERROR, { title = "kaeru.nvim" })
     end
@@ -331,27 +332,6 @@ end, {
   desc = "Google Cast: receive casts in Neovim (bridged to Kikru) and cast to real Chromecast devices",
   complete = function(arglead, cmdline, cursorpos)
     return require("kaeru.complete").complete_items(cmdline, cursorpos)
-  end,
-})
-
-vim.api.nvim_create_user_command("Clina", function(cmd)
-  local kaeru = require("kaeru")
-  kaeru.ensure_setup()
-  local range_text = nil
-  if cmd.range and cmd.range > 0 then
-    local ok, lines = pcall(vim.api.nvim_buf_get_lines, 0, cmd.line1 - 1, cmd.line2, false)
-    if ok and lines then
-      range_text = table.concat(lines, "\n")
-    end
-  end
-  require("kaeru.clina").dispatch(cmd.fargs, range_text, cmd.bang)
-end, {
-  nargs = "*",
-  bang = true,
-  range = true,
-  desc = ":Clina — NeoCodeium AI Coding IDE integration for Neovim",
-  complete = function(_, cmdline, cursorpos)
-    return complete(cmdline, cursorpos)
   end,
 })
 

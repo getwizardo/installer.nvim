@@ -21,10 +21,10 @@ M.presets = {
   -- completion --------------------------------------------------------------
   {
     repo = "monkoose/neocodeium",
-    title = "neocodeium (:Clina default)",
+    title = "neocodeium",
     category = "completion",
     needs = "free Windsurf/Codeium account (:NeoCodeium auth)",
-    desc = "Flicker-free pure-Lua AI completion & chat for Neovim with dot-repeat and word/line accept (used by :Clina).",
+    desc = "Flicker-free pure-Lua AI completion & chat for Neovim with dot-repeat and word/line accept.",
     form = {
       repo = "monkoose/neocodeium",
       event = "VeryLazy",
@@ -382,7 +382,7 @@ function M.pick()
     end
   end
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "  <CR> review in modal   i install now   C :Clina IDE   K details   o open on GitHub   q close"
+  lines[#lines + 1] = "  <CR> review in modal   i install now   K details   o open on GitHub   q close"
   UI.set_lines(buf, lines)
   vim.bo[buf].modifiable = false
 
@@ -409,10 +409,6 @@ function M.pick()
   end
   UI.map(buf, "q", close)
   UI.map(buf, "<Esc>", close)
-  UI.map(buf, "C", function()
-    close()
-    require("kaeru.clina").ide()
-  end)
   UI.map(buf, "<CR>", function()
     local p = current()
     if p then
@@ -464,10 +460,6 @@ function M.pick()
     end,
   })
   pcall(vim.api.nvim_win_set_cursor, win, { 2, 0 })
-end
-
-function M.ide(prompt)
-  return require("kaeru.clina").ide(prompt)
 end
 
 return M

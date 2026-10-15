@@ -8,17 +8,17 @@ Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **fro
 - lazy.nvim reloads its specs and installs the plugin immediately, no restart needed.
 - `:Kaeru browse` searches **all Neovim plugins on GitHub** (`topic:neovim-plugin`), with README preview, `p` to parse the README spec, and one-key install.
 - **GitHub account**: sign in (gh CLI / token / device flow) for higher rate limits, starring and your starred list.
-- **AI coding presets & `:Clina` TypeScript AI Coding IDE**: curated specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub, plus **`:Clina`** — a full TypeScript AI Coding IDE (`lua/kaeru/clina.lua` + `starsky/src/lib/server/clina.ts`) with multi-provider support, MCP tool servers, workspace file context, unified diffs, and one-key patch application.
+- **AI coding presets (`:Kaeru ai`)**: curated lazy.nvim specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub and NeoCodeium. AI coding is done by the Neovim plugins themselves; kaeru.nvim only writes their specs.
 - **SFTP & SFTP Studio UI** (`:Kaeru sftp` / `:Kaeru sftp ui`): dual-pane floating Local Project ↔ Remote Server SFTP Studio UI inside Neovim and in the SvelteKit Webclient, plus parallel `sftp` workers, upload-on-save, every sftp command, remote file browser, and multiple SSH keys / ssh-config / ProxyJump.
 - **`kaeru.yaml`**: all configuration in a global or per-project YAML file (built-in parser, no dependencies).
 - **Mason (all 601 servers built-in)**: install LSP servers, DAP adapters, linters, formatters, compilers and runtimes from the [mason.nvim](https://github.com/mason-org/mason.nvim) registry (with built-in catalog of all 601 Mason packages & 296 `lspconfig` server mappings for offline/instant autocomplete), `ensure_installed` in `kaeru.yaml`, and one-command scaffolds for lspconfig / nvim-dap / conform + nvim-lint.
-- **Autocomplete for *everything*** (`:Kaeru complete`, `complete.any`): fuzzy `:` command-line completion for `:Kaeru`, `:Kikru` and `:Clina` — every subcommand, argument, repository, Mason package, radio station, EQ preset, filter, theme, playlist, file, directory, buffer, option, event, colorscheme, help tag and environment variable — with descriptions in the popup, live GitHub search, `<Tab>` cycling and ready-made [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) / [blink.cmp](https://github.com/Saghen/blink.cmp) cmdline sources.
+- **Autocomplete for *everything*** (`:Kaeru complete`, `complete.any`): fuzzy `:` command-line completion for `:Kaeru` and `:Kikru` — every subcommand, argument, repository, Mason package, radio station, EQ preset, filter, theme, playlist, file, directory, buffer, option, event, colorscheme, help tag and environment variable — with descriptions in the popup, live GitHub search, `<Tab>` cycling and ready-made [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) / [blink.cmp](https://github.com/Saghen/blink.cmp) cmdline sources.
 - **`:Kikru` — a Winamp-style player in Lua** (inspired by [cliamp](https://github.com/bjarneo/cliamp) and [NodeLink](https://github.com/PerformanC/NodeLink)): LCD marquee, FFT spectrum / wave / VU / matrix analyzers, 10-band EQ (31 Hz – 16 kHz) with per-band editing and presets, LavaLink-style filter chain (timescale, tremolo, vibrato, 8D rotation, karaoke, lowpass, echo, reverb, chorus, phaser, compressor, distortion, channel mix), internet radio (curated + 30 000 Radio Browser stations), synced **and word-level karaoke** lyrics ([lrc.red](https://lrc.red) · [LRCLIB](https://lrclib.net) · NetEase · SyncLRC · lyrics.ovh, with translations and a disk cache), M3U/PLS/TOML/JSON playlists, file-library indexing, MPRIS/MPD control, multi-engine backends (mpv · ffplay · VLC), a headless IPC daemon and 2-Neovim remote — all inside Neovim.
 - **Cast YouTube & YouTube Music into Neovim**: `:Kikru cast <url|search>`, `:Kikru youtube …`, `:Kikru ytmusic …`, plus a built-in cast server (`:Kikru cast server`) with a phone/bookmarklet page, a `kikru://` URL-scheme handler for "Open with Kikru" and `:Kikru appcast`, which picks up whatever the YouTube/YT Music app (or any MPRIS player: Spotify, browser tab, VLC) is playing right now and continues it with your EQ.
 - **`:Karu` — Google Cast, implemented in TypeScript** (`karu/`, no runtime dependencies): `karu receive` makes Neovim itself a Cast target that the **YouTube / YouTube Music / Chrome** apps can cast to (mDNS `_googlecast._tcp`, CASTV2 over TLS 8009, `CC1AD845` Default Media Receiver, device auth), and every cast is bridged straight into Kikru; the sender side (`:Karu discover` / `:Karu cast`) drives real Chromecasts on your LAN.
 - **Integrations with the ecosystem you already use**: [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) extension (`:Telescope kaeru …`), [fzf-lua](https://github.com/ibhagwan/fzf-lua), [snacks.nvim](https://github.com/folke/snacks.nvim) picker, [mini.pick](https://github.com/echasnovski/mini.nvim), [lualine](https://github.com/nvim-lualine/lualine.nvim) component, [nvim-notify](https://github.com/rcarriga/nvim-notify), [fidget.nvim](https://github.com/j-hui/fidget.nvim), [plenary.nvim](https://github.com/nvim-lua/plenary.nvim) jobs, plus detection of every external binary (`yt-dlp`, `mpv`, `ffmpeg`, `vlc`, `playerctl`, `mpc`, `gh`, `fzf`, `node`/`deno`/`bun`, …). `:Kaeru integrations` prints the report.
 - **Plugin cache**: installed plugins archived as `cache/<name>.nvimpack` (zip, `.git` included) or `.pack` (git bundle for large repos) and restored before install — offline re-installs.
-- **Starsky for Neovim Webclient** (`:Kaeru starsky` / `starsky/`): **SvelteKit 3 (Svelte 5, TypeScript, Vite 8, mobile-first)** webclient scaffolded via `npx sv create` and served by `adapter-node`, featuring the `:Kaeru` Spec Saver, `:Clina` TypeScript AI Coding IDE, SFTP Studio UI, all 601 Mason servers, 296 LSPconfig servers, and the universal 11-manager README parser.
+- **Starsky for Neovim Webclient** (`:Kaeru starsky` / `starsky/`): **SvelteKit 3 (Svelte 5, TypeScript, Vite 8, mobile-first)** web IDE on remote Neovim (open, save and `:` commands through the Node `neovim` client), Solar icons, the `:Kaeru` spec saver, SFTP Studio UI, all 601 Mason servers, 296 LSPconfig servers, and the universal 11-manager README parser.
 
 ```
 ╭──────────────────── kaeru.nvim · add a plugin to lazy.nvim ────────────────────╮
@@ -72,7 +72,7 @@ Optional — each one unlocks more, everything degrades gracefully without them:
 | `mpc` | MPD control |
 | `gh` | GitHub sign-in without pasting a token |
 | `fzf`, `telescope.nvim`, `fzf-lua`, `snacks.nvim`, `mini.pick` | Picker backends for `:Kaeru pick`, `:Kaeru complete`, the Mason picker, … |
-| `node` / `deno` / `bun` | Clina's TypeScript AI engine |
+| `node` / `npm` | Starsky web client (`:Kaeru starsky`), SvelteKit + Vite |
 
 ## Installation
 
@@ -80,13 +80,13 @@ Optional — each one unlocks more, everything degrades gracefully without them:
 -- lua/plugins/kaeru.lua
 return {
   "getwizardo/installer.nvim", -- repository slug; the plugin itself is kaeru.nvim
-  cmd = { "Kaeru", "Kikru", "Clina" },
+  cmd = { "Kaeru", "Kikru" },
   opts = {},
 }
 ```
 
 > **Name.** The plugin is *kaeru.nvim*: every module lives in `lua/kaeru`, the
-> commands are `:Kaeru` / `:Kikru` / `:Clina`, the help file is `doc/kaeru.txt`
+> commands are `:Kaeru` / `:Kikru`, the help file is `doc/kaeru.txt`
 > and augroups, sockets and state directories are all `kaeru*`. The GitHub
 > repository keeps its historical slug `getwizardo/installer.nvim`, so that is
 > what goes in the lazy.nvim spec.
@@ -103,14 +103,13 @@ return {
 | `:Kaeru save owner/repo`    | Write a plugin spec file to `lua/plugins/<file>.lua` without installing |
 | `:Kaeru parse [repo\|file]` | Parse any installer snippet from GitHub `README.md`, local file, or buffer |
 | `:Kaeru dir`                | Show where spec files are written                                      |
-| `:Kaeru ai [preset\|ide]`   | Curated AI coding plugins & `:Clina` AI Coding IDE                     |
-| `:Clina [action]`               | `ide`, `agent`, `chat`, `edit`, `spec`, `apply`, `diff`, `provider`, `mcp`, `web` — TypeScript AI Coding IDE |
+| `:Kaeru ai [preset]`        | Curated AI coding plugins (NeoCodeium, Copilot, avante, …)              |
 | `:Kaeru login\|logout\|whoami` | GitHub account                                                     |
 | `:Kaeru sftp [action]`      | `ui` (dual-pane SFTP Studio), transfers, every sftp command, remote browser, shell |
 | `:Kaeru config [...]`       | `edit`, `project`, `reload`, `show` — manage `kaeru.yaml`           |
 | `:Kaeru cache [...]`        | `list`, `pack [name\|all]`, `restore <name>`, `remove`, `clean`, `dir`   |
 | `:Kaeru mason [...]`        | Mason picker, `lsp\|dap\|linter\|formatter`, `install`, `ensure`, `export`, `scaffold` — see below |
-| `:Kaeru starsky [...]`      | `start`, `stop`, `open`, `status`, `build` — SvelteKit TypeScript Starsky Webclient |
+| `:Kaeru starsky [...]`      | `start`, `stop`, `open`, `status`, `build`, `info` — SvelteKit TypeScript Starsky Webclient |
 | `:Kaeru pick [source]`      | Open a picker (telescope / fzf-lua / snacks / mini.pick / `vim.ui.select`) over `plugins`, `mason`, `sftp`, `cache`, `radio`, `queue`, `cast` |
 | `:Kaeru complete [partial]` | **Complete anything**: pick from every candidate for a partial command line and run it |
 | `:Kaeru integrations`       | Report every detected picker, plugin and external binary |
@@ -155,7 +154,7 @@ GitHub allows 10 unauthenticated searches per minute; signed-in users get 30.
 kaeru.nvim ships its own completion engine — no dependency on cmp, blink or
 anything else — and then *also* plugs into them.
 
-**On the `:` command line** (for `:Kaeru`, `:Kikru` and `:Clina`):
+**On the `:` command line** (for `:Kaeru` and `:Kikru`):
 
 - fuzzy matching that ignores case and separators: `fole/laz` → `folke/lazy.nvim`,
   `ytm lo` → `:Kikru ytmusic lofi`
@@ -557,12 +556,14 @@ require("kaeru").setup({ ai = { enabled = true } })
 
 | Category | Presets |
 | --- | --- |
-| Inline completion | [copilot.lua](https://github.com/zbirenbaum/copilot.lua), [copilot.vim](https://github.com/github/copilot.vim), [supermaven-nvim](https://github.com/supermaven-inc/supermaven-nvim), [windsurf.nvim](https://github.com/Exafunction/windsurf.nvim), [minuet-ai.nvim](https://github.com/milanglacier/minuet-ai.nvim) |
+| Inline completion | [neocodeium](https://github.com/monkoose/neocodeium), [copilot.lua](https://github.com/zbirenbaum/copilot.lua), [copilot.vim](https://github.com/github/copilot.vim), [supermaven-nvim](https://github.com/supermaven-inc/supermaven-nvim), [windsurf.nvim](https://github.com/Exafunction/windsurf.nvim), [minuet-ai.nvim](https://github.com/milanglacier/minuet-ai.nvim) |
 | Chat & inline edits | [codecompanion.nvim](https://github.com/olimorris/codecompanion.nvim), [avante.nvim](https://github.com/avante-corp/avante.nvim), [CopilotChat.nvim](https://github.com/CopilotC-Nvim/CopilotChat.nvim), [gp.nvim](https://github.com/Robitx/gp.nvim), [parrot.nvim](https://github.com/frankroeder/parrot.nvim), [gen.nvim](https://github.com/David-Kunz/gen.nvim) |
 | Coding agents | [sidekick.nvim](https://github.com/folke/sidekick.nvim), [claudecode.nvim](https://github.com/coder/claudecode.nvim), [opencode.nvim](https://github.com/nickjvandyke/opencode.nvim), [claude-code.nvim](https://github.com/greggh/claude-code.nvim), [nvim-aider](https://github.com/GeorgesAlkhouri/nvim-aider) |
 | Add-ons | [mcphub.nvim](https://github.com/ravitemer/mcphub.nvim), [copilot-cmp](https://github.com/zbirenbaum/copilot-cmp), [blink-copilot](https://github.com/fang2hou/blink-copilot) |
 
 `<CR>` opens the modal with the preset filled in so you can review it, `i` installs immediately, `K` shows the generated spec. Presets mirror each project's README install snippet (e.g. avante's `build = "make"`, CopilotChat's `make tiktoken`); API keys, CLIs and subscriptions remain yours to set up.
+
+For NeoCodeium, pick the `neocodeium` preset, then use the plugin's own commands (`:NeoCodeium auth`, `:NeoCodeium toggle`). kaeru.nvim has no AI wrapper command.
 
 ## SFTP
 
@@ -836,19 +837,6 @@ Generated files are plain lazy.nvim specs — edit them freely afterwards.
 :'<,'>Kaeru parse                  " parse selected snippet in current buffer
 ```
 
-## `:Clina` — NeoCodeium (`monkoose/neocodeium`) AI Coding Integration
-
-`:Clina` integrates directly with **[NeoCodeium (`monkoose/neocodeium`)](https://github.com/monkoose/neocodeium)** for flicker-free Windsurf/Codeium inline ghost-text completions and chat:
-
-```vim
-:Clina                                 " open the :Clina NeoCodeium dashboard
-:Clina install                         " write lua/plugins/neocodeium.lua & install via lazy.nvim
-:Clina setup                           " bind NeoCodeium keymaps (<A-f>, <A-w>, <A-a>, <A-e>, <A-r>, <A-c>)
-:Clina auth                            " run :NeoCodeium auth
-:Clina toggle                          " toggle NeoCodeium completion globally
-:Clina chat                            " open NeoCodeium Windsurf Chat in browser
-```
-
 ## `:Kikru` — Built-in Player with 10-Band EQ, Visualizer, Radio & 2-Neovim Device Controller
 
 `:Kikru` provides a floating music & radio studio inside Neovim and in the Starsky Web IDE, including a **2-Neovim Device Controller (`Server <-> Client`)** over TCP (`vim.uv.new_tcp()`):
@@ -867,16 +855,27 @@ Generated files are plain lazy.nvim specs — edit them freely afterwards.
 :Kaeru boot                        " play the interactive STARSKY / INSTALLER.NVIM ASCII boot sequence
 ```
 
+## ASCII welcome screen
+
+When Neovim starts without file arguments, kaeru.nvim shows the same ASCII logo as a `nofile`, `nomodifiable` scratch buffer. `e` or `q` opens an empty buffer.
+
+```lua
+require("kaeru").setup({ welcome = { enabled = false } }) -- on by default
+```
+
 ## Starsky Code IDE for Neovim (`starsky/`)
 
-Starsky is the **SvelteKit 3 (Svelte 5 + TypeScript)** webclient for `kaeru.nvim`. It is mobile-first: a bottom tab bar on phones, a top bar with a two-column split from 768px, and the full IDE layout (file explorer | editor + terminal | Clina assistant) from 1100px.
+Starsky is the **SvelteKit 3 (Svelte 5 + TypeScript)** webclient for `kaeru.nvim`. It is mobile-first: a bottom tab bar on phones, a top bar with a two-column split from 768px, and the full IDE layout (file explorer | editor + terminal | NeoCodeium card) from 1100px.
 
-- **Server routes (`starsky/src/routes/api/*/+server.ts`)**: `spec`, `spec/generate`, `spec/save`, `complete`, `github`, `mason`, `parse`, `sftp`, `music`, `clina`, `status`. They talk to Neovim through the official **Node Neovim client (`neovim` npm package)**, started as `nvim --embed --headless -n -i NONE -u NONE`, and fall back to a TypeScript spec builder when Neovim is not on `PATH`.
+- **Remote Neovim**: the IDE edits through a Neovim session using the official **Node Neovim client (`neovim` npm package)**. By default Starsky starts its own headless Neovim (`nvim --embed --headless -n -i NONE -u NONE`). Set `STARSKY_NVIM_SOCKET=/path/to/nvim.sock` to attach to a Neovim you already run with `nvim --listen`; Starsky never starts or stops that instance.
+- **Server routes (`starsky/src/routes/api/*/+server.ts`)**: `files` (repo file list), `nvim` (open, save and `:` commands), `spec`, `spec/save` (writes into the plugins dir, never overwrites without `overwrite`), `complete`, `github`, `mason`, `parse`, `sftp`, `music`, `status`.
+- **Web terminal**: only a fixed set of Ex commands runs (`help`, `w`, `e`, `ls`, `Kaeru save <repo>`, `Kaeru dir`, `Kikru play|pause|next|prev`). Anything else (shell escapes such as `!id`) is refused.
+- **Icons**: [Solar](https://icon-sets.iconify.design/solar/) by 480 Design, licensed CC-BY-4.0. A generated 40-icon subset lives in `starsky/src/lib/client/solar.ts` and is rendered by `Icon.svelte`. Regenerate with `npm run icons`.
 - **Web Components (`starsky/src/lib/client/webComponents.ts`, registered in the browser only)**:
   - `<starsky-code-editor>`: Shadow DOM code editor with line numbers and a status bar. NeoCodeium inline ghost-text keys: `<A-f>` accept, `<A-w>` word, `<A-a>` line, `<A-e>` cycle.
   - `<starsky-ascii-boot>`: animated ASCII boot terminal.
   - `<starsky-eq-visualizer>`: 60fps canvas spectrum and waveform visualizer for `:Kikru`.
-  - `<starsky-terminal>`: interactive Neovim Ex-command terminal (`Kaeru save <repo>`, `Kikru play`, `Clina`).
+  - `<starsky-terminal>`: interactive Neovim Ex-command terminal (`help`, `w`, `e`, `ls`, `Kaeru save <repo>`, `Kikru play`).
 - **Panels (`starsky/src/lib/components/`)**: Spec builder (mirrors the `:Kaeru` modal), Parser, GitHub search, Mason and LSP explorer (601 Mason packages, 296 `lspconfig` mappings), SFTP dual-pane studio, Music player, and the IDE with the NeoCodeium spec saver and keymap reference.
 - **Live GitHub completions (`/api/complete`)**: queries `https://api.github.com/search/repositories` as you type in `repo` or `dependencies`.
 
@@ -885,6 +884,7 @@ Starsky is the **SvelteKit 3 (Svelte 5 + TypeScript)** webclient for `kaeru.nvim
 :Kaeru starsky status              " check server status
 :Kaeru starsky build               " npm run build (Vite + adapter-node) into starsky/build/
 :Kaeru starsky stop                " stop the webclient
+:Kaeru starsky info                " KIT splash: big pixel letters in a random color, animated pixel 3 (q closes)
 ```
 
 Or from the shell:
@@ -905,4 +905,6 @@ make test   # runs the spec tests with LuaJIT (no Neovim required)
 
 ## License
 
-MIT
+kaeru.nvim is MIT licensed.
+
+Icons: [Solar](https://icon-sets.iconify.design/solar/) by 480 Design, CC-BY-4.0.

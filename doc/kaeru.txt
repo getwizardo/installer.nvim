@@ -25,6 +25,7 @@ CONTENTS                                                   *kaeru-contents*
  20. Lyrics (lrc.red, TTML, karaoke) ............. |kaeru-lyrics|
  21. Integrations .................................. |kaeru-integrations|
  22. Starsky webclient (SvelteKit) .................. |kaeru-starsky|
+ 23. Welcome screen and starsky info ............. |kaeru-welcome|
 
 ==============================================================================
 1. INTRODUCTION                                        *kaeru-introduction*
@@ -61,7 +62,7 @@ their READMEs and install them with a single key.
 ==============================================================================
 4. COMMANDS                                                *kaeru-commands*
 
-                                                          *:Kaeru* *:Kaeru-pick*
+                                                          *:Kaeru-pick*
 :Kaeru pick [source]     Open a picker over plugins, mason, sftp, cache, radio,
                          queue or cast. Uses telescope.nvim, fzf-lua, snacks.nvim,
                          mini.pick or |vim.ui.select| — whichever is installed.
@@ -469,7 +470,7 @@ Lua API: `require("kaeru").mason.pick{category="LSP"}`, `.install(name)`,
 kaeru.nvim has its own completion engine (no plugin needed) and plugs into the
 ones you may already use.
 
-On the `:` command line — for `:Kaeru`, `:Kikru` and `:Clina`:           *:Kaeru-Tab*
+On the `:` command line — for `:Kaeru` and `:Kikru`:                    *:Kaeru-Tab*
 
   - fuzzy matching that ignores case and separators                                 ~
       `fole/laz`   -> folke/lazy.nvim
@@ -772,7 +773,7 @@ Lua API: `require("kaeru.kikru.lyrics")` — `resolve(track, opts, cb)`,
   jobs         plenary.nvim (falls back to luv / vim.fn.system)
   themes       the active colorscheme selects the Kikru theme
   binaries     yt-dlp, mpv, ffplay, ffmpeg, vlc, mpc, playerctl, curl, gh, fzf,
-               node/deno/bun (Clina), ...
+               node/npm (Starsky), ...
 
 >lua
   require("telescope").load_extension("kaeru")
@@ -790,8 +791,9 @@ Lua API: `require("kaeru.integrations")` — `.pick(items, opts)`,
 22. STARSKY WEBCLIENT (SVELTEKIT)                            *kaeru-starsky*
 
 Starsky is the browser front end for kaeru.nvim: spec builder, parser, GitHub
-search, Mason and LSP explorer, SFTP studio, music, and the code IDE with the
-:Clina NeoCodeium assistant. It is a SvelteKit 3 app (Svelte 5, TypeScript,
+search, Mason and LSP explorer, SFTP studio, music, and a minimal code IDE on
+remote Neovim (open, save and `:` commands) with a NeoCodeium card. AI coding
+itself is done by the Neovim plugins (see |kaeru-ai|). It is a SvelteKit 3 app (Svelte 5, TypeScript,
 Vite 8) in the `starsky/` directory and is mobile-first: a bottom tab bar on
 phones, a top bar and two-column layout from 768px, and the three-column IDE from 1100px.
 
@@ -805,6 +807,8 @@ COMMANDS                                                 *kaeru-starsky-commands
   :Kaeru starsky status    show the directory, framework, packages, and state
   :Kaeru starsky build     run `npm run build` (Vite + adapter-node) into
                            `starsky/build/`
+  :Kaeru starsky info      KIT splash: big pixel letters in a random color with
+                           an animated pixel 3 (q or <Esc> closes it)
   :Kaeru web …             alias of :Kaeru starsky
 
 The first start needs packages: run `npm install` in `starsky/` once.
@@ -826,9 +830,41 @@ CONFIGURATION                                         *kaeru-starsky-config*
 NEOVIM ACCESS                                              *kaeru-starsky-neovim*
 
 The API routes reach Neovim through the Node Neovim client (the `neovim`
-npm package), which attaches to `nvim --embed --headless -n -i NONE -u NONE`
-(Neovim 0.9 or newer, found on PATH). When Neovim is not available, spec
-generation falls back to a TypeScript builder and the other features that
-need Neovim report a clear error.
+npm package). By default Starsky starts its own instance with
+`nvim --embed --headless -n -i NONE -u NONE` (Neovim 0.9 or newer, found on
+PATH). To use a Neovim you already run, start it with `nvim --listen <socket>`
+and export `STARSKY_NVIM_SOCKET=<socket>` before starting Starsky. Starsky
+then attaches to that session and never starts or stops it.
+
+The web terminal accepts only a fixed set of Ex commands (`help`, `w`, `e`,
+`ls`, `Kaeru save <repo>`, `Kaeru dir`, `Kikru play|pause|next|prev`). Anything
+else, such as shell escapes (`!id`), is refused.
+
+ICONS
+
+The icons are from Solar by 480 Design, licensed CC-BY-4.0
+(https://icon-sets.iconify.design/solar/). A generated subset is in
+`starsky/src/lib/client/solar.ts`; `npm run icons` regenerates it.
+
+==============================================================================
+23. WELCOME SCREEN AND STARSKY INFO                          *kaeru-welcome*
+
+WELCOME SCREEN
+
+When Neovim starts without file arguments, kaeru.nvim shows the ASCII logo
+(the same logo as `:Kaeru boot`) in a `nofile`, `nomodifiable` scratch buffer.
+`e` or `q` starts an empty buffer. It only appears when a UI is attached and
+the start buffer is untouched.
+
+>lua
+  require("kaeru").setup({ welcome = { enabled = false } }) -- default: true
+<
+
+STARSKY INFO                                                *:Kaeru-starsky-info*
+
+  :Kaeru starsky info      opens a floating window with the letters KIT drawn
+                           in pixels, in a random color, and an animated pixel
+                           3 beside them. The animation runs on a uv timer that
+                           stops when the window closes. `q` or `<Esc>` closes it.
 
 vim:tw=78:ts=8:ft=help:norl:

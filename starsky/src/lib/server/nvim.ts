@@ -1,11 +1,16 @@
 // Node Neovim client (https://github.com/neovim/node-client) for Starsky.
 //
-// Starsky talks to a real headless Neovim that loads the kaeru.nvim Lua modules
-// (`kaeru.spec`, `kaeru.parser`, `kaeru.complete`, …). The Lua side only ever
-// receives and returns JSON strings, so the msgpack ↔ JS conversion never has
-// to guess Lua table shapes.
+// Starsky talks to one Neovim session over msgpack-RPC:
+//   * by default a headless `nvim --embed` that Starsky starts itself, or
+//   * a remote Neovim you already run, when `STARSKY_NVIM_SOCKET` points at its
+//     `--listen` socket (e.g. `nvim --listen /tmp/nvim.sock`).
+// The same session serves the Lua bridge (`kaeru.spec`, `kaeru.parser`, …) and
+// the web editor's buffers. The Lua side only receives and returns JSON strings,
+// so msgpack ↔ JS conversion never has to guess Lua table shapes.
 import { spawn, type ChildProcess } from "node:child_process";
 import { attach, findNvim, type NeovimClient } from "neovim";
+
+export const REMOTE_SOCKET_ENV = "STARSKY_NVIM_SOCKET";
 
 const NVIM_ARGS = ["--embed", "--headless", "-n", "-i", "NONE", "-u", "NONE"];
 const CALL_TIMEOUT_MS = 8000;
@@ -48,6 +53,9 @@ export const NVIM_ACTIONS = {
     end
     return { ok = true, items = items }
   `,
+  plugins_dir: `
+    return { ok = true, dir = require("kaeru.lazy").plugins_dir() }
+  `,
   complete: `
     local items = require("kaeru.complete").complete_field(
       payload.key or "repo", payload.base or "", payload.form or {})
@@ -74,12 +82,30 @@ export function findNvimCommand(): string[] | null {
   return command;
 }
 
-export function nvimStatus(): { available: boolean; cmd: string | null } {
+/** The socket of a Neovim the user runs themselves, or null for the embedded one. */
+export function remoteSocket(): string | null {
+  const value = process.env[REMOTE_SOCKET_ENV];
+  return value && value.trim() !== "" ? value.trim() : null;
+}
+
+export function nvimStatus(): { available: boolean; cmd: string | null; remote: string | null } {
   const cmd = findNvimCommand();
-  return { available: cmd !== null, cmd: cmd ? cmd.join(" ") : null };
+  const remote = remoteSocket();
+  return {
+    available: remote !== null || cmd !== null,
+    cmd: remote ? `remote ${remote}` : cmd ? cmd.join(" ") : null,
+    remote,
+  };
 }
 
 async function startClient(): Promise<NeovimClient> {
+  const socket = remoteSocket();
+  if (socket) {
+    // Attach to a Neovim the user already runs; Starsky never spawns or kills it.
+    const nvim = attach({ socket });
+    client = nvim;
+    return nvim;
+  }
   const cmd = findNvimCommand();
   if (!cmd) {
     throw new Error("nvim >= 0.9 was not found on PATH");
@@ -150,4 +176,10 @@ export function closeNvim(): void {
 
 // Only hook `exit`: registering SIGINT/SIGTERM listeners would suppress the
 // default termination of the Node server.
-process.once("exit", () => closeNvim());
+// The guard keeps dev-server module reloads from stacking exit listeners.
+const EXIT_HOOK = Symbol.for("starsky.nvim.exitHook");
+const hooked = globalThis as typeof globalThis & { [EXIT_HOOK]?: boolean };
+if (!hooked[EXIT_HOOK]) {
+  hooked[EXIT_HOOK] = true;
+  process.once("exit", () => closeNvim());
+}

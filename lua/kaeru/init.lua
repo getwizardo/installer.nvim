@@ -5,11 +5,10 @@
 --   :Kaeru add owner/repo  write a bare spec and install right away
 --   :Kaeru save owner/repo write a spec file without running :Lazy install
 --   :Kaeru parse [target]  parse any installer snippet / README.md into a spec
---   :Kaeru ai              curated AI coding plugins & Clina AI Coding IDE
+--   :Kaeru ai              curated AI coding plugins (install with your own nvim AI plugin)
 --   :Kaeru login|whoami    GitHub account
 --   :Kaeru sftp [action]   SFTP UI / upload / download / sync over SFTP
 --   :Kaeru starsky         SvelteKit Starsky webclient
---   :Clina [action]            TypeScript AI Coding IDE for Neovim
 local Config = require("kaeru.config")
 local Spec = require("kaeru.spec")
 local Lazy = require("kaeru.lazy")
@@ -67,11 +66,6 @@ M.account = setmetatable({}, {
 M.ai = setmetatable({}, {
   __index = function(_, k)
     return require("kaeru.ai")[k]
-  end,
-})
-M.clina = setmetatable({}, {
-  __index = function(_, k)
-    return require("kaeru.clina")[k]
   end,
 })
 M.kikru = setmetatable({}, {

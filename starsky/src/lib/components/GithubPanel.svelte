@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api, formatStars, type ApiResult } from '#lib/client/api';
 	import { openSpecDraft } from '#lib/client/ui.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 
 	interface RepoItem {
 		full_name: string;
@@ -73,7 +74,7 @@
 				<li class="card" style:padding="0.6rem">
 					<div class="card-head" style:margin="0">
 						<strong style:overflow-wrap="anywhere">{item.full_name}</strong>
-						<span class="badge">★ {formatStars(item.stars)}</span>
+						<span class="badge"><Icon name="star-linear" size={14} /> {formatStars(item.stars)}</span>
 					</div>
 					<p class="small muted" style:margin="0.25rem 0 0.5rem">{item.description}</p>
 					<div class="row">

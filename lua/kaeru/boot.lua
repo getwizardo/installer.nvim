@@ -18,7 +18,7 @@ M.boot_steps = {
   { id = "spec", label = "Initializing lazy.nvim Spec Builder & Validator", detail = "lua/plugins/*.lua [OK]" },
   { id = "github", label = "Connecting GitHub Live Autocomplete API", detail = "api.github.com [READY]" },
   { id = "mason", label = "Mounting https://mason-registry.dev Catalog", detail = "601 pkgs / 296 LSPs [MOUNTED]" },
-  { id = "clina", label = "Binding :Clina -> NeoCodeium (monkoose/neocodeium)", detail = "Ghost-Text + Windsurf [BOUND]" },
+  { id = "ai", label = "Linking Neovim AI plugins (NeoCodeium, CodeCompanion, …)", detail = "nvim-native AI [LINKED]" },
   { id = "music", label = "Starting :Kikru 10-Band EQ & 2-Nvim RPC", detail = "Server<->Client TCP [ONLINE]" },
   { id = "sftp", label = "Loading Dual-Pane SFTP Studio & SSH Workers", detail = "Batch SFTP [READY]" },
   { id = "web", label = "Booting Starsky Web Code IDE (Web Components + Svelte 5)", detail = "SvelteKit 3 · Svelte 5 TS [READY]" },
@@ -59,7 +59,7 @@ function M.render_frame(step_idx, width)
 
   lines[#lines + 1] = ""
   if step_idx > total then
-    lines[#lines + 1] = "    ⚡ SYSTEM ONLINE — Press <CR> for :Kaeru, `c` for :Clina, `m` for :Kikru, `q` to close"
+    lines[#lines + 1] = "    ⚡ SYSTEM ONLINE — Press <CR> for :Kaeru, `m` for :Kikru, `q` to close"
   else
     lines[#lines + 1] = "    Booting subsystems… (press any key to skip)"
   end
@@ -121,10 +121,6 @@ function M.play(opts)
   UI.map(buf, "<CR>", function()
     close_boot()
     require("kaeru").open()
-  end)
-  UI.map(buf, "c", function()
-    close_boot()
-    require("kaeru.clina").ide()
   end)
   UI.map(buf, "m", function()
     close_boot()

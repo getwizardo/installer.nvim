@@ -2,7 +2,7 @@ import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { getRepoRoot } from "./luaBridge";
-import { createUnifiedDiff } from "./clina";
+import { createUnifiedDiff } from "./diff";
 
 export interface SftpProfile {
   name: string;

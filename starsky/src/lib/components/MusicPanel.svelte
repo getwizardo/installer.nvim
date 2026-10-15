@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api, type ApiResult } from '#lib/client/api';
 	import type { MusicStation, NeovimMusicDevice } from '#lib/server/music';
+	import Icon from '#lib/components/Icon.svelte';
 
 	interface MusicState {
 		playing: boolean;
@@ -70,7 +71,7 @@
 						{snap.station.service} · {snap.station.bitrate}
 					</p>
 				</div>
-				<span class="badge {snap.state.playing ? 'ok' : ''}">{snap.state.playing ? '● live' : '❚❚ paused'}</span>
+				<span class="badge {snap.state.playing ? 'ok' : ''}">{snap.state.playing ? '● live' : 'paused'}</span>
 			</div>
 
 			<p style:margin="0 0 0.25rem" style:font-size="1.15rem" style:font-weight="700" style:overflow-wrap="anywhere">
@@ -79,7 +80,7 @@
 			<p class="muted" style:margin="0 0 0.9rem">{snap.station.artist} · {snap.station.genre}</p>
 
 			<div class="row" style:justify-content="center">
-				<button type="button" aria-label="Previous station" disabled={busy} onclick={() => send('prev')}>⏮</button>
+				<button type="button" aria-label="Previous station" disabled={busy} onclick={() => send('prev')}><Icon name="skip-previous-linear" /></button>
 				<button
 					type="button"
 					class="primary"
@@ -87,9 +88,10 @@
 					disabled={busy}
 					onclick={() => send('toggle')}
 				>
-					{snap.state.playing ? '❚❚ Pause' : '▶ Play'}
+					<Icon name={snap.state.playing ? 'pause-linear' : 'play-linear'} size={16} />
+					{snap.state.playing ? 'Pause' : 'Play'}
 				</button>
-				<button type="button" aria-label="Next station" disabled={busy} onclick={() => send('next')}>⏭</button>
+				<button type="button" aria-label="Next station" disabled={busy} onclick={() => send('next')}><Icon name="skip-next-linear" /></button>
 			</div>
 
 			<label class="field" style:margin-top="1rem">

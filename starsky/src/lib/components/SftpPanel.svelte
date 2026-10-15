@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api, formatBytes, type ApiResult } from '#lib/client/api';
 	import type { SftpEntry, SftpProfile, SftpTransferRecord } from '#lib/server/sftpEngine';
+	import Icon from '#lib/components/Icon.svelte';
 
 	interface Listing {
 		cwd: string;
@@ -143,7 +144,7 @@
 				{#each local.entries as entry (entry.path)}
 					<li>
 						<button type="button" class="list-item" class:active={selectedLocal === entry.path} onclick={() => openLocal(entry)}>
-							<span aria-hidden="true">{entry.type === 'dir' ? '📁' : '📄'}</span>
+							<Icon name={entry.type === 'dir' ? 'folder-linear' : 'file-linear'} size={16} />
 							<span class="name">{entry.name}</span>
 							<span class="small muted">{entry.type === 'dir' ? '' : formatBytes(entry.size)}</span>
 						</button>
@@ -168,7 +169,7 @@
 				{#each remote.entries as entry (entry.path)}
 					<li>
 						<button type="button" class="list-item" class:active={selectedRemote === entry.path} onclick={() => openRemote(entry)}>
-							<span aria-hidden="true">{entry.type === 'dir' ? '📁' : '📄'}</span>
+							<Icon name={entry.type === 'dir' ? 'folder-linear' : 'file-linear'} size={16} />
 							<span class="name">{entry.name}</span>
 							<span class="small muted">{entry.type === 'dir' ? '' : formatBytes(entry.size)}</span>
 						</button>

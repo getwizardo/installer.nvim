@@ -2,134 +2,29 @@
 	import { onMount } from 'svelte';
 	import { api, type ApiResult } from '#lib/client/api';
 	import { registerStarskyWebComponents } from '#lib/client/webComponents';
-	import type {
-		ClinaCodeProposal,
-		ClinaFileNode,
-		ClinaMode,
-		ClinaProviderInfo,
-		ClinaAgentStep
-	} from '#lib/server/clina';
+	import type { WorkspaceEntry } from '#lib/server/workspace';
+	import Icon from '#lib/components/Icon.svelte';
 
-	interface ClinaStatus extends ApiResult {
-		providers: ClinaProviderInfo[];
-		files: ClinaFileNode[];
+	// Minimal web IDE. Editor buffers live in the remote Neovim session (see
+	// /api/nvim): opening a file creates a buffer there, saving writes it with :w,
+	// and the terminal runs an allow-listed set of Ex commands.
+
+	interface FilesReply extends ApiResult {
+		files: WorkspaceEntry[];
 	}
-	interface ClinaReply extends ApiResult {
-		mode: ClinaMode;
-		provider: string;
-		model: string;
-		reply: string;
-		steps: ClinaAgentStep[];
-		proposal?: ClinaCodeProposal;
-	}
-	interface FileRead extends ApiResult {
+	interface NvimOpen extends ApiResult {
 		path: string;
-		relativePath: string;
+		filetype: string;
 		content: string;
-		language: string;
 	}
-	interface Message {
-		role: 'user' | 'assistant';
-		text: string;
-		steps?: ClinaAgentStep[];
-		proposal?: ClinaCodeProposal;
+	interface NvimSave extends ApiResult {
+		relativePath: string;
+		size: number;
+	}
+	interface NvimStatus extends ApiResult {
+		neovim: { available: boolean; cmd: string | null; remote: string | null };
 	}
 	type Banner = { kind: 'ok' | 'err'; text: string };
-
-	const MODES: ClinaMode[] = ['agent', 'chat', 'edit', 'spec'];
-
-	let files = $state<ClinaFileNode[]>([]);
-	let providers = $state<ClinaProviderInfo[]>([]);
-	let provider = $state('clina-ts');
-	let mode = $state<ClinaMode>('agent');
-
-	let activePath = $state('');
-	let content = $state(''); // what the user is editing
-	let loadedText = $state(''); // what the editor was last loaded/saved with
-	let lang = $state('lua');
-	let dirty = $state(false);
-	let openTabs = $state<string[]>([]);
-	let banner = $state<Banner | null>(null);
-
-	let prompt = $state('');
-	let running = $state(false);
-	let chat = $state<Message[]>([]);
-	let explorerOpen = $state(false);
-
-	let editorEl = $state<HTMLElement>();
-	let terminalEl = $state<HTMLElement & { appendLine?: (s: string) => void }>();
-
-	function say(kind: Banner['kind'], text: string) {
-		banner = { kind, text };
-	}
-
-	async function refresh() {
-		const res = await api<ClinaStatus>('/api/clina');
-		if (res.ok) {
-			files = res.files;
-			providers = res.providers;
-			const configured = res.providers.find((p) => p.configured);
-			if (configured && !res.providers.some((p) => p.id === provider && p.configured)) {
-				provider = configured.id;
-			}
-		} else {
-			say('err', res.error ?? 'Could not load the workspace');
-		}
-	}
-
-	async function openFile(relativePath: string) {
-		if (dirty && !confirm(`Discard unsaved changes in ${activePath}?`)) return;
-		const res = await api<FileRead>(`/api/clina?file=${encodeURIComponent(relativePath)}`);
-		if (!res.ok) return say('err', res.error ?? `Cannot open ${relativePath}`);
-		activePath = res.relativePath;
-		lang = res.language || 'text';
-		content = res.content;
-		loadedText = res.content;
-		dirty = false;
-		explorerOpen = false;
-		if (!openTabs.includes(res.relativePath)) openTabs = [...openTabs, res.relativePath];
-	}
-
-	async function saveFile(text: string = content) {
-		if (!activePath) return say('err', 'Open a file first');
-		const res = await api<ApiResult & { relativePath?: string; size?: number }>('/api/clina', {
-			action: 'write',
-			path: activePath,
-			content: text
-		});
-		if (res.ok) {
-			loadedText = text;
-			content = text;
-			dirty = false;
-			say('ok', `Saved ${res.relativePath} (${res.size ?? text.length} bytes)`);
-		} else {
-			say('err', res.error ?? 'Save failed');
-		}
-	}
-
-	async function ask() {
-		const text = prompt.trim();
-		if (!text || running) return;
-		running = true;
-		chat = [...chat, { role: 'user', text }];
-		prompt = '';
-		const res = await api<ClinaReply>('/api/clina', {
-			prompt: text,
-			mode,
-			provider,
-			active_file: activePath,
-			active_content: content
-		});
-		running = false;
-		if (res.ok) {
-			chat = [
-				...chat,
-				{ role: 'assistant', text: res.reply, steps: res.steps, proposal: res.proposal }
-			];
-		} else {
-			chat = [...chat, { role: 'assistant', text: `Error: ${res.error ?? 'request failed'}` }];
-		}
-	}
 
 	const NEOCODEIUM_FORM = {
 		repo: 'monkoose/neocodeium',
@@ -137,7 +32,7 @@
 		cmd: 'NeoCodeium',
 		opts: 'manual = false, show_label = true'
 	};
-	const NEOCODEIUM_KEYMAPS = [
+	const NEOCODEIUM_KEYMAPS: [string, string][] = [
 		['<A-f>', 'accept()'],
 		['<A-w>', 'accept_word()'],
 		['<A-a>', 'accept_line()'],
@@ -146,62 +41,94 @@
 		['<A-c>', 'clear()']
 	];
 
-	async function saveNeoCodeiumSpec() {
-		const res = await api<ApiResult & { relativePath?: string }>('/api/spec/save', { form: NEOCODEIUM_FORM });
-		banner = res.ok
-			? { kind: 'ok', text: `Saved ${res.relativePath ?? 'neocodeium.lua'} to lua/plugins/` }
-			: { kind: 'err', text: res.error ?? 'Save failed' };
+	let files = $state<WorkspaceEntry[]>([]);
+	let nvim = $state<NvimStatus['neovim'] | null>(null);
+	let activePath = $state('');
+	let filetype = $state('text');
+	let content = $state(''); // what the editor currently shows
+	let loadedText = $state(''); // what Neovim last loaded or wrote
+	let dirty = $state(false);
+	let openTabs = $state<string[]>([]);
+	let banner = $state<Banner | null>(null);
+	let explorerOpen = $state(false);
+	let busy = $state(false);
+
+	let editorEl = $state<HTMLElement>();
+	let terminalEl = $state<HTMLElement & { appendLine?: (s: string) => void }>();
+
+	const fileEntries = $derived(files.filter((f) => f.type === 'file'));
+
+	function say(kind: Banner['kind'], text: string) {
+		banner = { kind, text };
 	}
 
-	async function applyProposal(p: ClinaCodeProposal) {
-		const res = await api<ApiResult & { relativePath?: string }>('/api/clina', {
-			action: 'apply',
-			path: p.relativePath,
-			content: p.code
+	async function refresh() {
+		const [list, status] = await Promise.all([
+			api<FilesReply>('/api/files'),
+			api<NvimStatus>('/api/nvim')
+		]);
+		if (list.ok) files = list.files;
+		else say('err', list.error ?? 'Could not list the workspace');
+		if (status.ok) nvim = status.neovim;
+	}
+
+	async function openFile(relativePath: string) {
+		if (dirty && !confirm(`Discard unsaved changes in ${activePath}?`)) return;
+		busy = true;
+		const res = await api<NvimOpen>('/api/nvim', { action: 'open', path: relativePath });
+		busy = false;
+		if (!res.ok) return say('err', res.error ?? `Cannot open ${relativePath}`);
+		activePath = res.path;
+		filetype = res.filetype || 'text';
+		content = res.content;
+		loadedText = res.content;
+		dirty = false;
+		explorerOpen = false;
+		if (!openTabs.includes(res.path)) openTabs = [...openTabs, res.path];
+		say('ok', `Opened ${res.path} in Neovim`);
+	}
+
+	async function saveFile(text: string = content) {
+		if (!activePath) return say('err', 'Open a file first');
+		busy = true;
+		const res = await api<NvimSave>('/api/nvim', {
+			action: 'save',
+			path: activePath,
+			content: text
 		});
-		if (!res.ok) return say('err', res.error ?? 'Apply failed');
-		say('ok', `Applied patch to ${res.relativePath ?? p.relativePath}`);
-		if (activePath === p.relativePath) {
-			content = p.code;
-			loadedText = p.code;
+		busy = false;
+		if (res.ok) {
+			loadedText = text;
+			content = text;
 			dirty = false;
+			say('ok', `Saved ${res.relativePath} (${res.size} bytes) with :w`);
+		} else {
+			say('err', res.error ?? 'Save failed');
 		}
-		await refresh();
 	}
 
-	/** Lines of a unified diff, classed for colouring. */
-	function diffLines(diff: string) {
-		return diff.split('\n').map((line) => ({
-			text: line,
-			kind: line.startsWith('+') && !line.startsWith('+++')
-				? 'add'
-				: line.startsWith('-') && !line.startsWith('---')
-					? 'del'
-					: 'ctx'
-		}));
+	async function saveNeoCodeiumSpec() {
+		const res = await api<ApiResult & { relativePath?: string; exists?: boolean }>('/api/spec/save', {
+			form: NEOCODEIUM_FORM
+		});
+		if (res.ok) say('ok', `Saved ${res.relativePath ?? 'neocodeium.lua'}`);
+		else if (res.exists) say('err', `${res.error} Use :Kaeru save with overwrite to replace it.`);
+		else say('err', res.error ?? 'Save failed');
 	}
 
-	// Terminal: the Ex commands that map onto Starsky actions. Everything else is
-	// echoed, so the terminal never runs arbitrary commands on the server.
+	// Terminal: the Ex commands the web terminal accepts. The server runs them
+	// in the Neovim session and returns their output lines.
 	async function runEx(command: string) {
-		const line = (text: string) => terminalEl?.appendLine?.(text);
-		const [head, ...rest] = command.split(/\s+/);
-		if (head === 'Kaeru' && rest[0] === 'save' && rest[1]) {
-			const res = await api<ApiResult & { relativePath?: string }>('/api/spec/save', {
-				form: { repo: rest[1] }
-			});
-			return line(res.ok ? `[Kaeru] saved spec → ${res.relativePath}` : `[Kaeru] ${res.error}`);
+		const out = (text: string) => terminalEl?.appendLine?.(text);
+		const res = await api<ApiResult & { lines?: string[] }>('/api/nvim', { action: 'ex', command });
+		const lines = res.lines ?? (res.error ? [res.error] : []);
+		if (lines.length === 0) return out(`:${command.replace(/^:/, '')}`);
+		for (const line of lines) out(line);
+		// keep the editor in step after :w and :e so the browser shows the buffer Neovim holds
+		if (res.ok && /^:?(e|edit)\s/.test(command)) {
+			const target = command.replace(/^:?(e|edit)\s+/, '').trim();
+			if (target) await openFile(target);
 		}
-		if (head === 'Kikru') {
-			const action = rest[0] === 'play' || rest[0] === 'pause' ? 'toggle' : rest[0] || 'status';
-			if (action === 'status') return line('[Kikru] open the Music tab for the full player');
-			const res = await api<ApiResult & { state?: { playing: boolean } }>('/api/music', { action });
-			return line(res.ok ? `[Kikru] ${action} → ${res.state?.playing ? 'playing' : 'paused'}` : `[Kikru] ${res.error}`);
-		}
-		if (head === 'Clina') {
-			return line(`[Clina] ${providers.filter((p) => p.configured).length} provider(s) configured · mode ${mode}`);
-		}
-		line(`[Starsky] :${command} is not wired to the webclient (echoed only)`);
 	}
 
 	onMount(() => {
@@ -209,7 +136,7 @@
 		refresh();
 	});
 
-	// attach the custom element events once the elements exist
+	// Editor and terminal custom events.
 	$effect(() => {
 		const editor = editorEl;
 		if (!editor) return;
@@ -236,8 +163,8 @@
 		const term = terminalEl;
 		if (!term) return;
 		const onEx = (e: Event) => {
-			const command = String((e as CustomEvent<{ command: string }>).detail?.command ?? '').trim();
-			if (command) runEx(command);
+			const command = (e as CustomEvent<{ command: string }>).detail?.command ?? '';
+			runEx(command);
 		};
 		term.addEventListener('ex-command', onEx);
 		return () => term.removeEventListener('ex-command', onEx);
@@ -245,166 +172,146 @@
 </script>
 
 <div class="ide">
-	<!-- Workspace explorer: a drawer on phones, a column on desktop -->
-	<section class="card">
-		<div class="card-head">
-			<h2>Workspace</h2>
-			<span class="badge">{files.length} files</span>
+	<!-- Toolbar: current buffer, Neovim connection, save -->
+	<section class="card ide-bar">
+		<div class="row ide-title">
+			<Icon name="code-square-linear" size={18} />
+			<span class="mono small ide-path">{activePath || 'No file open'}</span>
+			{#if dirty}<span class="badge warn" aria-label="unsaved changes">unsaved</span>{/if}
 		</div>
-		<button class="ghost" type="button" aria-expanded={explorerOpen} onclick={() => (explorerOpen = !explorerOpen)}>
-			{explorerOpen ? 'Hide files' : 'Browse files'}
-		</button>
-		<ul class="list explorer" class:open={explorerOpen}>
-			{#each files as file (file.relativePath)}
-				<li>
-					<button
-						type="button"
-						class="list-item"
-						class:active={activePath === file.relativePath}
-						onclick={() => openFile(file.relativePath)}
-					>
-						<span aria-hidden="true">{file.language === 'lua' ? '🌙' : file.language === 'typescript' ? '🔷' : '📄'}</span>
-						<span class="name">{file.relativePath}</span>
-					</button>
-				</li>
-			{:else}
-				<li class="muted small">No files in the workspace.</li>
-			{/each}
-		</ul>
+		<div class="row">
+			<span class="badge {nvim?.available ? 'ok' : 'warn'}" title={nvim?.cmd ?? ''}>
+				{nvim?.remote ? 'remote nvim' : nvim?.available ? 'nvim' : 'nvim offline'}
+			</span>
+			<button class="ghost" type="button" aria-expanded={explorerOpen} onclick={() => (explorerOpen = !explorerOpen)}>
+				<Icon name="folder-open-linear" size={18} /> {explorerOpen ? 'Hide files' : 'Files'}
+			</button>
+			<button class="success" type="button" disabled={!activePath || busy} onclick={() => saveFile()}>
+				<Icon name="diskette-linear" size={18} /> Save
+			</button>
+		</div>
 	</section>
 
-	<!-- Editor + Ex terminal -->
-	<div class="stack">
-		<section class="card">
-			<div class="row" style:justify-content="space-between">
-				<div class="row" style:overflow-x="auto" style:flex-wrap="nowrap" style:max-width="100%">
-					{#each openTabs as tab (tab)}
+	{#if banner}
+		<p class="banner {banner.kind}" role="status">{banner.text}</p>
+	{/if}
+
+	<div class="ide-grid">
+		<!-- Explorer: a drawer on phones, a column on wide screens -->
+		<section class="card explorer-card">
+			<div class="card-head">
+				<h2>Workspace</h2>
+				<span class="badge">{fileEntries.length} files</span>
+			</div>
+			<ul class="list explorer" class:open={explorerOpen}>
+				{#each fileEntries as file (file.relativePath)}
+					<li>
 						<button
 							type="button"
-							class="chip small"
-							aria-pressed={activePath === tab}
-							onclick={() => openFile(tab)}
+							class="list-item"
+							class:active={activePath === file.relativePath}
+							onclick={() => openFile(file.relativePath)}
 						>
-							{tab.split('/').pop()}{dirty && activePath === tab ? ' •' : ''}
+							<Icon name="file-linear" size={16} />
+							<span class="name">{file.relativePath}</span>
 						</button>
-					{:else}
-						<span class="muted small">Open a file from the workspace</span>
-					{/each}
-				</div>
-				<button class="success" type="button" disabled={!activePath} onclick={() => saveFile()}>Save (:w)</button>
-			</div>
-
-			{#if banner}
-				<p class="banner {banner.kind}" style:margin="0.6rem 0" role="status">{banner.text}</p>
-			{/if}
-
-			<div style:margin-top="0.6rem">
-				<starsky-code-editor
-					bind:this={editorEl}
-					code={loadedText}
-					language={lang}
-					filepath={activePath || 'lua/kaeru/spec.lua'}
-				></starsky-code-editor>
-			</div>
+					</li>
+				{:else}
+					<li class="muted small">No files in the workspace.</li>
+				{/each}
+			</ul>
 		</section>
 
-		<section class="card">
-			<h2>Ex terminal</h2>
-			<p class="muted small">Try <code>Kaeru save folke/which-key.nvim</code>, <code>Kikru play</code> or <code>Clina</code>.</p>
-			<starsky-terminal bind:this={terminalEl}></starsky-terminal>
+		<section class="card editor-card">
+			<div class="tabs-row">
+				{#each openTabs as tab (tab)}
+					<button type="button" class="chip small" aria-pressed={activePath === tab} onclick={() => openFile(tab)}>
+						{tab.split('/').pop()}{dirty && activePath === tab ? ' •' : ''}
+					</button>
+				{:else}
+					<span class="muted small">Open a file from the workspace</span>
+				{/each}
+			</div>
+			<starsky-code-editor
+				bind:this={editorEl}
+				code={loadedText}
+				language={filetype}
+				filepath={activePath || 'untitled.txt'}
+			></starsky-code-editor>
 		</section>
 	</div>
 
-	<!-- NeoCodeium (:Clina primary engine): spec saver + keymap reference -->
+	<!-- Terminal: remote Neovim Ex commands -->
+	<section class="card">
+		<div class="card-head">
+			<h2>Terminal</h2>
+			<span class="muted small">:e file · :w · :ls · :Kaeru save owner/repo · :Kikru play · :help</span>
+		</div>
+		<starsky-terminal bind:this={terminalEl}></starsky-terminal>
+	</section>
+
+	<!-- NeoCodeium is a plain Neovim plugin: save its spec and show its keys -->
 	<section class="card">
 		<div class="card-head">
 			<div>
-				<h2>:Clina · NeoCodeium</h2>
-				<p class="muted small">Engine: <code>monkoose/neocodeium</code> · Windsurf ghost-text</p>
+				<h2>NeoCodeium</h2>
+				<p class="muted small">Neovim plugin · monkoose/neocodeium · ghost-text AI completion</p>
 			</div>
-			<span class="badge">NeoCodeium</span>
+			<Icon name="bolt-linear" size={20} />
 		</div>
-		<button class="success" type="button" onclick={saveNeoCodeiumSpec}>💾 Save neocodeium.lua spec</button>
-		<h3>NeoCodeium Lua API &amp; keymaps</h3>
+		<button class="success" type="button" onclick={saveNeoCodeiumSpec}>
+			<Icon name="diskette-linear" size={18} /> Save neocodeium spec
+		</button>
+		<h3>Keymaps</h3>
 		<ul class="list keymaps">
 			{#each NEOCODEIUM_KEYMAPS as [key, call] (key)}
 				<li><code>{key}</code> <code>require("neocodeium").{call}</code></li>
 			{/each}
 		</ul>
 	</section>
-
-	<!-- Clina assistant -->
-	<section class="card">
-		<div class="card-head">
-			<div>
-				<h2>:Clina assistant</h2>
-				<p class="muted small" style:margin="0">TypeScript AI Coding IDE · {mode}</p>
-			</div>
-			<span class="badge ok">{providers.filter((p) => p.configured).length} ready</span>
-		</div>
-
-		<div class="stack">
-			<div class="split" style:grid-template-columns="1fr 1fr" style:gap="0.5rem">
-				<label class="field">
-					<span>Provider</span>
-					<select bind:value={provider}>
-						{#each providers as p (p.id)}
-							<option value={p.id} disabled={!p.configured && p.id !== 'clina-ts'}>
-								{p.name}{p.configured ? '' : ' (no key)'}
-							</option>
-						{/each}
-					</select>
-				</label>
-				<label class="field">
-					<span>Mode</span>
-					<select bind:value={mode}>
-						{#each MODES as m (m)}
-							<option value={m}>{m}</option>
-						{/each}
-					</select>
-				</label>
-			</div>
-
-			<div class="chat" aria-live="polite" style:display="grid" style:gap="0.5rem" style:max-height="50vh" style:overflow="auto">
-				{#each chat as msg, i (i)}
-					<div class="msg {msg.role}" style:padding="0.6rem" style:border-radius="10px" style:background={msg.role === 'user' ? 'var(--panel-2)' : 'transparent'} style:border="1px solid var(--border)">
-						<div class="small muted">{msg.role === 'user' ? 'you' : 'clina'}</div>
-						<div style:white-space="pre-wrap" style:overflow-wrap="anywhere">{msg.text}</div>
-						{#if msg.steps?.length}
-							<ol class="small muted" style:margin="0.4rem 0 0" style:padding-left="1.1rem">
-								{#each msg.steps as step, j (j)}
-									<li>{step.tool} · {step.action} — {step.detail}</li>
-								{/each}
-							</ol>
-						{/if}
-						{#if msg.proposal}
-							<details open style:margin-top="0.5rem">
-								<summary>Patch for <code>{msg.proposal.relativePath}</code></summary>
-								<pre class="code">{#each diffLines(msg.proposal.diff) as line, k (k)}<span style:color={line.kind === 'add' ? 'var(--green)' : line.kind === 'del' ? 'var(--red)' : 'inherit'}>{line.text}
-</span>{/each}</pre>
-								<button class="primary" type="button" style:margin-top="0.5rem" onclick={() => applyProposal(msg.proposal!)}>
-									Apply patch
-								</button>
-							</details>
-						{/if}
-					</div>
-				{:else}
-					<p class="muted small">Ask for a spec, an edit or an explanation. Unsaved editor contents are sent as context.</p>
-				{/each}
-			</div>
-
-			<form
-				class="stack"
-				onsubmit={(e) => {
-					e.preventDefault();
-					ask();
-				}}
-			>
-				<textarea rows="3" bind:value={prompt} placeholder="e.g. add a keymap for <leader>ff to the open spec" aria-label="Prompt for Clina"></textarea>
-				<button class="primary" type="submit" disabled={running || !prompt.trim()}>
-					{running ? 'Thinking…' : 'Send to Clina'}
-				</button>
-			</form>
-		</div>
-	</section>
 </div>
+
+<style>
+	.ide {
+		display: grid;
+		gap: 0.75rem;
+	}
+	.ide-bar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		justify-content: space-between;
+		align-items: center;
+	}
+	.ide-title {
+		min-width: 0;
+	}
+	.ide-path {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.ide-grid {
+		display: grid;
+		gap: 0.75rem;
+	}
+	.explorer-card {
+		min-width: 0;
+	}
+	.editor-card {
+		min-width: 0;
+	}
+	.tabs-row {
+		display: flex;
+		gap: 0.4rem;
+		overflow-x: auto;
+		margin-bottom: 0.5rem;
+		flex-wrap: nowrap;
+	}
+	@media (min-width: 1100px) {
+		.ide-grid {
+			grid-template-columns: 240px 1fr;
+			align-items: start;
+		}
+	}
+</style>

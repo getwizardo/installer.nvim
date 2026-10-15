@@ -8,24 +8,26 @@
 	import SftpPanel from '#lib/components/SftpPanel.svelte';
 	import ParserPanel from '#lib/components/ParserPanel.svelte';
 	import GithubPanel from '#lib/components/GithubPanel.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 
 	import { ui, type TabId } from '#lib/client/ui.svelte';
+	import type { SolarIconName } from '#lib/client/solar';
 
-	const TABS: { id: TabId; label: string; icon: string }[] = [
-		{ id: 'ide', label: 'IDE', icon: '◧' },
-		{ id: 'music', label: 'Music', icon: '♪' },
-		{ id: 'spec', label: 'Spec', icon: '✚' },
-		{ id: 'mason', label: 'Mason', icon: '⛭' },
-		{ id: 'sftp', label: 'SFTP', icon: '⇅' },
-		{ id: 'parser', label: 'Parser', icon: '¶' },
-		{ id: 'github', label: 'GitHub', icon: '⌕' }
+	const TABS: { id: TabId; label: string; icon: SolarIconName }[] = [
+		{ id: 'ide', label: 'IDE', icon: 'code-square-linear' },
+		{ id: 'music', label: 'Music', icon: 'music-note-2-linear' },
+		{ id: 'spec', label: 'Spec', icon: 'add-square-linear' },
+		{ id: 'mason', label: 'Mason', icon: 'box-linear' },
+		{ id: 'sftp', label: 'SFTP', icon: 'cloud-upload-linear' },
+		{ id: 'parser', label: 'Parser', icon: 'document-text-linear' },
+		{ id: 'github', label: 'GitHub', icon: 'global-linear' }
 	];
 
 	interface Status extends ApiResult {
 		ok: boolean;
 		service?: string;
 		framework?: string;
-		neovim?: { available: boolean; cmd: string | null };
+		neovim?: { available: boolean; cmd: string | null; remote: string | null };
 		repoRoot?: string;
 		masonCount?: number;
 		savedSpecsCount?: number;
@@ -50,7 +52,7 @@
 	<title>Starsky for Neovim · SvelteKit webclient</title>
 	<meta
 		name="description"
-		content="Starsky for Neovim: mobile-first SvelteKit webclient for kaeru.nvim with Clina AI IDE, Kikru music, lazy.nvim spec builder, Mason, SFTP, README parser and GitHub browser."
+		content="Starsky for Neovim: mobile-first SvelteKit webclient for kaeru.nvim with a minimal web IDE on remote Neovim, Kikru music, lazy.nvim spec builder, Mason, SFTP, README parser and GitHub browser."
 	/>
 </svelte:head>
 
@@ -62,7 +64,7 @@
 		</div>
 		{#if status?.ok}
 			<span class="badge {status.neovim?.available ? 'ok' : 'warn'}" title={status.neovim?.cmd ?? ''}>
-				{status.neovim?.available ? 'nvim · node client' : 'nvim missing · TS fallback'}
+				{status.neovim?.remote ? 'remote nvim' : status.neovim?.available ? 'nvim · node client' : 'nvim missing · TS fallback'}
 			</span>
 		{:else if status && !status.ok}
 			<span class="badge err">API offline</span>
@@ -76,7 +78,7 @@
 				aria-current={ui.tab === tab.id ? 'page' : undefined}
 				onclick={() => select(tab.id)}
 			>
-				<span class="ico" aria-hidden="true">{tab.icon}</span>
+				<span class="ico"><Icon name={tab.icon} size={20} /></span>
 				<span>{tab.label}</span>
 			</button>
 		{/each}

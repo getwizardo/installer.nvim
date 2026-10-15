@@ -12,7 +12,7 @@
 --   jobs         plenary.nvim · luv · vim.fn.system
 --   themes       the active colorscheme picks the Kikru UI theme
 --   binaries     yt-dlp · mpv · ffmpeg/ffplay · vlc · mpc · playerctl · curl ·
---                gh · fzf · deno/bun/node (Clina's TypeScript engine) · …
+--                gh · fzf · deno/bun/node · …
 --
 -- `:Kaeru integrations` prints what was detected, `:Kaeru pick …` opens a
 -- picker in whatever plugin you actually use.
