@@ -574,6 +574,75 @@ test("process pool respects concurrency and order", function()
   assert(empty_called)
 end)
 
+test("mason packages / resolve / language_for with a fake registry", function()
+  vim.tbl_get = vim.tbl_get or function(t, ...)
+    for _, k in ipairs({ ... }) do
+      if type(t) ~= "table" then
+        return nil
+      end
+      t = t[k]
+    end
+    return t
+  end
+  vim.tbl_contains = vim.tbl_contains or function(t, v)
+    for _, x in ipairs(t) do
+      if x == v then
+        return true
+      end
+    end
+    return false
+  end
+  vim.bo = vim.bo or { filetype = "python" }
+  local specs = {
+    { name = "lua-language-server", description = "Lua LSP", categories = { "LSP" }, languages = { "Lua" }, neovim = { lspconfig = "lua_ls" } },
+    { name = "stylua", description = "Lua formatter", categories = { "Formatter" }, languages = { "Lua" } },
+    { name = "debugpy", description = "Python debugger", categories = { "DAP" }, languages = { "Python" } },
+    { name = "pyright", description = "Python LSP", categories = { "LSP" }, languages = { "Python" }, neovim = { lspconfig = "pyright" } },
+  }
+  local installed = { stylua = true }
+  package.preload["mason-registry"] = function()
+    return {
+      get_all_package_specs = function()
+        return specs
+      end,
+      is_installed = function(n)
+        return installed[n] == true
+      end,
+      has_package = function(n)
+        for _, s in ipairs(specs) do
+          if s.name == n then
+            return true
+          end
+        end
+        return false
+      end,
+      get_package_aliases = function(n)
+        return n == "lua-language-server" and { "sumneko_lua" } or {}
+      end,
+    }
+  end
+  local Mason = require("installer.mason")
+  assert(Mason.available())
+  eq(#Mason.packages(), 4)
+  eq(Mason.packages()[1].name, "stylua") -- installed first
+  eq(#Mason.packages({ category = "LSP" }), 2)
+  eq(#Mason.packages({ language = "python" }), 2)
+  eq(#Mason.packages({ installed = true }), 1)
+  eq(Mason.packages({ query = "lua_ls" })[1].name, "lua-language-server")
+  eq(#Mason.packages({ query = "lsp python" }), 1)
+  eq(Mason.resolve("lua_ls"), "lua-language-server")
+  eq(Mason.resolve("sumneko_lua"), "lua-language-server")
+  eq(Mason.resolve("stylua"), "stylua")
+  eq(Mason.resolve("nope"), nil)
+  eq(Mason.language_for("sh"), "Bash")
+  eq(Mason.language_for("python"), "Python")
+  eq(Mason.language_for("lua"), "Lua")
+  eq(Mason.language_for("nonexistent"), nil)
+  eq(Mason.language_for(""), nil)
+  package.preload["mason-registry"] = nil
+  package.loaded["mason-registry"] = nil
+end)
+
 print(("\n%d passed, %d failed"):format(pass, fail))
 if fail > 0 then
   os.exit(1)

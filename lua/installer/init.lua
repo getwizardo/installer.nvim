@@ -22,6 +22,14 @@ function M.setup(opts)
   Config.setup(opts)
   M._setup_done = true
   require("installer.sftp").setup_autocmd()
+  if Config.options.mason and Config.options.mason.auto_ensure then
+    vim.schedule(function()
+      local mason = require("installer.mason")
+      if mason.available() then
+        mason.ensure()
+      end
+    end)
+  end
 end
 
 --- Make sure configuration files were loaded even when setup() was never called.
@@ -61,6 +69,11 @@ M.sftp = setmetatable({}, {
 M.cache = setmetatable({}, {
   __index = function(_, k)
     return require("installer.cache")[k]
+  end,
+})
+M.mason = setmetatable({}, {
+  __index = function(_, k)
+    return require("installer.mason")[k]
   end,
 })
 M.config = Config

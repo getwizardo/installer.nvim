@@ -78,6 +78,23 @@ M.defaults = {
     exclude = {},
   },
 
+  -- mason.nvim integration (`:Installer mason`): LSP servers, DAP adapters,
+  -- linters, formatters, compilers and runtimes from the Mason registry.
+  mason = {
+    -- Packages (Mason names or lspconfig server names) installed by
+    -- `:Installer mason ensure`; `:Installer mason export` fills this list.
+    ---@type string[]
+    ensure_installed = {},
+    -- Run `ensure` automatically after setup() when mason.nvim is available.
+    auto_ensure = false,
+    -- Refresh the registry once per session before the first use.
+    refresh_registry = true,
+    -- Parallel installs for `ensure` / multi-select installs.
+    concurrency = 2,
+    -- Open the :Mason window after a package finished installing.
+    open_ui_on_install = false,
+  },
+
   -- Local plugin cache (`:Installer cache`). Installed plugins are archived to
   -- `<dir>/<name>.nvimpack` (a zip of the whole plugin directory, .git included)
   -- and restored from there before lazy.nvim clones, so re-installs work offline.
@@ -273,6 +290,12 @@ function M.template()
     "ai:",
     "  enabled: false",
     "  exclude: []",
+    "",
+    "mason:",
+    "  ensure_installed: []      # e.g. [lua-language-server, stylua, debugpy] or lspconfig names (lua_ls)",
+    "  auto_ensure: false",
+    "  refresh_registry: true",
+    "  concurrency: 2",
     "",
     "cache:",
     "  enabled: true",

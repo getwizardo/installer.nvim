@@ -17,6 +17,7 @@ CONTENTS                                                   *installer-contents*
  12. SFTP ......................................... |installer-sftp|
  13. installer.yaml ............................... |installer-yaml|
  14. Plugin cache ................................. |installer-cache|
+ 15. Mason ........................................ |installer-mason|
 
 ==============================================================================
 1. INTRODUCTION                                        *installer-introduction*
@@ -371,4 +372,56 @@ Commands: >
   :Installer cache clean             drop archives of plugins no longer in your spec
   :Installer cache dir
 <
+==============================================================================
+15. MASON                                                     *installer-mason*
+
+`:Installer mason` integrates mason.nvim (https://github.com/mason-org/mason.nvim):
+LSP servers, DAP adapters, linters, formatters, compilers and runtimes. The
+registry is refreshed once per session (`mason.refresh_registry`). When
+mason.nvim is not installed you are offered `:Installer mason scaffold lsp`.
+
+Commands: >
+  :Installer mason [query]                picker over every package
+  :Installer mason lsp|dap|linter|formatter|compiler|runtime [query]
+  :Installer mason ft                     packages for the current filetype
+  :Installer mason install <name>...      Mason names, lspconfig names or aliases
+  :Installer mason <name>...              shortcut for install
+  :Installer mason uninstall|update <name>...
+  :Installer mason upgrade                update registry + reinstall outdated
+  :Installer mason ensure                 install `mason.ensure_installed`
+  :Installer mason export                 write installed names to installer.yaml
+  :Installer mason list                   installed packages with versions
+  :Installer mason scaffold lsp|dap|tools write lazy.nvim specs and install them
+  :Installer mason ui                     :Mason
+<
+Picker keys: >
+  (type)         filter by name, lspconfig name, language, description
+  <Tab> /        switch between prompt and list
+  <CR> i         install (all marked packages when some are marked)
+  x  u           uninstall / update
+  <Space>        mark / unmark
+  f              cycle category (all, LSP, DAP, Linter, Formatter, ...)
+  l              filter by the filetype of the buffer you came from
+  t              installed only
+  K  o  y        details / open homepage / yank name
+  U  M           refresh registry / open :Mason
+  ?  q           help / close
+<
+Scaffolds (written to the lazy.nvim plugins dir, then installed): >
+  lsp    lua/plugins/mason.lua   mason.nvim, mason-lspconfig.nvim, nvim-lspconfig
+  dap    lua/plugins/dap.lua     nvim-dap, nvim-dap-ui, nvim-nio, mason-nvim-dap.nvim
+  tools  lua/plugins/tools.lua   mason-tool-installer.nvim, conform.nvim, nvim-lint
+<
+installer.yaml keys: >
+  mason:
+    ensure_installed: [lua-language-server, stylua, debugpy]
+    auto_ensure: false          # run ensure after setup()
+    refresh_registry: true
+    concurrency: 2              # parallel installs
+    open_ui_on_install: false
+<
+Lua API: `require("installer").mason.pick{category="LSP"}`, `.install(name)`,
+`.install_many(names)`, `.ensure()`, `.export()`, `.scaffold(kind)`,
+`.packages{category=, query=, installed=, language=}`, `.resolve(name)`.
+
 vim:tw=78:ts=8:ft=help:norl:

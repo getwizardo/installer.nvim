@@ -10,6 +10,7 @@ Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **fro
 - **AI coding presets** (opt-in): curated specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub and more.
 - **SFTP**: upload / download / sync projects with parallel `sftp` workers, upload-on-save, every sftp command, a remote file browser, multiple SSH keys / ssh-config / ProxyJump.
 - **`installer.yaml`**: all configuration in a global or per-project YAML file (built-in parser, no dependencies).
+- **Mason**: install LSP servers, DAP adapters, linters, formatters, compilers and runtimes from the [mason.nvim](https://github.com/mason-org/mason.nvim) registry with a filterable picker, `ensure_installed` in `installer.yaml`, and one-command scaffolds for lspconfig / nvim-dap / conform + nvim-lint.
 - **Plugin cache**: installed plugins archived as `cache/<name>.nvimpack` (zip, `.git` included) or `.pack` (git bundle for large repos) and restored before install — offline re-installs.
 
 ```
@@ -80,6 +81,7 @@ return {
 | `:Installer sftp <action>`      | transfers, every sftp command, remote browser, shell — see below        |
 | `:Installer config [...]`       | `edit`, `project`, `reload`, `show` — manage `installer.yaml`           |
 | `:Installer cache [...]`        | `list`, `pack [name\|all]`, `restore <name>`, `remove`, `clean`, `dir`   |
+| `:Installer mason [...]`        | Mason picker, `lsp\|dap\|linter\|formatter`, `install`, `ensure`, `export`, `scaffold` — see below |
 
 ### Modal keys
 
@@ -227,6 +229,44 @@ Installed plugins are archived under `~/.cache/nvim/installer/`:
 :Installer cache pack all          " archive every installed plugin
 :Installer cache restore <name>    " ! to overwrite an existing directory
 :Installer cache clean             " drop archives of plugins no longer in the spec
+```
+
+## Mason (LSP / DAP / linters / formatters)
+
+`:Installer mason` opens a picker over the whole [mason.nvim](https://github.com/mason-org/mason.nvim) registry (the registry is refreshed once per session). Requires mason.nvim; if it is missing, `:Installer mason scaffold lsp` adds it to your lazy.nvim specs.
+
+```vim
+:Installer mason                       " picker over every package
+:Installer mason lsp|dap|linter|formatter|compiler|runtime [query]
+:Installer mason ft                    " packages for the current filetype
+:Installer mason install lua_ls stylua debugpy   " lspconfig names, aliases or Mason names
+:Installer mason uninstall|update <name>
+:Installer mason upgrade               " update the registry, reinstall outdated packages
+:Installer mason ensure                " install everything in installer.yaml mason.ensure_installed
+:Installer mason export                " write the installed packages back to installer.yaml
+:Installer mason list                  " installed packages with versions
+:Installer mason scaffold lsp|dap|tools
+:Installer mason ui                    " plain :Mason
+```
+
+Picker keys: type to filter (name, lspconfig name, language, description), `<Tab>`/`/` switch between prompt and list, `<CR>`/`i` install, `x` uninstall, `u` update, `<Space>` mark several then `<CR>` to install them `concurrency` at a time, `f` cycle category, `l` filter by the filetype you came from, `t` installed only, `K` details, `o` homepage, `y` yank name, `U` refresh registry, `M` open `:Mason`, `?` help, `q` close.
+
+Scaffolds write ready-to-use lazy.nvim specs into your plugins directory and install them:
+
+| `scaffold` | File | Plugins |
+| --- | --- | --- |
+| `lsp` | `lua/plugins/mason.lua` | mason.nvim, mason-lspconfig.nvim, nvim-lspconfig (`ensure_installed` from `installer.yaml`) |
+| `dap` | `lua/plugins/dap.lua` | nvim-dap, nvim-dap-ui, nvim-nio, mason-nvim-dap.nvim |
+| `tools` | `lua/plugins/tools.lua` | mason-tool-installer.nvim, conform.nvim, nvim-lint |
+
+```yaml
+# installer.yaml
+mason:
+  ensure_installed: [lua-language-server, lua_ls, stylua, debugpy]  # Mason or lspconfig names
+  auto_ensure: false        # run `ensure` after setup()
+  refresh_registry: true
+  concurrency: 2
+  open_ui_on_install: false
 ```
 
 ## Configuration (Lua)

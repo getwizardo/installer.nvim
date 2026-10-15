@@ -8,7 +8,12 @@ if vim.fn.has("nvim-0.8") ~= 1 then
   return
 end
 
-local subcommands = { "modal", "browse", "search", "add", "dir", "ai", "login", "logout", "whoami", "sftp", "cache", "config" }
+local subcommands = { "modal", "browse", "search", "add", "dir", "ai", "login", "logout", "whoami", "sftp", "cache", "config", "mason" }
+local mason_actions = {
+  "pick", "install", "uninstall", "update", "upgrade", "ensure", "export", "list", "ft",
+  "lsp", "dap", "linter", "formatter", "compiler", "runtime", "scaffold", "ui",
+}
+local mason_scaffolds = { "lsp", "dap", "tools" }
 local sftp_actions = {
   "upload", "upload-project", "sync", "download", "download-project", "init", "status", "select", "browse", "diff", "test",
   "shell", "ssh", "run", "exec", "ls", "mkdir", "rmdir", "rm", "rename", "chmod", "chown", "chgrp", "ln", "symlink", "df", "pwd", "version",
@@ -137,6 +142,64 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
     else
       notify(false, "Unknown cache action: " .. action .. "\nUse: " .. table.concat(cache_actions, ", "))
     end
+  elseif sub == "mason" then
+    local mason = require("installer.mason")
+    local function notify(ok, msg)
+      vim.notify(msg, ok and vim.log.levels.INFO or vim.log.levels.ERROR, { title = "installer.nvim" })
+    end
+    local action = args[2] or "pick"
+    local rest = { unpack(args, 3) }
+    if action ~= "scaffold" and not mason.available() then
+      return notify(false, "mason.nvim is not installed. Run `:Installer mason scaffold lsp` to add it to your lazy.nvim specs.")
+    end
+    local category_map = { lsp = "LSP", dap = "DAP", linter = "Linter", formatter = "Formatter", compiler = "Compiler", runtime = "Runtime" }
+    if action == "pick" then
+      mason.pick({ query = table.concat(rest, " ") })
+    elseif category_map[action] then
+      mason.pick({ category = category_map[action], query = table.concat(rest, " ") })
+    elseif action == "install" then
+      if #rest == 0 then
+        return notify(false, "Usage: :Installer mason install <package> [<package>...]")
+      end
+      mason.install_many(rest, notify)
+    elseif action == "uninstall" then
+      if #rest == 0 then
+        return notify(false, "Usage: :Installer mason uninstall <package>")
+      end
+      for _, name in ipairs(rest) do
+        mason.uninstall(name, notify)
+      end
+    elseif action == "update" then
+      if #rest == 0 then
+        return notify(false, "Usage: :Installer mason update <package>")
+      end
+      for _, name in ipairs(rest) do
+        mason.update(name)
+      end
+    elseif action == "upgrade" then
+      mason.upgrade()
+    elseif action == "ensure" then
+      mason.ensure()
+    elseif action == "export" then
+      mason.export()
+    elseif action == "list" then
+      mason.list()
+    elseif action == "ft" then
+      mason.for_filetype()
+    elseif action == "ui" then
+      vim.cmd("Mason")
+    elseif action == "scaffold" then
+      local kind = rest[1] or "lsp"
+      if not vim.tbl_contains(mason_scaffolds, kind) then
+        return notify(false, "Usage: :Installer mason scaffold " .. table.concat(mason_scaffolds, "|"))
+      end
+      mason.scaffold(kind)
+    elseif not mason.resolve(action) then
+      notify(false, "Unknown mason action: " .. action .. "\nUse: " .. table.concat(mason_actions, ", "))
+    else
+      -- `:Installer mason <package>` is a shortcut for install.
+      mason.install_many({ action, unpack(rest) }, notify)
+    end
   elseif sub == "config" then
     local Config = require("installer.config")
     local action = args[2] or "edit"
@@ -188,6 +251,19 @@ end, {
           names[#names + 1] = name
         end
       end
+      table.sort(names)
+      return filter(names)
+    elseif words[2] == "mason" and #words == 3 then
+      return filter(mason_actions)
+    elseif words[2] == "mason" and words[3] == "scaffold" then
+      return filter(mason_scaffolds)
+    elseif words[2] == "mason" and #words >= 4 then
+      local ok, registry = pcall(require, "mason-registry")
+      if not ok then
+        return {}
+      end
+      local names = (words[3] == "uninstall" or words[3] == "update") and registry.get_installed_package_names()
+        or registry.get_all_package_names()
       table.sort(names)
       return filter(names)
     elseif words[2] == "config" and #words == 3 then
