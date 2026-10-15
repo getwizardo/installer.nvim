@@ -116,6 +116,9 @@ end
 local CHAR = "[%z\1-\127\194-\244][\128-\191]*"
 
 local function text_width(s)
+  if not s:find("[\128-\255]") then
+    return #s
+  end
   if vim and vim.fn and vim.fn.strdisplaywidth then
     return vim.fn.strdisplaywidth(s)
   end
@@ -163,23 +166,28 @@ function M.wrap(text, width)
       -- a picture is one line, never wrapped, so `o` can find its name
       out[#out + 1] = "[image: " .. image .. "]"
     else
-      local current = ""
+      -- `current_width` is tracked incrementally: measuring each whole candidate line
+      -- again made wrapping a long book several times slower.
+      local current, current_width = "", 0
       for word in para:gmatch("%S+") do
+        local word_width = text_width(word)
         local pieces = { word }
-        if text_width(word) > width then
+        if word_width > width then
           pieces = split_long(word, width)
         end
         for piece_index, piece in ipairs(pieces) do
           if piece_index > 1 then
             out[#out + 1] = current
-            current = ""
+            current, current_width = "", 0
           end
-          local candidate = current == "" and piece or (current .. " " .. piece)
-          if text_width(candidate) > width and current ~= "" then
+          local piece_width = #pieces == 1 and word_width or text_width(piece)
+          if current == "" then
+            current, current_width = piece, piece_width
+          elseif current_width + 1 + piece_width > width then
             out[#out + 1] = current
-            current = piece
+            current, current_width = piece, piece_width
           else
-            current = candidate
+            current, current_width = current .. " " .. piece, current_width + 1 + piece_width
           end
         end
       end

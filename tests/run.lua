@@ -2806,6 +2806,56 @@ test("keruos: wide render keeps one line per entry", function()
   eq(lines[#lines], "press a key to open, q to close", "footer")
 end)
 
+test("cve: scan keeps at most `concurrency` lookups in flight and reports in job order", function()
+  local Cve = require("kaeru.cve")
+  local saved_check, saved_read, saved_conc, saved_max = Cve.check, Cve.read_project, Cve.concurrency, Cve.max_queries
+  local pending, in_flight, peak = {}, 0, 0
+  Cve.concurrency, Cve.max_queries = 3, 10
+  Cve.read_project = function()
+    local packages = {}
+    for i = 1, 7 do
+      packages[#packages + 1] = { name = "pkg" .. i, version = "1.0." .. i }
+    end
+    return { { ecosystem = "npm", file = "package-lock.json", packages = packages } }, {}
+  end
+  Cve.check = function(ecosystem, name, version, cb)
+    in_flight = in_flight + 1
+    peak = math.max(peak, in_flight)
+    pending[#pending + 1] = function(err, findings)
+      in_flight = in_flight - 1
+      cb(err, findings)
+    end
+  end
+  local report
+  Cve.scan("/unused", function(err, r)
+    eq(err, nil, "scan error")
+    report = r
+  end)
+  eq(#pending, 3, "first wave size")
+  -- Answer out of order: job 2 first, then 3 and 1, then the rest.
+  local order = { 2, 3, 1, 5, 4, 7, 6 }
+  for _, idx in ipairs(order) do
+    local answer = pending[idx]
+    assert(answer, "no pending lookup " .. idx)
+    if idx == 2 then
+      answer(nil, { { id = "GHSA-x", severity = "high", summary = "bad", url = "u" } })
+    elseif idx == 5 then
+      answer("curl failed (6)", nil)
+    else
+      answer(nil, {})
+    end
+    -- keep the queue moving: callbacks queue the next lookup synchronously
+  end
+  eq(peak, 3, "peak in flight")
+  assert(report, "scan did not finish")
+  eq(report.checked, 7, "checked count")
+  eq(#report.vulnerable, 1, "vulnerable count")
+  eq(report.vulnerable[1].name, "pkg2", "the vulnerable package")
+  eq(#report.errors, 1, "error count")
+  assert(report.errors[1]:find("pkg5", 1, true), "error names the failed package")
+  Cve.check, Cve.read_project, Cve.concurrency, Cve.max_queries = saved_check, saved_read, saved_conc, saved_max
+end)
+
 print(("\n%d passed, %d failed"):format(pass, fail))
 if fail > 0 then
   os.exit(1)

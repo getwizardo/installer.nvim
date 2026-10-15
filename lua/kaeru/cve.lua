@@ -14,6 +14,7 @@ local Json = require("kaeru.json")
 local M = {}
 
 M.max_queries = 60
+M.concurrency = 4 -- lookups in flight at once
 
 --- GitHub advisory ecosystem for each lock file we read.
 M.lockfiles = {
@@ -235,25 +236,48 @@ function M.scan(dir, cb)
     end
   end
   local skipped = math.max(0, #jobs - M.max_queries)
+  local total = math.min(#jobs, M.max_queries)
   local report = { packages = #jobs, checked = 0, skipped = skipped, vulnerable = {}, errors = {}, notes = notes }
-  local index = 0
-  local function step()
-    index = index + 1
-    if index > math.min(#jobs, M.max_queries) then
-      return cb(nil, report)
-    end
-    local job = jobs[index]
-    M.check(job.ecosystem, job.name, job.version, function(err, findings)
-      report.checked = report.checked + 1
-      if err then
-        report.errors[#report.errors + 1] = job.name .. " " .. job.version .. ": " .. err
-      elseif findings and #findings > 0 then
-        report.vulnerable[#report.vulnerable + 1] = { ecosystem = job.ecosystem, name = job.name, version = job.version, findings = findings }
-      end
-      step()
-    end)
+  if total == 0 then
+    return cb(nil, report)
   end
-  step()
+
+  -- Up to `M.concurrency` lookups run at once; each result is stored by job index so the
+  -- report lists packages in the same order however the replies arrive.
+  local results = {}
+  local started, finished, in_flight = 0, 0, 0
+  local function launch()
+    while in_flight < M.concurrency and started < total do
+      started = started + 1
+      in_flight = in_flight + 1
+      local index = started
+      local job = jobs[index]
+      M.check(job.ecosystem, job.name, job.version, function(err, findings)
+        in_flight = in_flight - 1
+        results[index] = { job = job, err = err, findings = findings }
+        finished = finished + 1
+        if finished == total then
+          for i = 1, total do
+            local r = results[i]
+            report.checked = report.checked + 1
+            if r.err then
+              report.errors[#report.errors + 1] = r.job.name .. " " .. r.job.version .. ": " .. r.err
+            elseif r.findings and #r.findings > 0 then
+              report.vulnerable[#report.vulnerable + 1] = {
+                ecosystem = r.job.ecosystem,
+                name = r.job.name,
+                version = r.job.version,
+                findings = r.findings,
+              }
+            end
+          end
+          return cb(nil, report)
+        end
+        launch()
+      end)
+    end
+  end
+  launch()
 end
 
 --- Plain-text report lines (no decoration beyond ASCII).
