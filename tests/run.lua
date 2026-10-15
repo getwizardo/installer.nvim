@@ -1168,6 +1168,44 @@ test("cve: query URL, findings order and report rendering", function()
   assert(text:find("skipped 1", 1, true), "skip notice")
 end)
 
+test("upgrator: parses npm, pip, go and cargo outdated output", function()
+  local U = require("kaeru.upgrator")
+  local npm = U.parse_npm_outdated('{"lodash":{"current":"4.17.0","wanted":"4.17.0","latest":"4.18.1"},"same":{"current":"1.0.0","wanted":"1.0.0","latest":"1.0.0"}}')
+  eq(#npm, 1, "packages already at latest are dropped")
+  eq(npm[1].name, "lodash")
+  eq(npm[1].latest, "4.18.1")
+  eq(#U.parse_npm_outdated(""), 0, "empty npm output means nothing outdated")
+
+  local pip = U.parse_pip_outdated('[{"name": "wheel", "version": "0.38.4", "latest_version": "0.48.0", "latest_filetype": "wheel"}]')
+  eq(#pip, 1)
+  eq(pip[1].latest, "0.48.0")
+
+  local go = U.parse_go_outdated("example.com/x v1.0.0 [v1.2.0]\nexample.com/y v2.0.0\n")
+  eq(#go, 1, "modules without an update are skipped")
+  eq(go[1].latest, "v1.2.0")
+
+  local cargo = U.parse_cargo_outdated("name    project  compat  latest  kind\nserde   1.0.130 1.0.130 1.0.200 Normal\ntokio   1.2.0   1.2.0   1.2.0  Normal\n")
+  eq(#cargo, 1)
+  eq(cargo[1].name, "serde")
+end)
+
+test("upgrator: detection follows manifest files and render reports the plan", function()
+  local U = require("kaeru.upgrator")
+  local repo = vim.fn.getcwd and vim.fn.getcwd() or "."
+  local root_found = U.detect(".")
+  -- the repo root has no package manifest of its own
+  eq(#root_found, 0)
+  local starsky = U.detect("starsky")
+  eq(starsky[1].id, "npm", "starsky/package.json is an npm project")
+  local text = table.concat(U.render({
+    { manager = { label = "npm" }, items = { { name = "lodash", current = "4.17.0", latest = "4.18.1" } } },
+    { manager = { label = "go" }, items = {}, error = "go is not installed" },
+  }), "\n")
+  assert(text:find("lodash", 1, true) and text:find("4.18.1", 1, true), "outdated row")
+  assert(text:find("error: go is not installed", 1, true), "errors are shown, not hidden")
+  assert(text:find("1 outdated package", 1, true), "summary count")
+end)
+
 -- SFTP UI, NeoCodeium AI preset, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
 test("sftp ui helpers and the NeoCodeium AI preset", function()
   local Sftp = require("kaeru.sftp")

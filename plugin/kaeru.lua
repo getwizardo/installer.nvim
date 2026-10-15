@@ -290,6 +290,8 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
     end
   elseif sub == "cve" then
     require("kaeru.cve").command({ unpack(args, 2) })
+  elseif sub == "upgrade" or sub == "upgrator" then
+    require("kaeru.upgrator").command({ unpack(args, 2) })
   elseif sub == "starsky" or sub == "web" then
     local starsky = require("kaeru.starsky")
     local action = args[2] or "start"

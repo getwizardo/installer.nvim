@@ -301,6 +301,7 @@ M.subcommands = {
   { word = "config", menu = "edit/reload kaeru.yaml", info = ":Kaeru config [edit|project|reload|show]" },
   { word = "mason", menu = "LSP/DAP/linter/formatter packages", info = ":Kaeru mason <action>" },
   { word = "starsky", menu = "SvelteKit Starsky web client", info = ":Kaeru starsky [start|stop|open|status|build|info]" },
+  { word = "upgrade", menu = "update outdated packages in this project (npm, pip, cargo, go, lazy)", info = ":Kaeru upgrade [check|apply [latest]]" },
   { word = "cve", menu = "known CVEs for the packages in this project", info = ":Kaeru cve [scan [dir]|check <npm|pip|rust|go> <name> [version]]" },
   { word = "web", menu = "alias of starsky", info = ":Kaeru web [action]" },
   { word = "pick", menu = "open a picker in telescope / fzf-lua / snacks / mini.pick", info = ":Kaeru pick [plugins|mason|sftp|cache|radio|queue|cast]" },
