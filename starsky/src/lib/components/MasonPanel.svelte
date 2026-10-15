@@ -134,7 +134,7 @@
 							<strong>{pkg.name}</strong>
 							{#if pkg.lspconfig}<span class="badge">lspconfig: {pkg.lspconfig}</span>{/if}
 							<br />
-							<span class="small muted">{pkg.categories.join(' · ')} — {pkg.description}</span>
+							<span class="small muted">{pkg.categories.join(' · ')}: {pkg.description}</span>
 						</span>
 					</label>
 				</li>

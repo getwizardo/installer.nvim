@@ -418,7 +418,7 @@ function M.get_snapshot()
     paused = M.state.paused,
     muted = M.state.muted,
     volume = M.state.volume,
-    position = backend.position,
+    position = (M._send.device and M._send.position) or backend.position,
     duration = backend.duration or (track and track.duration) or 0,
     engine = backend.engine,
     eq_preset = M.state.eq_preset,
@@ -743,6 +743,88 @@ function M.send_track(track, opts)
   M.bump()
 end
 
+-- Device status sync ----------------------------------------------------------------
+-- While sending, the Cast device is the source of truth for position, play/pause and
+-- volume. A timer polls `karu status` and folds the answer into Kikru's state.
+
+local POLL_MS = 2500
+
+--- Apply a `karu status` payload (`media.state`, `media.currentTime`, `volume`).
+--- Public so the window and tests can feed it directly.
+---@param payload table
+function M.apply_device_status(payload)
+  if type(payload) ~= "table" then
+    return
+  end
+  local volume = payload.volume
+  if type(volume) == "table" then
+    if type(volume.level) == "number" then
+      M.state.volume = math.floor(math.max(0, math.min(1, volume.level)) * 100 + 0.5)
+    end
+    if volume.muted ~= nil then
+      M.state.muted = volume.muted == true
+    end
+  elseif type(volume) == "number" then
+    M.state.volume = math.floor(math.max(0, math.min(100, volume)) + 0.5)
+  end
+  local media = type(payload.media) == "table" and payload.media or nil
+  local state = media and media.state
+  if state == "PLAYING" or state == "BUFFERING" then
+    M._send.seen_playing = true
+    M.state.playing, M.state.paused = true, false
+  elseif state == "PAUSED" then
+    M.state.playing, M.state.paused = true, true
+  elseif state == "IDLE" and M._send.seen_playing then
+    -- the device finished or was stopped elsewhere: do not auto-advance, since
+    -- the device does not say which (karu's status has no idle reason yet)
+    M._send.seen_playing = false
+    M.state.playing, M.state.paused = false, true
+  end
+  if media and tonumber(media.currentTime) then
+    M._send.position = tonumber(media.currentTime)
+  end
+  M.bump()
+end
+
+--- One poll of the send device; never overlaps with the previous one.
+local function poll_device()
+  local ok, Karu = pcall(require, "kaeru.karu")
+  local device = M._send.device
+  if not ok or not device or M._send.polling then
+    return
+  end
+  M._send.polling = true
+  Karu.status(device, function(err, payload)
+    vim.schedule(function()
+      M._send.polling = false
+      if not err and M._send.device == device then
+        M.apply_device_status(payload)
+      end
+    end)
+  end)
+end
+
+function M.stop_poll()
+  local timer = M._send.timer
+  M._send.timer = nil
+  if timer then
+    timer:stop()
+    if not timer:is_closing() then
+      timer:close()
+    end
+  end
+end
+
+local function start_poll()
+  M.stop_poll()
+  local timer = uv and uv.new_timer and uv.new_timer()
+  if not timer then
+    return
+  end
+  M._send.timer = timer
+  timer:start(POLL_MS, POLL_MS, vim.schedule_wrap(poll_device))
+end
+
 --- Start sending to `device`. If a track is loaded it is cast right away.
 ---@param device string
 function M.send_start(device)
@@ -751,6 +833,8 @@ function M.send_start(device)
     return UI.notify(":Kikru · " .. reason, vim.log.levels.ERROR)
   end
   M._send.device = device
+  M._send.position = nil
+  start_poll()
   -- the local engine must not keep playing under the cast
   if Backend.running() then
     Backend.pause()
@@ -769,6 +853,9 @@ end
 function M.send_stop(stop_device)
   local device = M._send.device
   M._send.device = nil
+  M._send.position = nil
+  M._send.seen_playing = false
+  M.stop_poll()
   if device and stop_device then
     local Karu = karu_bridge()
     if Karu then
@@ -1632,6 +1719,42 @@ end
 --- `:Kikru [subcommand] [args…]`
 ---@param args string[]
 ---@return boolean
+--- Start or stop the Karu receiver: this machine becomes a Cast device, and casts
+--- from phones and apps land in Kikru through the cast server.
+---@param action? "start"|"stop"|"status"|nil  nil toggles
+function M.receiver_toggle(action)
+  local Karu, reason = karu_bridge()
+  if not Karu then
+    return UI.notify(":Kikru · " .. reason, vim.log.levels.ERROR)
+  end
+  local running = Karu.receiver_running()
+  if action == "status" then
+    return UI.notify(":Kikru · cast receiver " .. (running and "is running" or "is off"))
+  end
+  if action == "stop" or (action == nil and running) then
+    if Karu.stop_receiver() then
+      return UI.notify(":Kikru · cast receiver stopped")
+    end
+    return UI.notify(":Kikru · cast receiver is not running")
+  end
+  if running then
+    return UI.notify(":Kikru · cast receiver is already running")
+  end
+  if not Cast.server_running() then
+    local ok, message = Cast.start_server()
+    if not ok then
+      return UI.notify(":Kikru · cannot start the cast server: " .. tostring(message), vim.log.levels.ERROR)
+    end
+  end
+  local job, err = Karu.receive({ bridge = Cast.url() }, function(info)
+    UI.notify(":Kikru · receiving casts as “" .. tostring(info and info.name or "Karu") .. "”")
+  end)
+  if not job then
+    UI.notify(":Kikru · " .. tostring(err or "could not start the receiver"), vim.log.levels.ERROR)
+  end
+  return job ~= nil
+end
+
 --- `:Kikru send [device|off|stop|status|devices]`
 ---@param words string[] arguments after `send`
 function M.send_command(words)
@@ -2010,6 +2133,8 @@ function M.dispatch(args)
     M.disconnect()
   elseif sub == "send" then
     M.send_command(rest)
+  elseif sub == "receive" then
+    M.receiver_toggle((rest[1] or ""):lower() ~= "" and (rest[1] or ""):lower() or nil)
   elseif sub == "devices" then
     local devices = Daemon.device_list()
     if #devices == 0 then

@@ -515,6 +515,7 @@ M.kikru_actions = {
   { word = "disconnect", menu = "leave the 2-Neovim session" },
   { word = "devices", menu = "list paired Neovim devices" },
   { word = "send", menu = "send playback to a Cast device (Karu)", info = ":Kikru send [device|off|stop|status|devices]" },
+  { word = "receive", menu = "be a Cast device; casts land in Kikru (Karu receiver)", info = ":Kikru receive [start|stop|status]" },
   { word = "handoff", menu = "route the audio output to a device" },
   { word = "daemon", menu = "local IPC daemon", info = ":Kikru daemon start|stop|status" },
   { word = "ipc", menu = "send a command to the daemon", info = ":Kikru ipc play" },

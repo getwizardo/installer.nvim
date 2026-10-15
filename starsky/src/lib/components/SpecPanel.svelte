@@ -176,7 +176,7 @@
 					<span>{field.label}</span>
 					{#if field.kind === 'bool'}
 						<select value={form[field.key] ?? ''} onchange={(e) => set(field.key, e.currentTarget.value)}>
-							<option value="">—</option>
+							<option value="">(none)</option>
 							<option value="true">true</option>
 							<option value="false">false</option>
 						</select>

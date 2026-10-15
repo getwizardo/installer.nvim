@@ -626,6 +626,17 @@ track. YouTube and other page URLs are resolved with yt-dlp first, because the
 Cast device cannot play page URLs. Local files are not sent yet. The send
 target is not saved, so a restart plays locally again.
 
+While sending, Kikru polls the device every few seconds and shows its real
+position, play or pause state and volume. When the device finishes a track,
+Kikru shows it as paused and does not advance the queue.
+
+Turning this machine into a Cast device (casts from phones and apps land in
+Kikru through the cast server on 127.0.0.1:8722):
+
+>vim
+  :Kikru receive [start|stop|status]    " or press W in the Kikru window
+<
+
 The cast server serves a small page (open http://127.0.0.1:8722) with a cast box
 and transport buttons, and these JSON endpoints:
 

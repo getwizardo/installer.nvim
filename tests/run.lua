@@ -1056,6 +1056,62 @@ test("kikru send: casts tracks, forwards transport, and resolves page URLs with 
   assert(ok, err)
 end)
 
+test("kikru send: device status sync updates position, play state and volume", function()
+  local Kikru = require("kaeru.kikru")
+  Kikru._send.device = "Living Room"
+  Kikru.apply_device_status({ volume = { level = 0.4, muted = false }, media = { state = "PAUSED", currentTime = 42.5 } })
+  local snap = Kikru.get_snapshot()
+  eq(snap.position, 42.5, "position comes from the device")
+  eq(snap.paused, true)
+  eq(snap.volume, 40)
+  eq(snap.playing, false)
+  Kikru.apply_device_status({ media = { state = "PLAYING", currentTime = 50 } })
+  eq(Kikru.get_snapshot().playing, true)
+  -- a finished track is not auto-advanced on the device
+  Kikru.apply_device_status({ media = { state = "IDLE" } })
+  eq(Kikru.get_snapshot().paused, true)
+  Kikru._send.device = nil
+  Kikru._send.position = nil
+  Kikru._send.seen_playing = false
+end)
+
+test("kikru receive: toggling the Karu receiver bridges casts into the cast server", function()
+  local Kikru = require("kaeru.kikru")
+  local Cast = require("kaeru.kikru.cast")
+  local saved_karu = package.loaded["kaeru.karu"]
+  local seen = {}
+  local running = false
+  package.loaded["kaeru.karu"] = {
+    available = function() return true end,
+    receiver_running = function() return running end,
+    receive = function(opts)
+      seen.bridge = opts.bridge
+      running = true
+      return 7, nil
+    end,
+    stop_receiver = function()
+      local was = running
+      running = false
+      return was
+    end,
+  }
+  local saved_server = Cast.server_running
+  local saved_start = Cast.start_server
+  local saved_url = Cast.url
+  Cast.server_running = function() return true end
+  Cast.url = function() return "http://127.0.0.1:8722" end
+  local ok, err = pcall(function()
+    Kikru.receiver_toggle("start")
+    eq(seen.bridge, "http://127.0.0.1:8722", "receiver must bridge to the Kikru cast server")
+    eq(running, true)
+    Kikru.receiver_toggle()
+    eq(running, false, "a bare toggle stops a running receiver")
+  end)
+  package.loaded["kaeru.karu"] = saved_karu
+  Cast.server_running, Cast.start_server, Cast.url = saved_server, saved_start, saved_url
+  assert(ok, err)
+end)
+
 -- SFTP UI, NeoCodeium AI preset, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
 test("sftp ui helpers and the NeoCodeium AI preset", function()
   local Sftp = require("kaeru.sftp")
