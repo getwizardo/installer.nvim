@@ -84,6 +84,8 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
   elseif sub == "music" or sub == "kikru" or sub == "player" then
     require("kaeru.kikru").dispatch(Compat.list_slice(args, 2))
     return
+  elseif sub == "karu" or sub == "googlecast" then
+    require("kaeru.karu").dispatch(Compat.list_slice(args, 2), { bang = cmd.bang })
   elseif sub == "cast" then
     require("kaeru.kikru").dispatch(vim.list_extend({ "cast" }, Compat.list_slice(args, 2)))
   elseif sub == "boot" then
@@ -316,6 +318,19 @@ end, {
   desc = "kaeru.nvim: add plugins to lazy.nvim",
   complete = function(_, cmdline, cursorpos)
     return complete(cmdline, cursorpos)
+  end,
+})
+
+vim.api.nvim_create_user_command("Karu", function(cmd)
+  local args = cmd.fargs
+  local karu = require("kaeru.karu")
+  karu.dispatch(args, { bang = cmd.bang })
+end, {
+  nargs = "*",
+  bang = true,
+  desc = "Google Cast: receive casts in Neovim (bridged to Kikru) and cast to real Chromecast devices",
+  complete = function(arglead, cmdline, cursorpos)
+    return require("kaeru.complete").complete_items(cmdline, cursorpos)
   end,
 })
 

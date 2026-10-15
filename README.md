@@ -13,8 +13,9 @@ Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **fro
 - **`kaeru.yaml`**: all configuration in a global or per-project YAML file (built-in parser, no dependencies).
 - **Mason (all 601 servers built-in)**: install LSP servers, DAP adapters, linters, formatters, compilers and runtimes from the [mason.nvim](https://github.com/mason-org/mason.nvim) registry (with built-in catalog of all 601 Mason packages & 296 `lspconfig` server mappings for offline/instant autocomplete), `ensure_installed` in `kaeru.yaml`, and one-command scaffolds for lspconfig / nvim-dap / conform + nvim-lint.
 - **Autocomplete for *everything*** (`:Kaeru complete`, `complete.any`): fuzzy `:` command-line completion for `:Kaeru`, `:Kikru` and `:Clina` — every subcommand, argument, repository, Mason package, radio station, EQ preset, filter, theme, playlist, file, directory, buffer, option, event, colorscheme, help tag and environment variable — with descriptions in the popup, live GitHub search, `<Tab>` cycling and ready-made [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) / [blink.cmp](https://github.com/Saghen/blink.cmp) cmdline sources.
-- **`:Kikru` — a Winamp-style player in Lua** (inspired by [cliamp](https://github.com/bjarneo/cliamp) and [NodeLink](https://github.com/PerformanC/NodeLink)): LCD marquee, FFT spectrum / wave / VU / matrix analyzers, 10-band EQ (31 Hz – 16 kHz) with per-band editing and presets, LavaLink-style filter chain (timescale, tremolo, vibrato, 8D rotation, karaoke, lowpass, echo, reverb, chorus, phaser, compressor, distortion, channel mix), internet radio (curated + 30 000 Radio Browser stations), synced lyrics (tags → `.lrc` → [LRCLIB](https://lrclib.net)), M3U/PLS/TOML/JSON playlists, file-library indexing, MPRIS/MPD control, multi-engine backends (mpv · ffplay · VLC), a headless IPC daemon and 2-Neovim remote — all inside Neovim.
+- **`:Kikru` — a Winamp-style player in Lua** (inspired by [cliamp](https://github.com/bjarneo/cliamp) and [NodeLink](https://github.com/PerformanC/NodeLink)): LCD marquee, FFT spectrum / wave / VU / matrix analyzers, 10-band EQ (31 Hz – 16 kHz) with per-band editing and presets, LavaLink-style filter chain (timescale, tremolo, vibrato, 8D rotation, karaoke, lowpass, echo, reverb, chorus, phaser, compressor, distortion, channel mix), internet radio (curated + 30 000 Radio Browser stations), synced **and word-level karaoke** lyrics ([lrc.red](https://lrc.red) · [LRCLIB](https://lrclib.net) · NetEase · SyncLRC · lyrics.ovh, with translations and a disk cache), M3U/PLS/TOML/JSON playlists, file-library indexing, MPRIS/MPD control, multi-engine backends (mpv · ffplay · VLC), a headless IPC daemon and 2-Neovim remote — all inside Neovim.
 - **Cast YouTube & YouTube Music into Neovim**: `:Kikru cast <url|search>`, `:Kikru youtube …`, `:Kikru ytmusic …`, plus a built-in cast server (`:Kikru cast server`) with a phone/bookmarklet page, a `kikru://` URL-scheme handler for "Open with Kikru" and `:Kikru appcast`, which picks up whatever the YouTube/YT Music app (or any MPRIS player: Spotify, browser tab, VLC) is playing right now and continues it with your EQ.
+- **`:Karu` — Google Cast, implemented in TypeScript** (`karu/`, no runtime dependencies): `karu receive` makes Neovim itself a Cast target that the **YouTube / YouTube Music / Chrome** apps can cast to (mDNS `_googlecast._tcp`, CASTV2 over TLS 8009, `CC1AD845` Default Media Receiver, device auth), and every cast is bridged straight into Kikru; the sender side (`:Karu discover` / `:Karu cast`) drives real Chromecasts on your LAN.
 - **Integrations with the ecosystem you already use**: [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) extension (`:Telescope kaeru …`), [fzf-lua](https://github.com/ibhagwan/fzf-lua), [snacks.nvim](https://github.com/folke/snacks.nvim) picker, [mini.pick](https://github.com/echasnovski/mini.nvim), [lualine](https://github.com/nvim-lualine/lualine.nvim) component, [nvim-notify](https://github.com/rcarriga/nvim-notify), [fidget.nvim](https://github.com/j-hui/fidget.nvim), [plenary.nvim](https://github.com/nvim-lua/plenary.nvim) jobs, plus detection of every external binary (`yt-dlp`, `mpv`, `ffmpeg`, `vlc`, `playerctl`, `mpc`, `gh`, `fzf`, `node`/`deno`/`bun`, …). `:Kaeru integrations` prints the report.
 - **Plugin cache**: installed plugins archived as `cache/<name>.nvimpack` (zip, `.git` included) or `.pack` (git bundle for large repos) and restored before install — offline re-installs.
 - **Starsky for Neovim Webclient** (`:Kaeru starsky` / `starsky/`): **Next.js 16 (TypeScript App Router)** webclient scaffolded via `yarn create next-app`, featuring the `:Kaeru` Spec Saver, `:Clina` TypeScript AI Coding IDE, SFTP Studio UI, all 601 Mason servers, 296 LSPconfig servers, and the universal 11-manager README parser.
@@ -232,7 +233,7 @@ follows LavaLink/[NodeLink](https://github.com/PerformanC/NodeLink)).
 | `R` | radio browser (curated + Radio Browser search) |
 | `/` | search (YouTube, YouTube Music, SoundCloud, …) |
 | `P` | playlist / queue pane |
-| `l` | synced lyrics (tags → `.lrc` → LRCLIB) |
+| `l` | lyrics pane — synced / word-level karaoke (lrc.red · LRCLIB · NetEase), translations |
 | `c` | cast pane (link, server, appcast) |
 | `?` | help · `q` close |
 
@@ -253,6 +254,11 @@ Command line:
 :Kikru daemon start                      " headless IPC daemon (socket)
 :Kikru server 41999                      " 2-Neovim remote (control another Neovim)
 :Kikru connect 192.168.1.20:41999        " …or be controlled by one
+:Kikru lyrics                            " fetch + open the lyrics pane
+:Kikru lyrics providers                  " the provider chain and what is enabled
+:Kikru lyrics search <q> [provider]      " raw candidates (lrc.red match/search)
+:Kikru lyrics refresh                    " forget the cache and look again
+:Kikru lyrics save [file.lrc]            " write lyrics next to the audio file
 :Kikru status --json                     " machine-readable state
 ```
 
@@ -325,6 +331,148 @@ Phone on the same Wi-Fi: the server binds `127.0.0.1` only. To reach it from a
 phone, forward the port (`ssh -L 8722:127.0.0.1:8722 you@laptop`) or add an
 iOS/Android shortcut that posts to the URL — or simply use the `kikru://`
 handler on the machine that runs Neovim.
+
+## `:Karu` — Google Cast, in TypeScript
+
+`karu/` is a dependency-free TypeScript implementation of the protocol behind
+Google Cast (the thing a Chromecast speaks). It works in **both directions**,
+which is what makes casting into Neovim possible at all.
+
+### Be a Cast device — cast from the YouTube app
+
+```vim
+:Karu receive                          " start the receiver (port 8009 + mDNS)
+:Karu receive --name "Vim TV" --no-mdns
+:Karu receive --fallback mpv           " play locally when Kikru is not running
+:Karu off                              " stop the receiver
+:Karu bridge                           " receiver + Kikru bridge status
+```
+
+Once it is running your machine shows up as a cast target (`Vim TV`) in the
+**YouTube Music**, **YouTube**, **Chrome** and iOS Cast lists — the same list
+your TV and speakers appear in. Tap the Cast button, pick `Vim TV`, and the
+track is handed to Neovim: the URL goes through Kikru's yt-dlp pipeline, lands
+in the queue and plays with your EQ, analyzer and lyrics. Transport buttons
+(play / pause / stop / seek / the scrub bar) work from the phone; the receiver
+mirrors them into mpv and reports the position back, which is why the phone's
+progress bar follows the music.
+
+What is implemented: mDNS advertisement of `_googlecast._tcp` (so apps *find*
+you), CASTV2 over TLS on port 8009 with a self-signed ECDSA P-256 certificate,
+the `tp.connection` / `tp.heartbeat` / `receiver` / `media` / `tp.deviceauth`
+namespaces, the Default Media Receiver (`CC1AD845`) launch handshake, `LOAD` /
+`PLAY` / `PAUSE` / `STOP` / `SEEK` / `GET_STATUS` / `SET_VOLUME`, and
+`MEDIA_STATUS` broadcasts plus the `supportedMediaCommands` bitmask the apps
+use to decide which controls to show.
+
+```yaml
+# kaeru.yaml
+karu:
+  enabled: true
+  device_name: Karu · Neovim   # what the Cast list shows
+  port: 8009                   # CASTV2 (fixed by the protocol)
+  mdns: true                   # advertise _googlecast._tcp (needs a LAN, not a VPN)
+  fallback: none               # mpv | ffplay | none — play locally when Kikru is down
+  bridge: null                 # where casts are handed over (default 127.0.0.1:8722)
+  autostart: false             # start the receiver with Neovim
+  devices: []                  # extra host[:port] Cast devices to probe
+```
+
+### Cast to a real device — the sender side
+
+```vim
+:Karu discover                 " who is on the network (mDNS browse)
+:Karu cast https://music.youtube.com/watch?v=… "Living room TV"
+:Karu cast lofi hip hop radio  " a search is resolved with yt-dlp first
+:Karu play | pause | toggle | quit | next | prev [dev]
+:Karu seek 90 "Living room TV"
+:Karu volume 70 | +10 | mute [dev]
+:Karu status [dev]             " what the device is playing right now
+:Karu probe 192.168.1.24:8009  " reachability + device status
+:Karu info                     " protocol/environment report
+```
+
+`:Karu cast` launches the Default Media Receiver on the device, resolves the
+target (a direct media URL, or a YouTube/YT Music search or link via `yt-dlp
+-g`), and `LOAD`s it. That means a Neovim command can put a YouTube video on
+the TV in the living room — and, because it is the same protocol, anything that
+can cast can also *be* cast to.
+
+### Requirements & notes
+
+- Node ≥ 22.6 (the TypeScript is run directly — no build step). `:Karu info`
+  prints the CLI, the Node version, the port and the namespaces.
+- Nothing else: no `npm install` needed at runtime (dev dependencies are only
+  TypeScript and `@types/node`). `karu/node_modules` is not required.
+- The receiver and the sender can run at the same time (a receiver on 8009 plus
+  outgoing control connections).
+- The `:Karu` command is complete on the `:` line: subcommands, flags, device
+  names from the last discovery, and hosts — `:Kaeru complete Karu ca` also works.
+
+## Lyrics — lrc.red, karaoke & translations
+
+The lyrics pane (`l`) resolves the current track through local sources first and
+then a configurable provider chain:
+
+```
+tags (.flac/.mp3 USLT, Vorbis LYRICS)  →  <track>.lrc  →  cache  →  providers
+```
+
+| Provider | What it gives | API |
+| --- | --- | --- |
+| [**lrc.red**](https://lrc.red) | 29.8M tracks, 12.5M synced, **word-level timing**, TTML/LRC/YAML | `GET /match.json?track=&artist=&duration=` → ISRC → `GET /s/<ISRC>.lrc` |
+| [LRCLIB](https://lrclib.net) | huge free synced/plain database | `GET /api/get` · `/api/search?q=` |
+| NetEase Cloud Music | synced LRC + **translations** (`tlyric`) | `GET /api/search/get` → `/api/song/lyric` |
+| [SyncLRC](https://synclrc.dev) | karaoke / synced / plain | `GET /api.synclrc.dev/lyrics?track=&artist=&format=lrc` |
+| lyrics.ovh | plain text, last resort | `GET /api.lyrics.ovh/v1/<artist>/<title>` |
+
+The chain stops at the first **synced** hit and remembers the first **plain**
+hit as a fallback (`sync_first = false` takes the first hit of any kind). Every
+provider is optional: `:Kikru lyrics providers` lists the chain and what is
+enabled, and the pane footer shows where the current lyrics came from —
+`lrc.red · Bohemian Rhapsody (word-synced, translated)`.
+
+Because lrc.red, SyncLRC and many LRCLIB rows ship *enhanced* LRC
+(`[00:03.73]<00:03.73>Is <00:04.14>this…`), the parser keeps the per-word timing
+and the player turns it into a karaoke highlight; `Kikru` prints the sung part
+of the current line while the rest of the line stays dim. Matching is
+duration-aware (±3 s wins, ±10 s is preferred, >60 s is punished) and
+order-insensitive, so `Bohemian Rhapsody (Remastered 2011)` lands on the right
+ISRC. Results are cached under `stdpath("cache")/kaeru/lyrics` and can be
+written next to the audio file:
+
+```vim
+:Kikru lyrics providers                    " provider chain + enabled flags
+:Kikru lyrics search queen under pressure  " raw candidates (lrc.red / LRCLIB / NetEase)
+:Kikru lyrics refresh                      " drop the cache and look again
+:Kikru lyrics save ~/Music/Queen/bohemian.lrc
+```
+
+```lua
+require("kaeru").setup({
+  kikru = {
+    lyrics = {
+      providers = { "lrc.red", "lrclib", "netease", "synclrc", "lyrics.ovh" },
+      sync_first = true,     -- keep looking for timed lyrics after a plain hit
+      cache = true,          -- stdpath("cache")/kaeru/lyrics
+      cache_dir = nil,       -- or your own directory
+      save_sidecar = false,  -- also write <track>.lrc when lyrics came online
+      translations = true,   -- show `tlyric` translations (NetEase)
+      karaoke = true,        -- word-level highlight when the provider has it
+    },
+  },
+})
+```
+
+The API is also usable directly:
+
+```lua
+local Lyrics = require("kaeru.kikru.lyrics")
+Lyrics.resolve({ title = "Bohemian Rhapsody", artist = "Queen", path = "/music/br.flac" },
+  { provider = "lrc.red" }, function(err, lyrics)
+    print(lyrics.source, #lyrics.synced, lyrics.synced[1].words and "word-level" or "line-level")
+  end)
+```
 
 ## Integrations
 

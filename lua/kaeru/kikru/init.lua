@@ -1670,9 +1670,58 @@ function M.dispatch(args)
   elseif sub == "library" or sub == "index" then
     M.action("index_dir", { path = rest[1] or "~/Kikru", play = args[#args] == "--play" })
   elseif sub == "lyrics" then
-    M.fetch_lyrics(true)
-    M.ui()
-    require("kaeru.kikru.ui").set_view("lyrics")
+    local action = (rest[1] or ""):lower()
+    if action == "providers" or action == "sources" then
+      local lines = { ":Kikru lyrics · providers (in order)" }
+      for index, provider in ipairs(Lyrics.providers()) do
+        lines[#lines + 1] = ("  %d. %-11s %s%s"):format(
+          index,
+          provider.name,
+          provider.label,
+          provider.enabled and "" or "  [disabled]"
+        )
+      end
+      lines[#lines + 1] = "  enable/disable via kikru.lyrics.providers in kaeru.yaml"
+      UI.notify(table.concat(lines, "\n"))
+    elseif action == "save" or action == "write" then
+      local track = M.current_track()
+      local path = Lyrics.save(track, M._lyrics, rest[2])
+      UI.notify(
+        path and (":Kikru · lyrics written to " .. path) or ":Kikru · no lyrics to write",
+        path and vim.log.levels.INFO or vim.log.levels.WARN
+      )
+    elseif action == "refresh" or action == "update" or action == "reload" then
+      M._lyrics = nil
+      M._lyrics_key = nil
+      Lyrics._cache = {}
+      M.fetch_lyrics(true)
+      UI.notify(":Kikru · lyrics refreshed")
+    elseif action == "search" then
+      local track = M.current_track()
+      local query = rest[2] and table.concat({ rest[2], rest[3] or "" }, " ") or nil
+      Lyrics.search(track, { provider = rest[4], query = (query and query ~= "") and query or nil }, function(err, hits, provider)
+        if err or not hits or #hits == 0 then
+          return UI.notify(":Kikru lyrics search · nothing on " .. provider .. (err and (" (" .. err .. ")") or ""))
+        end
+        local lines = { (":Kikru lyrics search · %s"):format(provider) }
+        for index, hit in ipairs(hits) do
+          if index > 8 then
+            break
+          end
+          lines[#lines + 1] = ("  %s — %s (%s)%s"):format(
+            hit.title or "?",
+            hit.artist or "?",
+            hit.isrc or hit.id or "?",
+            hit.duration and (" · " .. Tags.format_time(hit.duration)) or ""
+          )
+        end
+        UI.notify(table.concat(lines, "\n"))
+      end)
+    else
+      M.fetch_lyrics(true)
+      M.ui()
+      require("kaeru.kikru.ui").set_view("lyrics")
+    end
   elseif sub == "playlist" or sub == "playlists" then
     local action = (rest[1] or "list"):lower()
     if action == "list" then

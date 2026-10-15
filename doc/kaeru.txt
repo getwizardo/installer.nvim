@@ -21,7 +21,9 @@ CONTENTS                                                   *kaeru-contents*
  16. Autocomplete .................................. |kaeru-complete|
  17. Kikru (the player) ............................ |kaeru-kikru|
  18. Casting YouTube & YouTube Music ............... |kaeru-cast|
- 19. Integrations .................................. |kaeru-integrations|
+ 19. Karu (Google Cast, TypeScript) ................ |kaeru-karu|
+ 20. Lyrics (lrc.red, karaoke) ................... |kaeru-lyrics|
+ 21. Integrations .................................. |kaeru-integrations|
 
 ==============================================================================
 1. INTRODUCTION                                        *kaeru-introduction*
@@ -510,7 +512,7 @@ Keys:                                                                  *Kikru-ke
   R              radio browser (curated + Radio Browser search)
   /              search a provider (ytsearch:, scsearch:, ytmsearch:, ...)
   P              queue / playlist pane
-  l              lyrics (tags -> .lrc -> LRCLIB, synced when available)
+  l              lyrics pane (lrc.red -> LRCLIB -> NetEase -> SyncLRC)
   c              cast pane
   ?  q           help / close
 
@@ -531,7 +533,11 @@ Command line:                                                         *:Kikru*
   :Kikru server [port]                     control other Neovim instances
   :Kikru connect <host:port>               be controlled by one
   :Kikru devices | handoff                 ive devices
-  :Kikru lyrics                            fetch lyrics for the current track
+  :Kikru lyrics                            fetch lyrics + open the lyrics pane
+  :Kikru lyrics providers                  provider chain and enabled flags
+  :Kikru lyrics search <q> [provider]      raw candidates for a query
+  :Kikru lyrics refresh                    forget the cache and fetch again
+  :Kikru lyrics save [file.lrc]            write the lyrics next to the audio file
   :Kikru status [--json]                   player state
 
 `:MusicPlayer` is kept as an alias of `:Kikru` for 1.x keymaps.
@@ -550,6 +556,11 @@ Configuration (see also |kaeru-yaml|):                             *kikru-config
       playlist_dir = nil, daemon_on_start = false,
       ytdlp_cookies = nil, ytdlp_extra_args = {},
       subsonic = { url = nil, user = nil, password = nil },
+      lyrics = {
+        providers = { "lrc.red", "lrclib", "netease", "synclrc", "lyrics.ovh" },
+        sync_first = true, cache = true, cache_dir = nil,
+        save_sidecar = false, translations = true, karaoke = true,
+      },
     },
   })
 <
@@ -593,7 +604,107 @@ it here with the EQ and analyzer.
 Options: `kikru.cast = { port = 8722, token = nil, auto_start = false, ui = true }`.
 
 ==============================================================================
-19. INTEGRATIONS                                        *kaeru-integrations*
+19. KARU (GOOGLE CAST, TYPESCRIPT)                             *kaeru-karu*
+
+Karu implements the protocol Google Cast devices speak (CASTV2 over TLS on
+port 8009, advertised over mDNS as `_googlecast._tcp`) on both sides, so
+Neovim can *be* a cast device and can cast to real ones. The implementation
+lives in `karu/` (TypeScript, no runtime dependencies, Node >= 22.6).
+
+Be a Cast device (the YouTube / YouTube Music / Chrome apps see you): ~
+
+>vim
+  :Karu receive                     " 8009 + mDNS; casts land in Kikru
+  :Karu receive --name "Vim TV" --no-mdns --fallback mpv
+  :Karu off                         " stop the receiver
+  :Karu bridge                      " receiver + Kikru bridge status
+<
+Once it runs, pick the device in the Cast list of the phone app: the media URL
+is handed to Kikru (yt-dlp -> queue -> mpv), and play/pause/stop/seek and the
+progress bar are mirrored both ways. `--fallback mpv|ffplay|none` decides what
+happens when Kikru is not running.
+
+Cast to a real device (sender):                                       ~
+>vim
+  :Karu discover                    " mDNS browse
+  :Karu cast https://youtu.be/... "Living room TV"
+  :Karu play|pause|toggle|quit|next|prev [dev]
+  :Karu seek <seconds> [dev]
+  :Karu volume 70|+10|-10|mute|unmute [dev]
+  :Karu status [dev]                " what the device plays right now
+  :Karu probe <host[:port]>         " reachability + status
+  :Karu info | help
+<
+`:Karu cast` resolves searches and YouTube links with `yt-dlp -g`, launches the
+Default Media Receiver (CC1AD845) on the device and sends `LOAD`. A device name,
+an id or `host[:port]` can be used; only the second positional (or `--device`)
+is treated as a device, so URLs are never mistaken for one.
+
+`:Karu` is also available as `:Kaeru karu ...` / `:Kaeru googlecast ...`, and
+the whole command line is completed (subcommands, flags, discovered devices).
+
+Configuration (see also |kaeru-yaml|):                                *karu-config*
+>lua
+  require("kaeru").setup({
+    karu = {
+      enabled = true, path = nil, node = nil,
+      device_name = "Karu · Neovim", port = 8009, mdns = true,
+      bridge = nil, token = nil, fallback = "none",
+      autostart = false, notify = true, timeout = 2500, devices = {},
+    },
+  })
+<
+`karu info` reports the CLI, Node version, namespaces, device id and address;
+`lua/kaeru/karu.lua` is the Lua bridge (`Karu.available()`, `Karu.devices()`,
+`Karu.discover()`, `Karu.cast()`, `Karu.receive()`, `Karu.snapshot()`).
+
+See `karu/README.md` for the protocol details (framing, namespaces, mDNS TXT
+records, the self-signed certificate and device auth).
+
+==============================================================================
+20. LYRICS (LRC.RED, KARAOKE)                                 *kaeru-lyrics*
+
+The lyrics pane (`l` in the player) resolves the current track locally first,
+then through a chain of providers:
+
+  tags (USLT / Vorbis LYRICS) -> <track>.lrc sidecar -> disk cache -> providers
+
+  lrc.red    29.8M tracks, word-level timing (ISRC based, /match.json)
+  lrclib     free synced/plain database (/api/get, /api/search)
+  netease    synced LRC plus translations (tlyric)
+  synclrc    karaoke / synced / plain (api.synclrc.dev)
+  lyrics.ovh plain text, last resort
+
+The chain stops at the first *synced* hit and keeps the first *plain* hit as a
+fallback (`sync_first = false` takes the first hit of any kind). Enhanced LRC
+with per-word `<mm:ss.xx>` tags becomes a karaoke highlight; matching is
+duration-aware and order-insensitive; results are cached under
+`stdpath("cache")/kaeru/lyrics`.
+
+>vim
+  :Kikru lyrics                             fetch + open the pane
+  :Kikru lyrics providers                   the chain and what is enabled
+  :Kikru lyrics search queen under pressure raw candidates (lrc.red/LRCLIB/NetEase)
+  :Kikru lyrics refresh                     drop the cache and look again
+  :Kikru lyrics save ~/Music/bohemian.lrc   write them next to the audio file
+<
+>lua
+  require("kaeru").setup({
+    kikru = {
+      lyrics = {
+        providers = { "lrc.red", "lrclib", "netease", "synclrc", "lyrics.ovh" },
+        sync_first = true, cache = true, cache_dir = nil,
+        save_sidecar = false, translations = true, karaoke = true,
+      },
+    },
+  })
+<
+Lua API: `require("kaeru.kikru.lyrics")` — `resolve(track, opts, cb)`,
+`fetch_remote`, `search`, `providers()`, `parse_lrc`, `window`,
+`karaoke_state`, `save`, `cache_read`/`cache_write`.
+
+==============================================================================
+21. INTEGRATIONS                                        *kaeru-integrations*
 
 `:Kaeru integrations` prints what was detected.
 

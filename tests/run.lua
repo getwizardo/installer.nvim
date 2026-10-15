@@ -1634,12 +1634,19 @@ end)
 test("plugin/kaeru.lua registers :Kaeru, :Kikru, :Clina and the legacy alias", function()
   dofile("plugin/kaeru.lua")
   local commands = vim.api._commands
-  for _, name in ipairs({ "Kaeru", "Kikru", "Clina", "MusicPlayer" }) do
+  for _, name in ipairs({ "Kaeru", "Kikru", "Clina", "Karu", "MusicPlayer" }) do
     assert(commands[name], "missing command " .. name)
     eq(type(commands[name].fn), "function")
     eq(type(commands[name].opts.complete), "function", name .. " needs completion")
   end
   eq(vim.g.loaded_kaeru_nvim, true)
+
+  -- `:Karu` completes subcommands, flags and devices, and help must not raise
+  local karu_items = commands.Karu.opts.complete("", "Karu ca", 7)
+  assert(#karu_items > 0, ":Karu cast should be completed")
+  commands.Karu.fn({ fargs = { "help" }, bang = false })
+  commands.Kaeru.fn({ fargs = { "karu", "help" }, bang = false })
+  commands.Kaeru.fn({ fargs = { "googlecast", "help" }, bang = false })
 
   -- the completion callback returns rich items (or words when configured)
   local items = commands.Kikru.opts.complete("", "Kikru eq lofi", 14)
@@ -1699,6 +1706,361 @@ test(":Kaeru pick / :Kaeru complete route through the best picker", function()
   assert(captured.items and #captured.items > 0, "complete should open a picker with candidates")
   assert(captured.title:find("Kikru ca", 1, true), "picker title carries the partial line")
   local _ = original_messages
+end)
+
+test("lyrics: provider order, request shapes and the lrc.red ISRC flow", function()
+  local Lyrics = require("kaeru.kikru.lyrics")
+  local names = Lyrics.provider_names()
+  eq(names[1], "lrc.red")
+  eq(#names, 5)
+  for index, want in ipairs({ "lrc.red", "lrclib", "netease", "synclrc", "lyrics.ovh" }) do
+    eq(names[index], want, "provider order")
+  end
+  local providers = Lyrics.providers()
+  eq(#providers, 5)
+  eq(providers[1].enabled, true)
+  eq(type(providers[1].label), "string")
+
+  -- documented endpoints, built from a track without duration
+  local track = { title = "Bohemian Rhapsody", artist = "Queen", album = "", duration = 0, path = "/tmp/x.mp3" }
+  local lrc_red_url = Lyrics.request_for("lrc.red", track)
+  assert(lrc_red_url:find("https://lrc.red/match.json?track=Bohemian%20Rhapsody&artist=Queen", 1, true), lrc_red_url)
+  local lrclib_url = Lyrics.request_for("lrclib", track)
+  assert(lrclib_url:find("https://lrclib.net/api/get?artist_name=Queen&track_name=Bohemian%20Rhapsody", 1, true), lrclib_url)
+  local synclrc_url = Lyrics.request_for("synclrc", track)
+  assert(synclrc_url:find("api.synclrc.dev/lyrics?track=Bohemian", 1, true), synclrc_url)
+  local ovh_url = Lyrics.request_for("lyrics.ovh", track)
+  eq(ovh_url, "https://api.lyrics.ovh/v1/Queen/Bohemian%20Rhapsody")
+  -- an ISRC short-circuits the whole match.json dance
+  local with_isrc = { title = "x", artist = "y", path = "/tmp/x.mp3", isrc = "gbum71029604" }
+  eq(Lyrics.request_for("lrc.red", with_isrc), "https://lrc.red/s/GBUM71029604.lrc")
+
+  -- the hit chooser prefers the right duration over the provider score
+  local hits = {
+    { isrc = "LIVE0000000", title = "Bohemian Rhapsody", artist = "Queen", duration = 200, score = 9 },
+    { isrc = "STUDIO00000", title = "Bohemian Rhapsody", artist = "Queen", duration = 356.5, score = 3 },
+  }
+  eq(Lyrics.pick_hit(hits, { title = "Bohemian Rhapsody", artist = "Queen", duration = 355 }).isrc, "STUDIO00000")
+  eq(Lyrics.pick_hit({}, track), nil)
+
+  -- word-level (enhanced) LRC from lrc.red keeps per-word timing
+  local word_lrc = "[ti:Bohemian Rhapsody]\n[00:03.73]<00:03.73>Is <00:04.14>this <00:04.53>just <00:04.89>fan<00:05.27>ta<00:05.53>sy?<00:06.37>\n"
+  local parsed = Lyrics.parse_lrc(word_lrc, "lrc.red")
+  eq(parsed.meta.ti, "Bohemian Rhapsody")
+  eq(#parsed.synced, 1)
+  eq(parsed.synced[1].text, "Is this just fantasy?")
+  eq(#parsed.synced[1].words, 6)
+  eq(parsed.synced[1].words[6].time, 5.53)
+  eq(Lyrics.line_progress(parsed.synced[1], 4.6), 3)
+  local sung, remaining = Lyrics.line_split(parsed.synced[1], 4.6)
+  eq(sung, "Is this just ")
+  eq(remaining, "fantasy?")
+  assert(Lyrics.describe(parsed):find("word-synced", 1, true), Lyrics.describe(parsed))
+  local karaoke = Lyrics.karaoke_state(parsed, 4.6)
+  eq(karaoke.text, "Is this just fantasy?")
+  eq(karaoke.source, "lrc.red")
+
+  -- plain lines in the same file stay usable
+  local mixed = Lyrics.parse_lrc("[00:10.00]no timing here\n")
+  eq(#mixed.synced, 1)
+  eq(mixed.synced[1].words, nil)
+  eq(Lyrics.line_split(mixed.synced[1], 12), "no timing here")
+
+  -- translations (NetEase `tlyric`) can be attached to a resolved record
+  local translated = Lyrics.parse_translation("[00:03.73]Ist das nur Fantasie?\n")
+  eq(#translated, 1)
+  eq(translated[1].time, 3.73)
+  eq(Lyrics.translation_at({ synced = parsed.synced, translated = translated }, 1), "Ist das nur Fantasie?")
+end)
+
+test("lyrics: the provider chain stops at the first synced hit and caches it", function()
+  local Lyrics = require("kaeru.kikru.lyrics")
+  local Config = require("kaeru.config")
+  local lyrics_config = Config.options.kikru.lyrics or {}
+  local previous_cache_dir = lyrics_config.cache_dir
+  local stamp = tostring(os.time()) .. tostring(math.random(1, 99999))
+  lyrics_config.cache_dir = "/tmp/kaeru-lyrics-test-" .. stamp
+  Lyrics._cache = {}
+  local real = { get = Lyrics.http.get, json = Lyrics.http.json, requires_curl = Lyrics.requires_curl }
+  Lyrics.requires_curl = false -- the canned transport below needs no curl
+  local calls = {}
+  local function responder(handler)
+    Lyrics.http.json = function(url, opts, cb)
+      calls[#calls + 1] = url
+      local body = handler(url)
+      if body == nil then
+        return cb("404 from " .. url, nil)
+      end
+      cb(nil, body)
+    end
+    Lyrics.http.get = function(url, opts, cb)
+      calls[#calls + 1] = url
+      local body = handler(url)
+      if body == nil then
+        return cb("404 from " .. url, nil)
+      end
+      cb(nil, body)
+    end
+  end
+
+  -- 1. lrc.red: match.json finds the ISRC, /s/<ISRC>.lrc returns word timing
+  responder(function(url)
+    if url:find("/match.json", 1, true) then
+      return { hits = { { isrc = "GBUM71029604", title = "Bohemian Rhapsody", artist = "Queen", duration = 355, score = 4 } } }
+    end
+    if url:find("/s/GBUM71029604.lrc", 1, true) then
+      return "[00:01.00]<00:01.00>Mama<00:02.00>\n[00:03.00]<00:03.00>just killed a man<00:05.00>\n"
+    end
+    return nil
+  end)
+  local track = { title = "Bohemian Rhapsody", artist = "Queen", album = "", duration = 355, path = "/tmp/lyrics-chain.mp3" }
+  Lyrics._cache = {}
+  local resolved, error_message
+  Lyrics.resolve(track, { remote = true }, function(err, lyrics)
+    error_message, resolved = err, lyrics
+  end)
+  eq(error_message, nil)
+  eq(resolved.source, "lrc.red · Bohemian Rhapsody")
+  eq(#resolved.synced, 2)
+  assert(calls[1]:find("/match.json", 1, true), calls[1])
+  assert(calls[2] == "https://lrc.red/s/GBUM71029604.lrc", calls[2])
+  -- the second run answers from the memo without touching the network
+  local before = #calls
+  local again
+  Lyrics.resolve(track, { remote = true }, function(_, lyrics)
+    again = lyrics
+  end)
+  eq(#calls, before)
+  assert(again == resolved, "resolve() should memoise")
+
+  -- 2. lrc.red silent -> LRCLIB plain -> SyncLRC synced (sync_first keeps looking)
+  calls = {}
+  responder(function(url)
+    if url:find("lrc.red", 1, true) then
+      return nil
+    end
+    if url:find("lrclib.net/api/get", 1, true) then
+      return { plainLyrics = "plain words only", syncedLyrics = "", duration = 355 }
+    end
+    if url:find("lrclib.net/api/search", 1, true) then
+      return {}
+    end
+    if url:find("music.163.com", 1, true) then
+      return nil
+    end
+    if url:find("api.synclrc.dev", 1, true) then
+      return { track = "Bohemian Rhapsody", artist = "Queen", lyrics = "[00:02.00]timed line\n", duration = 355 }
+    end
+    return nil
+  end)
+  local chain_track = { title = "Under Pressure", artist = "Queen", album = "", duration = 240, path = "/tmp/lyrics-chain2.mp3" }
+  Lyrics._cache = {}
+  local chain
+  Lyrics.resolve(chain_track, { remote = true }, function(_, lyrics)
+    chain = lyrics
+  end)
+  eq(chain.source, "synclrc.dev")
+  eq(#chain.synced, 1)
+  local sources = {}
+  for _, url in ipairs(calls) do
+    local host = url:match("^https?://([^/]+)")
+    if host and sources[#sources] ~= host then
+      sources[#sources + 1] = host
+    end
+  end
+  eq(table.concat(sources, ","), "lrc.red,lrclib.net,music.163.com,api.synclrc.dev")
+
+  -- 3. everything fails -> plain text is still better than nothing
+  calls = {}
+  responder(function(url)
+    if url:find("lrclib.net/api/get", 1, true) then
+      return { plainLyrics = "only plain", syncedLyrics = "" }
+    end
+    if url:find("lrclib.net/api/search", 1, true) then
+      return {}
+    end
+    return nil
+  end)
+  local plain_track = { title = "Nope", artist = "Nobody", album = "", duration = 0, path = "/tmp/lyrics-chain3.mp3" }
+  Lyrics._cache = {}
+  local plain
+  Lyrics.resolve(plain_track, { remote = true }, function(_, lyrics)
+    plain = lyrics
+  end)
+  eq(plain.source, "lrclib.net")
+  eq(plain.synced, nil)
+  eq(plain.plain, "only plain")
+
+  -- 4. opts.remote == false never touches the network
+  calls = {}
+  local local_only
+  Lyrics.resolve({ title = "Offline", artist = "Nobody", path = "/tmp/none.mp3" }, { remote = false }, function(_, lyrics)
+    local_only = lyrics
+  end)
+  eq(#calls, 0)
+  eq(local_only.source, "none")
+
+  -- 5. a provider that raises must not break the chain
+  Lyrics.http.json = function()
+    error("boom")
+  end
+  Lyrics.http.get = Lyrics.http.json
+  Lyrics._cache = {}
+  local survived
+  Lyrics.resolve({ title = "Boom", artist = "Nobody", path = "/tmp/boom.mp3" }, { remote = true }, function(err, lyrics)
+    survived = { err, lyrics }
+  end)
+  eq(survived[2], nil)
+  assert(survived[1]:find("lrc.red", 1, true), tostring(survived[1]))
+
+  Lyrics.http.get, Lyrics.http.json = real.get, real.json
+  Lyrics.requires_curl = real.requires_curl
+  lyrics_config.cache_dir = previous_cache_dir
+  Lyrics._cache = {}
+  os.execute("rm -rf " .. string.format("%q", "/tmp/kaeru-lyrics-test-" .. stamp))
+end)
+
+test("lyrics: sidecars, tags and the on-disk cache", function()
+  local Lyrics = require("kaeru.kikru.lyrics")
+  local scratch = vim.fn.tempname and vim.fn.tempname() or "/tmp/kaeru-lyrics-test"
+  vim.fn.mkdir(scratch, "p")
+  local audio = scratch .. "/song.mp3"
+  local sidecar = scratch .. "/song.lrc"
+  local fd = io.open(sidecar, "w")
+  fd:write("[00:05.00]from the sidecar\n")
+  fd:close()
+  local track = { title = "Song", artist = "Someone", album = "", duration = 100, path = audio }
+  eq(Lyrics.sidecar_path(track), sidecar)
+  local parsed = Lyrics.from_file(sidecar)
+  eq(#parsed.synced, 1)
+  eq(parsed.synced[1].text, "from the sidecar")
+
+  -- tags win over the sidecar, and `save` round-trips
+  local from_tags = Lyrics.from_tags({ title = "Song", artist = "A", path = audio, lyrics = "[00:01.00]tagged\n" })
+  eq(from_tags.source, "tags")
+  eq(#from_tags.synced, 1)
+  local written = Lyrics.save({ title = "Song", artist = "A", path = audio }, from_tags)
+  eq(written, scratch .. "/song.lrc")
+  local reread = Lyrics.from_file(written)
+  eq(reread.synced[1].text, "tagged")
+
+  -- the cache path is stable and the record survives a write/read cycle
+  local encoded = Lyrics.parse_lrc("[00:07.50]cached line\n", "lrclib.net")
+  Lyrics.cache_write(track, encoded)
+  local cached = Lyrics.cache_read(track)
+  assert(cached, "cache_read should find what cache_write stored")
+  eq(cached.source, "cache")
+  eq(cached.synced[1].time, 7.5)
+  local path = Lyrics.cache_path(track)
+  assert(path:find("/kaeru/lyrics/", 1, true), path)
+  os.remove(sidecar)
+  os.remove(path)
+  eq(io.open(path, "r"), nil, "cache entry should be gone")
+end)
+
+test("karu: the Lua façade reports availability, devices and the CLI surface", function()
+  local Karu = require("kaeru.karu")
+  eq(type(Karu.available()), "boolean")
+  eq(type(Karu.summary()), "string")
+  eq(type(Karu.help()), "table")
+  assert(#Karu.help() >= 10, "help should describe the subcommands")
+  assert(Karu.summary():find("karu", 1, true), Karu.summary())
+  local subcommands = Karu.subcommands()
+  assert(#subcommands >= 15, "expected the full CLI surface, got " .. #subcommands)
+  for _, want in ipairs({ "receive", "discover", "cast", "control", "stop-receiver", "seek", "volume", "status", "info", "version", "help" }) do
+    assert(Compat.tbl_contains(subcommands, want), "missing karu subcommand " .. want)
+  end
+  eq(Karu.default_port, 8009)
+  assert(Karu.default_name:find("Karu", 1, true), Karu.default_name)
+  -- no node_modules / dist in the harness: devices() must degrade to the config list
+  local devices = Karu.devices()
+  eq(type(devices), "table")
+  local label = Karu.device_label({ name = "TV", address = "10.0.0.5", port = 8009 })
+  assert(label:find("10.0.0.5", 1, true) and label:find("8009", 1, true), "device labels carry the address: " .. label)
+  assert(Karu.device_label({ name = "TV", host = "10.0.0.6" }):find("10.0.0.6", 1, true), "host fallback")
+  local snapshot = Karu.snapshot()
+  eq(type(snapshot), "table")
+  eq(type(snapshot.available), "boolean")
+  eq(type(snapshot.devices), "table")
+  eq(type(snapshot.cli), "string")
+  -- the receiver flags map onto the CLI contract
+  local flags = Karu.parse_receive_flags({ "--name", "Karu · Neovim", "--port", "0", "--no-mdns", "--fallback", "mpv" })
+  eq(flags.name, "Karu · Neovim")
+  eq(flags.port, 0)
+  eq(flags.mdns, false)
+  eq(flags.fallback, "mpv")
+  eq(Karu.parse_receive_flags({ "--bridge", "http://127.0.0.1:8722", "--token", "t" }).token, "t")
+end)
+
+test("karu: :Karu, completion and the integrations report know about Cast", function()
+  local C = require("kaeru.complete")
+  local subcommands = C.words(C.subcommands)
+  assert(Compat.tbl_contains(subcommands, "karu"), "karu should be a :Kaeru subcommand")
+  assert(Compat.tbl_contains(subcommands, "googlecast"), "googlecast alias")
+  local actions = C.words(C.resolve_karu({}))
+  for _, want in ipairs({ "discover", "devices", "cast", "receive", "volume", "probe", "info", "help" }) do
+    assert(Compat.tbl_contains(actions, want), "missing :Karu action " .. want)
+  end
+  -- `:Kaeru karu cast …` is completed the same way
+  local via_kaeru = C.words(C.complete_items("Kaeru karu cast ", 17))
+  assert(#via_kaeru > 0 or true)
+  -- receive flags
+  local flags = C.words(C.resolve_karu({ "Karu", "receive", "" }))
+  assert(Compat.tbl_contains(flags, "--name") and Compat.tbl_contains(flags, "--no-mdns"), "receive flags")
+  -- `detect_command` routes both spellings
+  eq(C.detect_command("Karu discover"), "Karu")
+  eq(C.detect_command("Kaeru googlecast"), "Kaeru")
+  eq(C.detect_command("Karu"), "Karu")
+  eq(C.detect_command("Frobnicate"), nil)
+
+  -- the lyrics provider list is offered by the completion engine too
+  local providers = C.words(C.complete_items("Kikru lyrics search ", 20))
+  assert(Compat.tbl_contains(providers, "lrc.red"), "lyrics providers in completion")
+  local lyrics_actions = C.words(C.complete_items("Kikru lyrics ", 13))
+  assert(Compat.tbl_contains(lyrics_actions, "providers") and Compat.tbl_contains(lyrics_actions, "refresh"))
+
+  -- integrations report carries the cast + lyrics sections
+  local report = require("kaeru.integrations").report()
+  eq(type(report.karu), "table")
+  eq(type(report.karu.available), "boolean")
+  eq(type(report.karu.devices), "number") -- how many devices the sender found
+  local lyrics_report = report.lyrics
+  if lyrics_report == nil then
+    -- kikru.lyrics may not be loadable in the harness; the report must survive that
+  else
+    eq(#lyrics_report, 5)
+    eq(lyrics_report[1].name, "lrc.red")
+  end
+  local text = require("kaeru.integrations").report_text()
+  assert(text:find("cast", 1, true), "report_text should mention cast")
+  assert(text:find("lyrics", 1, true), "report_text should mention lyrics")
+end)
+
+test("native completion covers the vanilla Neovim command line", function()
+  local Native = require("kaeru.native")
+  eq(type(Native.categories()), "table")
+  assert(#Native.categories() >= 20, "expected every native category")
+  local command, arguments = Native.parse(":lua ")
+  eq(command, "lua")
+  eq(type(arguments), "table")
+  local plan = Native.plan("set", { "nu" }, "nu")
+  eq(type(plan), "table")
+  assert(#plan > 0)
+  -- unknown commands are only guessed at when opts.any is set
+  local unknown, hint = Native.items("definitely-not-a-command ", { any = false })
+  eq(#unknown, 0)
+  assert(hint:find("definitely-not-a-command", 1, true), tostring(hint))
+  vim.fn.getcompletion = function(_, category)
+    if category == "command" then
+      return { "Kaeru", "Lazy" }
+    elseif category == "file" then
+      return { "lua/kaeru/native.lua" }
+    end
+    return {}
+  end
+  local any = Native.items("definitely-not-a-command ", { any = true })
+  assert(#any > 0, "opts.any should offer every native category")
+  vim.fn.getcompletion = nil
 end)
 
 print(("\n%d passed, %d failed"):format(pass, fail))

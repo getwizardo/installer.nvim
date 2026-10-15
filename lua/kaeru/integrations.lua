@@ -460,6 +460,31 @@ function M.report()
   }) do
     report.plugins[name] = M.has(name)
   end
+  report.karu = (function()
+    local ok, karu = pcall(require, "kaeru.karu")
+    if not ok then
+      return { available = false, reason = "module missing" }
+    end
+    local available, reason = karu.available()
+    return {
+      available = available,
+      reason = reason,
+      running = karu.receiver_running(),
+      devices = #karu.devices(),
+      summary = karu.summary(),
+    }
+  end)()
+  report.lyrics = (function()
+    local ok, lyrics = pcall(require, "kaeru.kikru.lyrics")
+    if not ok or type(lyrics.providers) ~= "function" then
+      return {}
+    end
+    local out = {}
+    for _, provider in ipairs(lyrics.providers()) do
+      out[#out + 1] = { name = provider.name, enabled = provider.enabled ~= false }
+    end
+    return out
+  end)()
   report.active = {
     picker = M.best_picker().id,
     theme = require("kaeru.kikru.ui").state.theme,
@@ -486,6 +511,20 @@ function M.report_text()
     plugin_bits[#plugin_bits + 1] = ("%s%s"):format(report.plugins[name] and "✓ " or "· ", name)
   end
   lines[#lines + 1] = "  plugins     " .. table.concat(plugin_bits, "  ")
+  if report.karu then
+    local karu = report.karu
+    lines[#lines + 1] = ("  cast        %s  %s"):format(
+      karu.available and (karu.running and "receiving" or "ready") or "unavailable",
+      karu.available and ("(" .. tostring(karu.devices or 0) .. " device(s))") or ("(" .. tostring(karu.reason or "?") .. ")")
+    )
+  end
+  if type(report.lyrics) == "table" and #report.lyrics > 0 then
+    local bits = {}
+    for _, provider in ipairs(report.lyrics) do
+      bits[#bits + 1] = (provider.enabled and "✓ " or "· ") .. provider.name
+    end
+    lines[#lines + 1] = "  lyrics      " .. table.concat(bits, "  ")
+  end
   local groups = Compat.tbl_keys(report.binaries)
   table.sort(groups)
   for _, group in ipairs(groups) do

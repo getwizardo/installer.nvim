@@ -376,7 +376,7 @@ function M.render_filters()
   return lines
 end
 
---- Render the lyrics pane.
+--- Render the lyrics pane (karaoke highlight + translations when available).
 ---@return string[] lines
 function M.render_lyrics()
   local p = player()
@@ -385,12 +385,29 @@ function M.render_lyrics()
   local position = p and p.backend_snapshot().position or 0
   local lines = { ("  LYRICS · %s"):format(track and Tags.label(track) or "no track") }
   local Lyrics = require("kaeru.kikru.lyrics")
-  local window, current = Lyrics.window(lyrics, position, math.max(3, (M.state.layout.height or 24) - 8))
-  for index, line in ipairs(window) do
+  local config = require("kaeru.config")
+  local settings = ((config.options or {}).kikru or {}).lyrics or {}
+  local window, current = Lyrics.window(lyrics, position, math.max(3, (M.state.layout.height or 24) - 8), {
+    translation = settings.translations ~= false,
+  })
+  for _, line in ipairs(window) do
     lines[#lines + 1] = M.pad(line, inner_width() + 2)
-    local _ = index
   end
-  lines[#lines + 1] = ("  (source: %s%s)"):format(lyrics and lyrics.source or "none", current > 0 and (" · line " .. current) or "")
+
+  -- Word-level karaoke bar for the line that is playing right now.
+  local karaoke = settings.karaoke ~= false and Lyrics.karaoke_state(lyrics, position) or nil
+  if karaoke and karaoke.sung ~= "" then
+    local bar = M.pad(("      ▶ %s"):format(karaoke.sung), inner_width() + 2)
+    lines[#lines + 1] = bar
+  end
+
+  local progress = lyrics and Lyrics.current_line(lyrics, position) or 0
+  local _ = progress
+  lines[#lines + 1] = ("  (source: %s%s · %d providers)"):format(
+    Lyrics.describe(lyrics),
+    current > 0 and (" · line " .. current) or "",
+    #Lyrics.providers()
+  )
   return lines
 end
 

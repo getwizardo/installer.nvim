@@ -1,0 +1,15 @@
+#!/bin/sh
+# Karu launcher.
+#
+#   dist/src/cli.js   a compiled build (`npm run build`)
+#   src/cli.ts        the TypeScript sources, run directly — Node >= 22.6
+#                     strips types natively, so no build step is required
+set -e
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+root=$(CDPATH= cd -- "$here/.." && pwd)
+for candidate in "$root/dist/src/cli.js" "$root/dist/cli.js"; do
+  if [ -f "$candidate" ]; then
+    exec node "$candidate" "$@"
+  fi
+done
+exec node "$root/src/cli.ts" "$@"

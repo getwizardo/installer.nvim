@@ -83,6 +83,37 @@ M.defaults = {
   },
 
   -- `:` command-line autocomplete.
+  -- Google Cast (`:Karu`) — the TypeScript implementation in karu/.
+  -- `karu/` is written in TypeScript and run either compiled (npm run build)
+  -- or directly by Node ≥ 22.6 (type stripping), so nothing has to be built.
+  karu = {
+    enabled = true,
+    -- Path to the karu launcher (default: <plugin>/karu/bin/karu, then $PATH).
+    path = nil,
+    -- Node binary to use (default: `node` from $PATH).
+    node = nil,
+    -- Friendly name senders see in their Cast list.
+    device_name = "Karu · Neovim",
+    -- CASTV2 port; 8009 is the port every Cast device uses.
+    port = 8009,
+    -- Advertise over mDNS (_googlecast._tcp) so phones find us automatically.
+    mdns = true,
+    -- Kikru cast server that receives everything cast at us.
+    bridge = nil, -- nil = http://127.0.0.1:<kikru.cast.port>
+    kikru_url = nil,
+    -- Shared secret forwarded to Kikru as `?token=`.
+    token = nil,
+    -- Play locally when Kikru is unreachable: "mpv" | "ffplay" | "none".
+    fallback = "none",
+    -- Start the receiver with `setup()`.
+    autostart = false,
+    notify = true,
+    -- mDNS discovery window for `:Karu discover`.
+    timeout = 2500,
+    -- Extra `host[:port]` Cast devices to probe (used when mDNS is blocked).
+    devices = {},
+  },
+
   complete = {
     -- Live popup while typing a `:` command (CmdlineChanged autocmd).
     cmdline = true,
@@ -188,6 +219,25 @@ M.defaults = {
       auto_start = false,
       -- Focus the floating player when a cast arrives.
       ui = true,
+    },
+    -- Lyrics for the current track: embedded tags → `.lrc` sidecar → cache →
+    -- the provider chain below.
+    lyrics = {
+      -- Tried in order. The first *synced* hit wins; a plain-text hit is only
+      -- used when nothing timed could be found (`sync_first`).
+      ---@type string[]
+      providers = { "lrc.red", "lrclib", "netease", "synclrc", "lyrics.ovh" },
+      -- Keep searching for timed lyrics after a plain-text hit was found.
+      sync_first = true,
+      -- Cache resolved lyrics in `<stdpath("cache")>/kaeru/lyrics`.
+      cache = true,
+      cache_dir = nil,
+      -- Write `<track>.lrc` next to the audio file when lyrics came from a provider.
+      save_sidecar = false,
+      -- Show translations (`tlyric`, NetEase) under the original line.
+      translations = true,
+      -- Word-level karaoke highlight when a provider ships `<mm:ss.xx>` timing.
+      karaoke = true,
     },
   },
 
@@ -402,6 +452,16 @@ function M.template()
     "  auto_pack: true",
     "  auto_restore: true",
     "",
+    "# Karu — Google Cast (`:Karu`), the TypeScript receiver/sender in karu/.",
+    "karu:",
+    "  enabled: true",
+    "  device_name: Karu · Neovim   # what phones show in their Cast list",
+    "  port: 8009                   # CASTV2 port (fixed by the protocol)",
+    "  mdns: true                   # advertise _googlecast._tcp so apps find us",
+    "  fallback: none               # mpv | ffplay | none — play locally when Kikru is down",
+    "  devices: []                  # extra host[:port] Cast devices to probe",
+    "  # bridge: http://127.0.0.1:8722   # where cast media is handed to Kikru",
+    "",
     "# Kikru — the player (`:Kikru`). `music:` is accepted as an alias of this block.",
     "kikru:",
     "  engine: auto            # auto | mpv | ffplay | vlc | mpd | mpris",
@@ -415,6 +475,13 @@ function M.template()
     "    port: 8722            # `:Kikru cast server` listens on 127.0.0.1:<port>",
     "    auto_start: false",
     "    ui: true              # focus the player window when a cast arrives",
+    "  lyrics:",
+    "    providers: [lrc.red, lrclib, netease, synclrc, lyrics.ovh]",
+    "    sync_first: true      # keep looking for timed lyrics after a plain hit",
+    "    cache: true           # <stdpath('cache')>/kaeru/lyrics",
+    "    save_sidecar: false   # also write <track>.lrc next to the audio file",
+    "    translations: true    # show tlyric translations (NetEase)",
+    "    karaoke: true         # word-level highlight when the provider has it",
     "  # subsonic:",
     "  #   url: https://music.example.com",
     "  #   user: me",

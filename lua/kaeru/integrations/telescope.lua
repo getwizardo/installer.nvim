@@ -151,6 +151,32 @@ function M.sources()
         }
       end,
     },
+    karu = {
+      title = "Google Cast devices (Karu)",
+      items = function()
+        local ok, karu = pcall(require, "kaeru.karu")
+        if not ok then
+          return {}
+        end
+        local items = {}
+        for _, device in ipairs(karu.devices()) do
+          items[#items + 1] = {
+            word = device.name or device.address,
+            menu = ("%s:%s · %s"):format(device.address or "?", device.port or "?", device.model or "Cast device"),
+            action = function()
+              karu.status(device.name, function(err, payload)
+                vim.notify(
+                  err and ("Karu: " .. err)
+                    or ("%s — %s"):format(device.name, payload and payload.media and payload.media.title or "idle"),
+                  err and vim.log.levels.ERROR or vim.log.levels.INFO
+                )
+              end)
+            end,
+          }
+        end
+        return items
+      end,
+    },
   }
 end
 

@@ -12,6 +12,7 @@
 --   2. the modal form completion (`omnifunc` / `completefunc`), including the
 --      live GitHub repository lookup.
 local Compat = require("kaeru.compat")
+local Native = require("kaeru.native")
 local Spec = require("kaeru.spec")
 local Config = require("kaeru.config")
 
@@ -294,6 +295,8 @@ M.subcommands = {
   { word = "ai", menu = "curated AI coding plugin presets", info = ":Kaeru ai [preset|ide]" },
   { word = "clina", menu = "TypeScript AI coding helpers", info = ":Kaeru clina <action>" },
   { word = "music", menu = "open the :Kikru", info = ":Kaeru music [action]" },
+  { word = "karu", menu = "Google Cast (receive casts, cast to devices)", info = ":Kaeru karu <action>" },
+  { word = "googlecast", menu = "alias of karu (Google Cast)" },
   { word = "boot", menu = "play the ASCII boot animation", info = ":Kaeru boot" },
   { word = "login", menu = "sign in to GitHub", info = ":Kaeru login [gh|token|device]" },
   { word = "logout", menu = "forget the GitHub token", info = ":Kaeru logout" },
@@ -442,8 +445,9 @@ M.starsky_actions = {
 
 -- :Kikru -------------------------------------------------------------------
 
-M.pick_sources = { "plugins", "mason", "sftp", "cache", "radio", "queue", "cast", "commands", "files" }
+M.pick_sources = { "plugins", "mason", "sftp", "cache", "radio", "queue", "cast", "karu", "commands", "files" }
 M.completion_categories = {
+  "karu",
   "command",
   "file",
   "dir",
@@ -459,6 +463,58 @@ M.completion_categories = {
   "mapping",
   "tag",
 }
+
+-- `:Karu` (Google Cast, the TypeScript implementation in karu/)
+M.karu_actions = {
+  { word = "discover", menu = "list Cast devices on the network", info = ":Karu discover [host:port]" },
+  { word = "devices", menu = "alias of discover" },
+  { word = "cast", menu = "cast a URL or search to a device", info = ":Karu cast <url|query> [device]" },
+  { word = "play", menu = "resume on the device" },
+  { word = "pause", menu = "pause on the device" },
+  { word = "toggle", menu = "play/pause" },
+  { word = "stop", menu = "stop playback" },
+  { word = "quit", menu = "close the receiver app on the device" },
+  { word = "seek", menu = "absolute position in seconds", info = ":Karu seek <seconds> [device]" },
+  { word = "volume", menu = "device volume", info = ":Karu volume <0-100|+10|-10|mute|unmute> [device]" },
+  { word = "status", menu = "what the device is playing" },
+  { word = "probe", menu = "reachability test", info = ":Karu probe <host[:port]>" },
+  { word = "receive", menu = "be a Cast device — casts land in Kikru", info = ":Karu receive [--name N] [--port P] [--no-mdns]" },
+  { word = "off", menu = "stop the receiver" },
+  { word = "bridge", menu = "receiver + Kikru bridge status" },
+  { word = "info", menu = "protocol/environment report" },
+  { word = "help", menu = "usage" },
+}
+
+M.karu_receive_flags = {
+  { word = "--name", menu = "friendly name in the Cast list", info = "--name 'Karu · Neovim'" },
+  { word = "--port", menu = "CASTV2 port (default 8009)", info = "--port 8009" },
+  { word = "--no-mdns", menu = "do not advertise over mDNS" },
+  { word = "--bridge", menu = "Kikru cast server URL", info = "--bridge http://127.0.0.1:8722" },
+  { word = "--token", menu = "shared secret for the Kikru bridge" },
+  { word = "--fallback", menu = "play locally when Kikru is down", info = "--fallback mpv|ffplay|none" },
+  { word = "--address", menu = "address to advertise" },
+}
+
+--- Devices discovered by `:Karu discover`, as completion items.
+---@return KaeruCompletionItem[]
+function M.karu_devices()
+  local ok, karu = pcall(require, "kaeru.karu")
+  if not ok or type(karu.devices) ~= "function" then
+    return {}
+  end
+  local items = {}
+  for _, device in ipairs(karu.devices()) do
+    items[#items + 1] = {
+      word = device.name or device.address,
+      menu = "[cast device]",
+      info = ("%s:%s · %s"):format(device.address or "?", device.port or "?", device.model or "Cast device"),
+    }
+  end
+  for _, entry in ipairs((Config.options.karu or {}).devices or {}) do
+    items[#items + 1] = { word = entry, menu = "[cast device]", info = "from karu.devices" }
+  end
+  return items
+end
 
 M.kikru_cast_targets = { "youtube", "youtube-music", "ytmusic", "ytm", "playlist", "video", "radio", "app", "mpris", "browser" }
 M.kikru_cast_actions = {
@@ -504,7 +560,7 @@ M.kikru_actions = {
   { word = "sources", menu = "list the available sources (NodeLink style)" },
   { word = "library", menu = "index a local directory", info = ":Kikru library ~/Kikru" },
   { word = "index", menu = "alias of library" },
-  { word = "lyrics", menu = "show lyrics (tags → .lrc → LRCLIB)" },
+  { word = "lyrics", menu = "lyrics pane / provider tools", info = ":Kikru lyrics [providers|refresh|search|save]" },
   { word = "queue", menu = "queue operations", info = ":Kikru queue list|clear|save|load" },
   { word = "playlist", menu = "playlist files", info = ":Kikru playlist save|load|list|dir" },
   { word = "engine", menu = "audio backend", info = ":Kikru engine mpv|ffplay|vlc|mpd|mpris" },
@@ -541,6 +597,7 @@ M.kikru_queue_actions = { "list", "clear", "save", "load", "remove", "move", "sh
 M.kikru_playlist_actions = { "list", "save", "load", "open", "dir" }
 M.kikru_ipc_actions = { "play", "pause", "toggle", "stop", "next", "prev", "volume", "seek", "status", "queue", "eq", "filter", "station" }
 M.kikru_sources = { "auto", "youtube", "youtube_music", "soundcloud", "bandcamp", "mixcloud", "bilibili", "twitch", "spotify", "deezer", "apple_music", "yandex_music", "radio", "subsonic", "rss", "mpd" }
+M.kikru_lyrics_actions = { "providers", "refresh", "search", "save" }
 
 -- Dynamic data sources ------------------------------------------------------------
 
@@ -851,6 +908,25 @@ end
 ---@param category string
 ---@param base string
 ---@return KaeruCompletionItem[]
+--- Items for the lyrics provider names, from `kaeru.kikru.lyrics` when loaded.
+---@return {word: string, menu: string}[]
+function M.kikru_provider_items()
+  local items = {}
+  local ok, lyrics = pcall(require, "kaeru.kikru.lyrics")
+  local providers = (ok and lyrics and lyrics.providers) and lyrics.providers() or nil
+  if type(providers) == "table" then
+    for _, provider in ipairs(providers) do
+      items[#items + 1] = { word = provider.name, menu = provider.label or "lyrics provider" }
+    end
+  end
+  if #items == 0 then
+    for _, name in ipairs({ "lrc.red", "lrclib", "netease", "synclrc", "lyrics.ovh" }) do
+      items[#items + 1] = { word = name, menu = "lyrics provider" }
+    end
+  end
+  return items
+end
+
 function M.native_items(category, base, menu)
   local items = {}
   for _, word in ipairs(Compat.getcompletion(base or "", category)) do
@@ -859,6 +935,44 @@ function M.native_items(category, base, menu)
     end
   end
   return items
+end
+
+--- Every native (Neovim) completion category we surface, keyed by the
+--- `getcompletion()` name and mapped to the menu label shown in the popup.
+---@return table<string, string>
+function M.native_categories()
+  return {
+    command = "command",
+    file = "file",
+    dir = "directory",
+    buffer = "buffer",
+    arglist = "arglist",
+    color = "colorscheme",
+    event = "autocmd event",
+    filetype = "filetype",
+    help = "help tag",
+    option = "option",
+    environment = "environment",
+    augroup = "augroup",
+    mapping = "mapping",
+    mapclear = "mapping",
+    tag = "tag",
+    highlight = "highlight",
+    ["function"] = "function",
+    lua = "lua",
+    menu = "menu item",
+    sign = "sign",
+    syntax = "syntax",
+    compiler = "compiler",
+    checkhealth = "checkhealth",
+    packadd = "package",
+    runtime = "runtime file",
+    history = "history",
+    messages = "message",
+    var = "variable",
+    user = "user command",
+    file_in_path = "file in path",
+  }
 end
 
 --- Everything a `:` line could possibly complete to: our own commands first,
@@ -876,34 +990,20 @@ function M.everything(prefix)
       items[#items + 1] = item
     end
   end
-  for _, name in ipairs({ "Kaeru", "Kikru", "Clina" }) do
+  for _, name in ipairs({ "Kaeru", "Kikru", "Karu", "Clina" }) do
     push({ word = name, menu = "[" .. name .. "] command" })
   end
-  for _, name in ipairs({ "Kaeru", "Kikru", "Clina" }) do
+  for _, name in ipairs({ "Kaeru", "Kikru", "Karu", "Clina" }) do
     for _, item in ipairs(M.rank(M.resolve_for(name, { name, "" }), "")) do
       push({ word = name .. " " .. item.word, menu = item.menu, kind = item.kind })
     end
   end
-  for category, menu in pairs({
-    command = "command",
-    file = "file",
-    dir = "directory",
-    buffer = "buffer",
-    color = "colorscheme",
-    event = "autocmd event",
-    filetype = "filetype",
-    help = "help tag",
-    option = "option",
-    environment = "environment",
-    augroup = "augroup",
-    mapping = "mapping",
-    tag = "tag",
-  }) do
+  for category, menu in pairs(M.native_categories()) do
     for _, item in ipairs(M.native_items(category, prefix, "[" .. menu .. "]")) do
       push(item)
     end
   end
-  return M.rank(items, prefix, { limit = 500 })
+  return M.rank(items, prefix, { limit = 800 })
 end
 
 -- Command line parsing ---------------------------------------------------------------
@@ -973,7 +1073,7 @@ function M.detect_command(line)
   if command == "" then
     return nil
   end
-  local names = { "Kaeru", "Clina", "Kikru" }
+  local names = { "Kaeru", "Clina", "Kikru", "Karu" }
   for _, name in ipairs(names) do
     if command == name then
       return name
@@ -1058,6 +1158,19 @@ local function resolve_kaeru(tokens)
     end
   elseif sub == "music" then
     return { { word = "ui" }, { word = "eq" }, { word = "radio" }, { word = "server" }, { word = "connect" } }
+  elseif sub == "karu" or sub == "googlecast" then
+    -- `:Kaeru karu …` mirrors `:Karu …`
+    local inner = tokens[3]
+    if inner == nil or (argc == 3 and prev == nil) then
+      return M.karu_actions
+    end
+    if inner == "receive" then
+      return M.karu_receive_flags
+    end
+    if inner == "cast" then
+      return M.karu_devices()
+    end
+    return M.karu_devices()
   elseif sub == "clina" then
     if argc <= 3 then
       return M.clina_actions
@@ -1243,7 +1356,22 @@ local function resolve_kikru(tokens)
       return M.kikru_ipc_actions
     elseif action == "daemon" then
       return { "start", "stop", "status" }
-    elseif action == "play" or action == "add" or action == "lyrics" then
+    elseif action == "lyrics" then
+      local sub_action = (tokens[3] or ""):lower()
+      if sub_action == "" then
+        return M.kikru_lyrics_actions
+      end
+      if sub_action == "search" then
+        local items = vim.deepcopy(M.kikru_sources)
+        vim.list_extend(items, M.kikru_provider_items())
+        return items
+      end
+      if sub_action == "providers" or sub_action == "sources" or sub_action == "refresh"
+        or sub_action == "reload" or sub_action == "update" then
+        return none()
+      end
+      return M.native_items("file", tokens[#tokens] or "", "[local file]")
+    elseif action == "play" or action == "add" then
       local items = vim.deepcopy(M.kikru_sources)
       vim.list_extend(items, M.native_items("file", tokens[#tokens] or "", "[local file]"))
       return items
@@ -1290,17 +1418,27 @@ function M.complete_items(cmdline, cursorpos)
   local line = cursorpos and tostring(cmdline):sub(1, cursorpos) or tostring(cmdline)
   local name = M.detect_command(line)
   if not name then
-    -- `complete.any = true` turns kaeru.nvim's popup into a completion
-    -- front-end for *every* `:` command (files, buffers, options, …).
+    -- Not one of our commands: complete it like Neovim would (`:set`, `:au`,
+    -- `:colorscheme`, `:e ++`, `:lua`, `:normal`, every file-taking command…).
+    -- With `complete.any = true` *everything* Neovim can complete is offered
+    -- for unknown commands too.
     local settings = (Config.options.complete or {})
-    if settings.any then
-      local _, _, arglead = M.parse_cmdline(line)
-      local items = M.everything(arglead)
+    local items = Native.items(line, { any = settings.any == true })
+    if #items > 0 then
       for _, item in ipairs(items) do
         item.kind = item.kind or "i"
         item.score = nil
       end
       return items
+    end
+    if settings.any then
+      local _, _, arglead = M.parse_cmdline(line)
+      local everything = M.everything(arglead)
+      for _, item in ipairs(everything) do
+        item.kind = item.kind or "i"
+        item.score = nil
+      end
+      return everything
     end
     return {}
   end
@@ -1311,6 +1449,8 @@ function M.complete_items(cmdline, cursorpos)
     candidates = resolve_kaeru(tokens)
   elseif name == "Kikru" then
     candidates = resolve_kikru(tokens)
+  elseif name == "Karu" then
+    candidates = M.resolve_karu(tokens)
   else
     candidates = resolve_clina(tokens)
   end
@@ -1331,6 +1471,29 @@ function M.complete_items(cmdline, cursorpos)
     item.score = nil
   end
   return items
+end
+
+--- Resolve candidates for a `:Karu` command line.
+---@param tokens string[]
+---@return (string|KaeruCompletionItem)[]
+function M.resolve_karu(tokens)
+  local argc = #tokens -- tokens[1] = command, tokens[#tokens] = arglead
+  local sub = tokens[2]
+  if sub == nil or sub == "" or (argc == 2 and previous(tokens) == nil) then
+    -- `:Karu <Tab>` — offer the actions plus the devices found last time.
+    local items = {}
+    vim.list_extend(items, M.karu_actions)
+    vim.list_extend(items, M.karu_devices())
+    return items
+  end
+  if sub == "receive" or sub == "start" or sub == "on" then
+    return M.karu_receive_flags
+  end
+  if sub == "cast" or sub == "status" or sub == "stop" or sub == "play" or sub == "pause"
+    or sub == "toggle" or sub == "quit" or sub == "seek" or sub == "volume" then
+    return M.karu_devices()
+  end
+  return none()
 end
 
 --- Plain word list (backwards compatible API, used by tests and pickers).
