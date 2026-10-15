@@ -8,8 +8,8 @@ Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **fro
 - lazy.nvim reloads its specs and installs the plugin immediately, no restart needed.
 - `:Kaeru browse` searches **all Neovim plugins on GitHub** (`topic:neovim-plugin`), with README preview, `p` to parse the README spec, and one-key install.
 - **GitHub account**: sign in (gh CLI / token / device flow) for higher rate limits, starring and your starred list.
-- **AI coding presets & `:Clina` TypeScript AI Coding IDE**: curated specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub, plus **`:Clina`** — a full TypeScript AI Coding IDE (`lua/kaeru/clina.lua` + `starsky/src/lib/clina.ts`) with multi-provider support, MCP tool servers, workspace file context, unified diffs, and one-key patch application.
-- **SFTP & SFTP Studio UI** (`:Kaeru sftp` / `:Kaeru sftp ui`): dual-pane floating Local Project ↔ Remote Server SFTP Studio UI inside Neovim and in the Next.js Webclient, plus parallel `sftp` workers, upload-on-save, every sftp command, remote file browser, and multiple SSH keys / ssh-config / ProxyJump.
+- **AI coding presets & `:Clina` TypeScript AI Coding IDE**: curated specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub, plus **`:Clina`** — a full TypeScript AI Coding IDE (`lua/kaeru/clina.lua` + `starsky/src/lib/server/clina.ts`) with multi-provider support, MCP tool servers, workspace file context, unified diffs, and one-key patch application.
+- **SFTP & SFTP Studio UI** (`:Kaeru sftp` / `:Kaeru sftp ui`): dual-pane floating Local Project ↔ Remote Server SFTP Studio UI inside Neovim and in the SvelteKit Webclient, plus parallel `sftp` workers, upload-on-save, every sftp command, remote file browser, and multiple SSH keys / ssh-config / ProxyJump.
 - **`kaeru.yaml`**: all configuration in a global or per-project YAML file (built-in parser, no dependencies).
 - **Mason (all 601 servers built-in)**: install LSP servers, DAP adapters, linters, formatters, compilers and runtimes from the [mason.nvim](https://github.com/mason-org/mason.nvim) registry (with built-in catalog of all 601 Mason packages & 296 `lspconfig` server mappings for offline/instant autocomplete), `ensure_installed` in `kaeru.yaml`, and one-command scaffolds for lspconfig / nvim-dap / conform + nvim-lint.
 - **Autocomplete for *everything*** (`:Kaeru complete`, `complete.any`): fuzzy `:` command-line completion for `:Kaeru`, `:Kikru` and `:Clina` — every subcommand, argument, repository, Mason package, radio station, EQ preset, filter, theme, playlist, file, directory, buffer, option, event, colorscheme, help tag and environment variable — with descriptions in the popup, live GitHub search, `<Tab>` cycling and ready-made [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) / [blink.cmp](https://github.com/Saghen/blink.cmp) cmdline sources.
@@ -18,7 +18,7 @@ Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **fro
 - **`:Karu` — Google Cast, implemented in TypeScript** (`karu/`, no runtime dependencies): `karu receive` makes Neovim itself a Cast target that the **YouTube / YouTube Music / Chrome** apps can cast to (mDNS `_googlecast._tcp`, CASTV2 over TLS 8009, `CC1AD845` Default Media Receiver, device auth), and every cast is bridged straight into Kikru; the sender side (`:Karu discover` / `:Karu cast`) drives real Chromecasts on your LAN.
 - **Integrations with the ecosystem you already use**: [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) extension (`:Telescope kaeru …`), [fzf-lua](https://github.com/ibhagwan/fzf-lua), [snacks.nvim](https://github.com/folke/snacks.nvim) picker, [mini.pick](https://github.com/echasnovski/mini.nvim), [lualine](https://github.com/nvim-lualine/lualine.nvim) component, [nvim-notify](https://github.com/rcarriga/nvim-notify), [fidget.nvim](https://github.com/j-hui/fidget.nvim), [plenary.nvim](https://github.com/nvim-lua/plenary.nvim) jobs, plus detection of every external binary (`yt-dlp`, `mpv`, `ffmpeg`, `vlc`, `playerctl`, `mpc`, `gh`, `fzf`, `node`/`deno`/`bun`, …). `:Kaeru integrations` prints the report.
 - **Plugin cache**: installed plugins archived as `cache/<name>.nvimpack` (zip, `.git` included) or `.pack` (git bundle for large repos) and restored before install — offline re-installs.
-- **Starsky for Neovim Webclient** (`:Kaeru starsky` / `starsky/`): **Next.js 16 (TypeScript App Router)** webclient scaffolded via `yarn create next-app`, featuring the `:Kaeru` Spec Saver, `:Clina` TypeScript AI Coding IDE, SFTP Studio UI, all 601 Mason servers, 296 LSPconfig servers, and the universal 11-manager README parser.
+- **Starsky for Neovim Webclient** (`:Kaeru starsky` / `starsky/`): **SvelteKit 3 (Svelte 5, TypeScript, Vite 8, mobile-first)** webclient scaffolded via `npx sv create` and served by `adapter-node`, featuring the `:Kaeru` Spec Saver, `:Clina` TypeScript AI Coding IDE, SFTP Studio UI, all 601 Mason servers, 296 LSPconfig servers, and the universal 11-manager README parser.
 
 ```
 ╭──────────────────── kaeru.nvim · add a plugin to lazy.nvim ────────────────────╮
@@ -110,7 +110,7 @@ return {
 | `:Kaeru config [...]`       | `edit`, `project`, `reload`, `show` — manage `kaeru.yaml`           |
 | `:Kaeru cache [...]`        | `list`, `pack [name\|all]`, `restore <name>`, `remove`, `clean`, `dir`   |
 | `:Kaeru mason [...]`        | Mason picker, `lsp\|dap\|linter\|formatter`, `install`, `ensure`, `export`, `scaffold` — see below |
-| `:Kaeru starsky [...]`      | `start`, `stop`, `open`, `status`, `build` — Next.js TypeScript Starsky Webclient |
+| `:Kaeru starsky [...]`      | `start`, `stop`, `open`, `status`, `build` — SvelteKit TypeScript Starsky Webclient |
 | `:Kaeru pick [source]`      | Open a picker (telescope / fzf-lua / snacks / mini.pick / `vim.ui.select`) over `plugins`, `mason`, `sftp`, `cache`, `radio`, `queue`, `cast` |
 | `:Kaeru complete [partial]` | **Complete anything**: pick from every candidate for a partial command line and run it |
 | `:Kaeru integrations`       | Report every detected picker, plugin and external binary |
@@ -869,21 +869,21 @@ Generated files are plain lazy.nvim specs — edit them freely afterwards.
 
 ## Starsky Code IDE for Neovim (`starsky/`)
 
-Starsky is the **Next.js 16 (TypeScript App Router)** Code IDE for `kaeru.nvim` built with **W3C Custom Elements / Web Components (`customElements.define`)** and **shadcn/ui + `vaul` Drawer**:
+Starsky is the **SvelteKit 3 (Svelte 5 + TypeScript)** webclient for `kaeru.nvim`. It is mobile-first: a bottom tab bar on phones, a top bar with a two-column split from 768px, and the full IDE layout (file explorer | editor + terminal | Clina assistant) from 1100px.
 
-- **Real Web Components (`starsky/src/components/webComponents.ts`)**:
-  - `<starsky-code-editor>` — Shadow DOM code editor with line numbers, status bar, and **NeoCodeium (`monkoose/neocodeium`)** inline ghost-text completions (`<A-f>` accept, `<A-w>` word, `<A-a>` line, `<A-e>` cycle).
-  - `<starsky-ascii-boot>` — Shadow DOM animated ASCII boot terminal.
-  - `<starsky-eq-visualizer>` — Shadow DOM 60fps canvas spectrum & waveform visualizer for `:Kikru`.
-  - `<starsky-terminal>` — Shadow DOM interactive Neovim Ex-command terminal.
-- **shadcn/ui + `vaul` Drawers (`starsky/src/components/ui/drawer.tsx`)**: slide-up `:Kikru` Studio Drawer and Quick `:Kaeru` Spec Builder Drawer.
-- **Live GitHub API Plugin Autocomplete (`/api/complete`)**: queries `https://api.github.com/search/repositories` live as you type in `repo` or `dependencies`.
-- **Official [`https://mason-registry.dev/`](https://mason-registry.dev/) Explorer**: all **601 official Mason packages** and **296 `lspconfig` mappings** synced with `https://mason-registry.dev/registry/list`.
-- **Dual-Pane SFTP Studio UI** (`:Kaeru sftp ui` in Neovim and in the Web IDE).
+- **Server routes (`starsky/src/routes/api/*/+server.ts`)**: `spec`, `spec/generate`, `spec/save`, `complete`, `github`, `mason`, `parse`, `sftp`, `music`, `clina`, `status`. They talk to Neovim through the official **Node Neovim client (`neovim` npm package)**, started as `nvim --embed --headless -n -i NONE -u NONE`, and fall back to a TypeScript spec builder when Neovim is not on `PATH`.
+- **Web Components (`starsky/src/lib/client/webComponents.ts`, registered in the browser only)**:
+  - `<starsky-code-editor>`: Shadow DOM code editor with line numbers and a status bar. NeoCodeium inline ghost-text keys: `<A-f>` accept, `<A-w>` word, `<A-a>` line, `<A-e>` cycle.
+  - `<starsky-ascii-boot>`: animated ASCII boot terminal.
+  - `<starsky-eq-visualizer>`: 60fps canvas spectrum and waveform visualizer for `:Kikru`.
+  - `<starsky-terminal>`: interactive Neovim Ex-command terminal (`Kaeru save <repo>`, `Kikru play`, `Clina`).
+- **Panels (`starsky/src/lib/components/`)**: Spec builder (mirrors the `:Kaeru` modal), Parser, GitHub search, Mason and LSP explorer (601 Mason packages, 296 `lspconfig` mappings), SFTP dual-pane studio, Music player, and the IDE with the NeoCodeium spec saver and keymap reference.
+- **Live GitHub completions (`/api/complete`)**: queries `https://api.github.com/search/repositories` as you type in `repo` or `dependencies`.
 
 ```vim
-:Kaeru starsky start               " start the Next.js TypeScript Code IDE and open browser
+:Kaeru starsky start               " start the SvelteKit dev server on 0.0.0.0:5173 and open the browser
 :Kaeru starsky status              " check server status
+:Kaeru starsky build               " npm run build (Vite + adapter-node) into starsky/build/
 :Kaeru starsky stop                " stop the webclient
 ```
 
@@ -891,8 +891,10 @@ Or from the shell:
 
 ```sh
 cd starsky
-yarn
-yarn start
+npm install
+npm run dev                        # development, http://localhost:5173
+npm run build && node build        # production, serves on PORT (default 3000) and HOST
+npm run check                      # svelte-check type checking
 ```
 
 ## Development

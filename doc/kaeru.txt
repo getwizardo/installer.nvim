@@ -24,6 +24,7 @@ CONTENTS                                                   *kaeru-contents*
  19. Karu (Google Cast, TypeScript) ................ |kaeru-karu|
  20. Lyrics (lrc.red, TTML, karaoke) ............. |kaeru-lyrics|
  21. Integrations .................................. |kaeru-integrations|
+ 22. Starsky webclient (SvelteKit) .................. |kaeru-starsky|
 
 ==============================================================================
 1. INTRODUCTION                                        *kaeru-introduction*
@@ -784,5 +785,50 @@ Lua API: `require("kaeru.kikru.lyrics")` — `resolve(track, opts, cb)`,
 Lua API: `require("kaeru.integrations")` — `.pick(items, opts)`,
 `.best_picker()`, `.statusline({width})`, `.lualine()`, `.job(args, opts, cb)`,
 `.with_progress(msg, fn)`, `.report()`, `.report_text()`, `.theme_for_colorscheme()`.
+
+==============================================================================
+22. STARSKY WEBCLIENT (SVELTEKIT)                            *kaeru-starsky*
+
+Starsky is the browser front end for kaeru.nvim: spec builder, parser, GitHub
+search, Mason and LSP explorer, SFTP studio, music, and the code IDE with the
+:Clina NeoCodeium assistant. It is a SvelteKit 3 app (Svelte 5, TypeScript,
+Vite 8) in the `starsky/` directory and is mobile-first: a bottom tab bar on
+phones, a top bar and two-column layout from 768px, and the three-column IDE from 1100px.
+
+COMMANDS                                                 *kaeru-starsky-commands*
+
+  :Kaeru starsky start     run `npm run dev -- --host 0.0.0.0 --port 5173`
+                           and open the browser (`:Kaeru! starsky start`
+                           does not open it)
+  :Kaeru starsky stop      stop the dev server
+  :Kaeru starsky open      open the URL in the system browser
+  :Kaeru starsky status    show the directory, framework, packages, and state
+  :Kaeru starsky build     run `npm run build` (Vite + adapter-node) into
+                           `starsky/build/`
+  :Kaeru web …             alias of :Kaeru starsky
+
+The first start needs packages: run `npm install` in `starsky/` once.
+
+PRODUCTION                                                 *kaeru-starsky-build*
+
+After `:Kaeru starsky build`, serve the production bundle with Node:
+
+  cd starsky && PORT=5173 HOST=0.0.0.0 node build
+
+CONFIGURATION                                         *kaeru-starsky-config*
+
+  starsky = {
+    host = "localhost",   -- host used in the browser URL
+    port = 5173,          -- Vite dev server port
+    dir  = nil,           -- nil = <repo>/starsky
+  },
+
+NEOVIM ACCESS                                              *kaeru-starsky-neovim*
+
+The API routes reach Neovim through the Node Neovim client (the `neovim`
+npm package), which attaches to `nvim --embed --headless -n -i NONE -u NONE`
+(Neovim 0.9 or newer, found on PATH). When Neovim is not available, spec
+generation falls back to a TypeScript builder and the other features that
+need Neovim report a clear error.
 
 vim:tw=78:ts=8:ft=help:norl:

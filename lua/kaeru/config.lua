@@ -49,8 +49,7 @@ M.defaults = {
   -- Starsky for Neovim Webclient settings (`:Kaeru starsky`).
   starsky = {
     host = "localhost",
-    port = 5173,
-    api_port = 4174,
+    port = 5173, -- Vite dev server (`:Kaeru starsky start`)
     dir = nil, -- nil = <repo_root>/starsky
   },
 

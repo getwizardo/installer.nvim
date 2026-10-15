@@ -2318,6 +2318,37 @@ test("spec: enabled/cond reject values that are neither boolean nor function", f
   assert(loadstring(ok.source), "generated spec must be valid Lua")
 end)
 
+-- Starsky (SvelteKit webclient) ------------------------------------------------
+test("starsky: the CLI commands run Vite and the npm build, not yarn/next", function()
+  local Starsky = require("kaeru.starsky")
+  local dev = Starsky.dev_command(5173)
+  eq(dev[1], "npm")
+  eq(table.concat(dev, " "), "npm run dev -- --host 0.0.0.0 --port 5173 --strictPort")
+  eq(table.concat(Starsky.build_command(), " "), "npm run build")
+  assert(not table.concat(dev, " "):find("yarn", 1, true), "no yarn")
+  assert(not table.concat(dev, " "):find("next", 1, true), "no next")
+end)
+
+test("starsky: the repository ships a SvelteKit project detected by the status report", function()
+  local Starsky = require("kaeru.starsky")
+  -- the test stub has no real fnamemodify, so point the dir at the repo's starsky/ explicitly
+  local Config = require("kaeru.config")
+  local saved = Config.options and Config.options.starsky
+  Config.options = Config.options or {}
+  Config.options.starsky = { dir = "starsky" }
+  local dir = Starsky.dir()
+  Config.options.starsky = saved
+  -- the Vite config must enable the SvelteKit plugin and the Node adapter
+  local f = assert(io.open(dir .. "/vite.config.ts"), "vite.config.ts missing")
+  local src = f:read("*a")
+  f:close()
+  assert(src:find("@sveltejs/kit/vite", 1, true), "sveltekit plugin missing")
+  assert(src:find("@sveltejs/adapter-node", 1, true), "adapter-node missing")
+  assert(src:find("0.0.0.0", 1, true), "dev server must bind 0.0.0.0")
+  assert(src:find(".e2b.app", 1, true), "preview host must be allowed")
+  eq(Starsky.is_sveltekit(dir), true)
+end)
+
 print(("\n%d passed, %d failed"):format(pass, fail))
 if fail > 0 then
   os.exit(1)

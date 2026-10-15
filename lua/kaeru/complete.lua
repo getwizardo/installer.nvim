@@ -305,7 +305,7 @@ M.subcommands = {
   { word = "cache", menu = "plugin archive (zip / git bundle)", info = ":Kaeru cache <action>" },
   { word = "config", menu = "edit/reload kaeru.yaml", info = ":Kaeru config [edit|project|reload|show]" },
   { word = "mason", menu = "LSP/DAP/linter/formatter packages", info = ":Kaeru mason <action>" },
-  { word = "starsky", menu = "Next.js Starsky web client", info = ":Kaeru starsky [start|stop|open|status|build]" },
+  { word = "starsky", menu = "SvelteKit Starsky web client", info = ":Kaeru starsky [start|stop|open|status|build]" },
   { word = "web", menu = "alias of starsky", info = ":Kaeru web [action]" },
   { word = "pick", menu = "open a picker in telescope / fzf-lua / snacks / mini.pick", info = ":Kaeru pick [plugins|mason|sftp|cache|radio|queue|cast]" },
   { word = "integrations", menu = "what is installed and wired up", info = ":Kaeru integrations" },
@@ -436,7 +436,7 @@ M.config_actions = {
 }
 
 M.starsky_actions = {
-  { word = "start", menu = "run the Next.js dev server" },
+  { word = "start", menu = "run the Vite dev server (npm run dev)" },
   { word = "stop", menu = "stop the dev server" },
   { word = "open", menu = "open the web client" },
   { word = "status", menu = "server status" },

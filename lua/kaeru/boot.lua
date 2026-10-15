@@ -21,7 +21,7 @@ M.boot_steps = {
   { id = "clina", label = "Binding :Clina -> NeoCodeium (monkoose/neocodeium)", detail = "Ghost-Text + Windsurf [BOUND]" },
   { id = "music", label = "Starting :Kikru 10-Band EQ & 2-Nvim RPC", detail = "Server<->Client TCP [ONLINE]" },
   { id = "sftp", label = "Loading Dual-Pane SFTP Studio & SSH Workers", detail = "Batch SFTP [READY]" },
-  { id = "web", label = "Booting Starsky Web Code IDE (Web Components + Vaul)", detail = "Next.js 16 TS [READY]" },
+  { id = "web", label = "Booting Starsky Web Code IDE (Web Components + Svelte 5)", detail = "SvelteKit 3 · Svelte 5 TS [READY]" },
 }
 
 --- Render a single frame `step_idx` (1..#M.boot_steps + 2) of the ASCII boot sequence.

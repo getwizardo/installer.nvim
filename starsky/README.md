@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Starsky for Neovim (SvelteKit webclient)
 
-## Getting Started
+Mobile-first web client for kaeru.nvim: spec builder, parser, GitHub search,
+Mason/LSP explorer, SFTP studio, music, and the code IDE with the `:Clina`
+NeoCodeium assistant.
 
-First, run the development server:
+Built with SvelteKit 3, Svelte 5, TypeScript, and Vite 8. Production builds use
+`@sveltejs/adapter-node`. The server talks to Neovim through the Node Neovim
+client (`neovim` npm package).
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:5173 (bound to 0.0.0.0)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+From Neovim: `:Kaeru starsky start`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command           | What it does                                          |
+| ----------------- | ----------------------------------------------------- |
+| `npm run dev`     | Vite dev server with hot reload                        |
+| `npm run build`   | Production build into `build/` (adapter-node)          |
+| `npm start`       | Run the production server (`node build`)               |
+| `npm run check`   | `svelte-check` type checking                           |
+| `npm run clina`   | Run the `:Clina` CLI (`bin/clina.ts`)                   |
 
-## Learn More
+## Layout
 
-To learn more about Next.js, take a look at the following resources:
+- `src/routes/` — tabbed shell (`+page.svelte`) and `api/*/+server.ts` routes
+- `src/lib/components/` — IDE, Spec, Parser, GitHub, Mason, SFTP, and Music panels
+- `src/lib/server/` — Neovim bridge (`nvim.ts`, `luaBridge.ts`), Clina, SFTP, music
+- `src/lib/client/` — browser helpers and Web Components (registered in `onMount`)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Imports use the `#lib/*` alias (declared in `package.json` `imports` and `tsconfig.json` `paths`).

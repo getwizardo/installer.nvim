@@ -1,10 +1,10 @@
 #!/usr/bin/env tsx
 import {
   runClinaAgent,
-  ClinaRequestPayload,
+  type ClinaRequestPayload,
   getProviders,
   CLINA_MCP_TOOLS,
-} from "../src/lib/clina";
+} from "../src/lib/server/clina";
 
 async function main() {
   const rawArg = process.argv[2] || "{}";

@@ -8,7 +8,7 @@
 --   :Kaeru ai              curated AI coding plugins & Clina AI Coding IDE
 --   :Kaeru login|whoami    GitHub account
 --   :Kaeru sftp [action]   SFTP UI / upload / download / sync over SFTP
---   :Kaeru starsky         Next.js Starsky webclient
+--   :Kaeru starsky         SvelteKit Starsky webclient
 --   :Clina [action]            TypeScript AI Coding IDE for Neovim
 local Config = require("kaeru.config")
 local Spec = require("kaeru.spec")
