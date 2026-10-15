@@ -1206,6 +1206,70 @@ test("upgrator: detection follows manifest files and render reports the plan", f
   assert(text:find("1 outdated package", 1, true), "summary count")
 end)
 
+test("winso: wrapping, chapter rendering, search, info and Termux detection", function()
+  local W = require("kaeru.winso")
+  local lines = W.wrap("The quick brown fox jumps over the lazy dog.\n\nSecond paragraph here.", 16)
+  eq(lines[1], "The quick brown", "word wrap at 16")
+  eq(lines[2], "fox jumps over")
+  eq(lines[3], "the lazy dog.")
+  eq(lines[4], "", "blank line between paragraphs")
+  eq(lines[5], "Second paragraph")
+  local long = W.wrap("abcdefghijklmnopqrstuvwxyz", 10)
+  eq(long[1], "abcdefghij", "a word longer than the column is split")
+  eq(long[3], "uvwxyz")
+  for _, l in ipairs(W.wrap(("word "):rep(200), 30)) do
+    assert(#l <= 30, "no line wider than the column: " .. #l)
+  end
+
+  local book = {
+    title = "Demo", author = "A. Writer", format = "txt", path = "/x/demo.txt",
+    chapters = {
+      { title = "One", text = "Alpha beta.\n\nGamma needle delta." },
+      { title = "Two", text = "Nothing here.\nAnother needle." },
+    },
+  }
+  local rendered = W.render_chapter(book, 2, 40)
+  eq(rendered[1], "== Two ==", "chapter heading")
+  local dup = { chapters = { { title = "Middle", text = "Middle\n\nChapter two text." } } }
+  local dl = W.render_chapter(dup, 1, 40)
+  eq(dl[1], "== Middle ==")
+  eq(dl[3], "Chapter two text.", "the repeated title is not shown twice")
+  local hits = W.search(book, "NEEDLE")
+  eq(#hits, 2, "case-insensitive search across chapters")
+  eq(hits[1].chapter, 1)
+  eq(hits[2].chapter, 2)
+  eq(hits[2].line, 2)
+  eq(#W.search(book, ""), 0)
+  local info = table.concat(W.info_lines(book), "\n")
+  assert(info:find("Chapters: 2", 1, true), "chapter count")
+  assert(info:find("Title:    Demo", 1, true), "title")
+
+  eq(W.is_termux({ TERMUX_VERSION = "0.118" }), true, "TERMUX_VERSION marks Termux")
+  eq(W.is_termux({ PREFIX = "/data/data/com.termux/files/usr" }), true, "PREFIX path marks Termux")
+  eq(W.is_termux({ HOME = "/home/user" }), false)
+  local hints = W.install_hints(true)
+  eq(hints.pdf, "pkg install poppler", "Termux installs tools with pkg")
+end)
+
+test("winso: extractor output parses and the library round-trips", function()
+  local W = require("kaeru.winso")
+  local book = assert(W.parse_extract('{"title":"T","author":"A","format":"epub","chapters":[{"title":"c","text":"hello\\nworld"}]}'))
+  eq(book.title, "T")
+  eq(book.chapters[1].text, "hello\nworld", "JSON escapes decode")
+  local bad, err = W.parse_extract("<html>not json")
+  eq(bad, nil)
+  assert(err, "bad extractor output reports an error")
+
+  local path = "/tmp/kaeru-winso-library-" .. tostring(os.time()) .. ".json"
+  local lib = { books = { ["/x/book.epub"] = { title = "Book", chapter = 3, line = 7, last = 1 } }, bookmarks = {} }
+  assert(W.write_library(lib, path))
+  local back = W.read_library(path)
+  eq(back.books["/x/book.epub"].chapter, 3, "chapter progress survives")
+  eq(back.books["/x/book.epub"].line, 7, "line survives")
+  eq(#W.read_library("/tmp/kaeru-winso-missing.json").books, 0, "missing library is empty, not an error")
+  os.remove(path)
+end)
+
 -- SFTP UI, NeoCodeium AI preset, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
 test("sftp ui helpers and the NeoCodeium AI preset", function()
   local Sftp = require("kaeru.sftp")

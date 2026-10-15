@@ -292,6 +292,8 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
     require("kaeru.cve").command({ unpack(args, 2) })
   elseif sub == "upgrade" or sub == "upgrator" then
     require("kaeru.upgrator").command({ unpack(args, 2) })
+  elseif sub == "winso" or sub == "ebook" then
+    require("kaeru.winso").command({ unpack(args, 2) })
   elseif sub == "starsky" or sub == "web" then
     local starsky = require("kaeru.starsky")
     local action = args[2] or "start"
@@ -387,3 +389,19 @@ vim.schedule(function()
     require("kaeru.complete").setup_cmdline()
   end)
 end)
+
+vim.api.nvim_create_user_command("Winso", function(cmd)
+  require("kaeru.winso").command(cmd.fargs)
+end, {
+  nargs = "*",
+  complete = function(arglead, cmdline)
+    local parts = vim.split(cmdline, "%s+", { trimempty = true })
+    if #parts <= 2 and not cmdline:match("%s$") or #parts <= 1 then
+      return vim.tbl_filter(function(word)
+        return word:find(arglead, 1, true) == 1
+      end, { "open", "library", "bookmarks", "search", "info" })
+    end
+    return vim.fn.getcompletion(arglead, "file")
+  end,
+  desc = "Winso: read eBooks (epub, fb2, pdf, mobi, txt, md, docx, html)",
+})
