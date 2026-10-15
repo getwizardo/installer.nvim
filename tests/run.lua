@@ -1973,23 +1973,118 @@ test("karu: the Lua façade reports availability, devices and the CLI surface", 
   eq(Karu.default_port, 8009)
   assert(Karu.default_name:find("Karu", 1, true), Karu.default_name)
   -- no node_modules / dist in the harness: devices() must degrade to the config list
-  local devices = Karu.devices()
-  eq(type(devices), "table")
-  local label = Karu.device_label({ name = "TV", address = "10.0.0.5", port = 8009 })
-  assert(label:find("10.0.0.5", 1, true) and label:find("8009", 1, true), "device labels carry the address: " .. label)
-  assert(Karu.device_label({ name = "TV", host = "10.0.0.6" }):find("10.0.0.6", 1, true), "host fallback")
+  eq(type(Karu.devices()), "table")
   local snapshot = Karu.snapshot()
   eq(type(snapshot), "table")
   eq(type(snapshot.available), "boolean")
   eq(type(snapshot.devices), "table")
+  assert(Karu.device_label({ name = "TV", address = "10.0.0.5", port = 8009 }):find("8009", 1, true), "labels carry the port")
+  eq(Karu.parse_receive_flags({ "--port", "8009" }).port, 8009)
+end)
+
+test("karu: the CLI bridge runs the CLI and parses its JSON events", function()
+  local Karu = require("kaeru.karu")
+  -- Pretend to be a real Neovim with the plugin checked out: Node present, the
+  -- launcher executable, jobstart backed by a scripted process.
+  local saved = {
+    uv = vim.uv,
+    executable = vim.fn.executable,
+    system = vim.fn.system,
+    jobstart = vim.fn.jobstart,
+    jobstop = vim.fn.jobstop,
+  }
+  vim.uv = {
+    fs_stat = function()
+      return { type = "file" }
+    end,
+    fs_access = function()
+      return true
+    end,
+  }
+  vim.fn.executable = function()
+    return 1
+  end
+  vim.fn.system = function()
+    return "v22.6.0\n"
+  end
+  local runs = {}
+  local function script(lines, code)
+    return function(argv, opts)
+      runs[#runs + 1] = { argv = argv, opts = opts }
+      if opts.on_stdout then
+        local payload = {}
+        for _, line in ipairs(lines) do
+          payload[#payload + 1] = line
+        end
+        payload[#payload + 1] = ""
+        opts.on_stdout(11, payload, nil)
+      end
+      if opts.on_exit then
+        opts.on_exit(11, code or 0)
+      end
+      return 11
+    end
+  end
+  vim.fn.jobstop = function()
+    return true
+  end
+
+  eq(Karu.available(), true)
+  assert(Karu.cli()[1]:find("karu", 1, true), "the launcher should be found")
+
+  -- a one-shot request: the JSON line reaches the callback
+  vim.fn.jobstart = script({ '{"ok":true,"version":"1.0.0","port":8009,"namespaces":["a","b"]}' })
+  local answered
+  Karu.request({ "info" }, function(err, payload)
+    answered = { err = err, payload = payload }
+  end)
+  assert(answered, "the request must answer")
+  eq(answered.err, nil)
+  eq(answered.payload.port, 8009)
+  assert(table.concat(runs[1].argv, " "):find("info --json", 1, true), table.concat(runs[1].argv, " "))
+
+  -- an error payload becomes an error string
+  vim.fn.jobstart = script({ '{"ok":false,"error":"no Cast devices found"}' })
+  local failed
+  Karu.request({ "status" }, function(err)
+    failed = err
+  end)
+  eq(failed, "no Cast devices found")
+
+  -- the receiver: `ready` JSON is parsed, the process is tracked, flags are passed
+  vim.fn.jobstart = script({ '{"ok":true,"event":"ready","name":"Vim TV","port":41234,"address":"127.0.0.1"}' })
+  local notified
+  local job = Karu.receive({ name = "Vim TV", port = 0, mdns = false }, function(info)
+    notified = info
+  end)
+  eq(job, 11)
+  eq(Karu.receiver_running(), true)
+  assert(notified and notified.port == 41234, "the ready event must be reported")
+  eq(Karu.receiver_info().port, 41234)
+  local argv = table.concat(runs[#runs].argv, " ")
+  for _, want in ipairs({ "receive", "--json", "--name Vim TV", "--port 0", "--no-mdns" }) do
+    assert(argv:find(want, 1, true), "argv missing " .. want .. ": " .. argv)
+  end
+  eq(Karu.stop_receiver(), true)
+  eq(Karu.receiver_running(), false)
+  assert(Karu.device_label({ name = "TV", host = "10.0.0.5", port = 8009 }):find("10.0.0.5", 1, true), "device labels carry the address")
+  local snapshot = Karu.snapshot()
   eq(type(snapshot.cli), "string")
+  assert(snapshot.cli:find("karu", 1, true), snapshot.cli)
+  eq(type(snapshot.subcommands), "table")
   -- the receiver flags map onto the CLI contract
-  local flags = Karu.parse_receive_flags({ "--name", "Karu · Neovim", "--port", "0", "--no-mdns", "--fallback", "mpv" })
+  local flags = Karu.parse_receive_flags({ "--name", "Karu · Neovim", "--port", "0", "--no-mdns", "--fallback", "mpv", "--bridge", "http://127.0.0.1:8722", "--token", "t" })
   eq(flags.name, "Karu · Neovim")
   eq(flags.port, 0)
   eq(flags.mdns, false)
   eq(flags.fallback, "mpv")
-  eq(Karu.parse_receive_flags({ "--bridge", "http://127.0.0.1:8722", "--token", "t" }).token, "t")
+  eq(flags.token, "t")
+
+  vim.uv = saved.uv
+  vim.fn.executable = saved.executable
+  vim.fn.system = saved.system
+  vim.fn.jobstart = saved.jobstart
+  vim.fn.jobstop = saved.jobstop
 end)
 
 test("karu: :Karu, completion and the integrations report know about Cast", function()

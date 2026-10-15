@@ -197,10 +197,12 @@ function M.run(args, opts, on_event, on_exit)
     return nil, "jobstart is unavailable in this environment"
   end
 
-  local argv = { cmd[1] }
-  for _, arg in ipairs(args) do
-    argv[#argv + 1] = arg
-  end
+  local argv = {}
+  vim.list_extend(argv, cmd)
+  vim.list_extend(argv, args)
+
+  -- `on_event` is a positional, `opts.on_event` kept for 2.0 callers.
+  local emit = on_event or opts.on_event
 
   local buffers = { out = "", err = "" }
   local function consume(stream, data)
@@ -214,15 +216,27 @@ function M.run(args, opts, on_event, on_exit)
       if line ~= "" then
         local ok, payload = pcall(Json.decode, line)
         if ok and type(payload) == "table" then
-          if opts.on_event then
-            opts.on_event(payload)
+          if emit then
+            emit(payload)
           end
-        elseif opts.on_event and line:sub(1, 1) ~= "#" then
-          opts.on_event(line)
+        elseif emit and line:sub(1, 1) ~= "#" then
+          emit(line)
         end
       end
     end
     buffers[stream] = text
+  end
+
+  -- A line without a trailing newline is still a line: flush both buffers when
+  -- the process ends, so `karu <cmd> --json` is never lost to buffering.
+  local function flush()
+    for _, stream in ipairs({ "out", "err" }) do
+      local text = buffers[stream] or ""
+      if text ~= "" then
+        buffers[stream] = ""
+        consume(stream, text .. "\n")
+      end
+    end
   end
 
   local job = vim.fn.jobstart(argv, {
@@ -236,6 +250,7 @@ function M.run(args, opts, on_event, on_exit)
       consume("err", data)
     end,
     on_exit = function(_, code)
+      flush()
       if opts.on_exit then
         opts.on_exit(code)
       end
@@ -257,7 +272,10 @@ function M.request(args, cb)
   end
   local done = false
   local job
-  job = M.run(vim.list_extend({ "--json" }, args), {}, function(payload)
+  local argv = {}
+  vim.list_extend(argv, args)
+  argv[#argv + 1] = "--json"
+  job = M.run(argv, {}, function(payload)
     if done or type(payload) ~= "table" then
       return
     end
@@ -467,6 +485,7 @@ function M.receive(opts, on_ready)
   end
   local args = {
     "receive",
+    "--json",
     "--name", opts.name or cfg.name,
     "--port", tostring(opts.port or cfg.port),
     "--bridge", opts.bridge or cfg.bridge or cfg.kikru_url or "http://127.0.0.1:8722",
@@ -552,7 +571,7 @@ function M.snapshot()
     info = M._receiver.info,
     devices = M.devices(),
     node = M.node_version(),
-    cli = M.cli() or "",
+    cli = table.concat(M.cli() or {}, " "),
     summary = M.summary(),
     subcommands = M.subcommands(),
     config = M.config(),

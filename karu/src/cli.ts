@@ -24,6 +24,9 @@ interface Args {
   flags: Map<string, string | boolean>;
 }
 
+/** Flags that never take a value: `karu --json info` must not eat "info". */
+const BOOLEAN_FLAGS = new Set(["json", "help", "version", "youtube", "mdns", "autoplay", "verbose", "quiet", "ui", "watch", "debug"]);
+
 export function parseArgs(argv: string[]): Args {
   const positionals: string[] = [];
   const flags = new Map<string, string | boolean>();
@@ -35,7 +38,13 @@ export function parseArgs(argv: string[]): Args {
       const negated = rawName.startsWith("no-");
       if (inline !== undefined) flags.set(name, inline);
       else if (negated) flags.set(name, false);
-      else if (i + 1 < argv.length && !argv[i + 1]!.startsWith("--")) flags.set(name, argv[++i]!);
+      else if (BOOLEAN_FLAGS.has(name)) {
+        // `--autoplay false` is still accepted, anything else is just the flag.
+        const next = argv[i + 1];
+        if (next !== undefined && /^(true|false|yes|no|0|1)$/i.test(next)) flags.set(name, next);
+        else flags.set(name, true);
+        if (flags.get(name) !== true) i++;
+      } else if (i + 1 < argv.length && !argv[i + 1]!.startsWith("--")) flags.set(name, argv[++i]!);
       else flags.set(name, true);
       continue;
     }

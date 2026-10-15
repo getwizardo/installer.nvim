@@ -87,6 +87,29 @@ function startStubKikru(): Promise<{ server: Server; port: number; requests: str
   });
 }
 
+test("cli: flags may precede the subcommand and never eat it", () => {
+  // `karu --json info` is how the Neovim bridge calls us
+  const reordered = parseArgs(["--json", "info"]);
+  assert.equal(reordered.command, "info");
+  assert.equal(reordered.flags.get("json"), true);
+
+  const trailing = parseArgs(["status", "--json"]);
+  assert.equal(trailing.command, "status");
+  assert.equal(trailing.flags.get("json"), true);
+
+  const autoplay = parseArgs(["cast", "https://example.com/a.mp3", "--autoplay", "false", "--json"]);
+  assert.equal(autoplay.command, "cast");
+  assert.equal(autoplay.positionals[0], "https://example.com/a.mp3");
+  assert.equal(autoplay.flags.get("autoplay"), "false");
+
+  const bare = parseArgs(["cast", "https://example.com/a.mp3", "--autoplay"]);
+  assert.equal(bare.flags.get("autoplay"), true);
+
+  const mdns = parseArgs(["receive", "--no-mdns", "--port", "0"]);
+  assert.equal(mdns.flags.get("mdns"), false);
+  assert.equal(mdns.flags.get("port"), "0");
+});
+
 test("cli: argument parsing", () => {
   const basic = parseArgs(["cast", "https://x/y.mp3", "--device", "Living Room", "--json"]);
   assert.equal(basic.command, "cast");
