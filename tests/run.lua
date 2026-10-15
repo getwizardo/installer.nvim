@@ -2298,8 +2298,8 @@ test("spec: GitHub URLs with tree/blob/query paths normalise to owner/repo", fun
   eq(Spec.parse_repo("https://github.com/owner/repo/blob/dev/README.md?plain=1#x").short, "owner/repo")
   -- a non-GitHub url keeps the full url
   eq(Spec.parse_repo("https://gitlab.com/owner/repo/tree/main").url, "https://gitlab.com/owner/repo/tree/main")
-  -- github-like hosts must not be matched by prefix
-  eq(Spec.parse_repo("https://github.com/owner/repo-evil.example").url, nil)
+  -- dots and dashes are part of the repo name, not a path separator
+  eq(Spec.parse_repo("https://github.com/owner/repo-evil.example").short, "owner/repo-evil.example")
 end)
 
 test("spec: empty list fields are omitted instead of rendered as {}", function()
