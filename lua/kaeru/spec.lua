@@ -93,8 +93,11 @@ function M.parse_repo(input)
     return nil, "Repository is required (owner/repo or a git URL)"
   end
 
-  -- https://github.com/owner/repo(.git)(/)
-  local owner, repo = input:match("^https?://github%.com/([%w_.-]+)/([%w_.-]+)/?$")
+  -- https://github.com/owner/repo(.git)(/)(tree/<branch>|blob/…|?query|#frag)
+  local owner, repo, rest = input:match("^https?://github%.com/([%w_.-]+)/([%w_.-]+)(.*)$")
+  if owner and not (rest == "" or rest:match("^[/?#]")) then
+    owner = nil
+  end
   if not owner then
     -- git@github.com:owner/repo.git
     owner, repo = input:match("^git@github%.com:([%w_.-]+)/([%w_.-]+)$")
@@ -335,6 +338,8 @@ function M.build(form)
           return nil, ferr
         end
         add(key, raw(reindent(text)))
+      else
+        return nil, ("`%s` must be true, false or a `function() ... end`"):format(key)
       end
     end
   end
@@ -343,7 +348,9 @@ function M.build(form)
     if not blank(form[key]) then
       local val = form[key]
       if type(val) == "table" then
-        add(key, #val == 1 and val[1] or val)
+        if #val > 0 then
+          add(key, #val == 1 and val[1] or val)
+        end
       elseif trim(val):match("^{") then
         local text, terr = M.validate_raw(val, "table", key)
         if terr then
@@ -352,7 +359,9 @@ function M.build(form)
         add(key, raw(reindent(text)))
       else
         local list = csv(val)
-        add(key, #list == 1 and list[1] or list)
+        if #list > 0 then
+          add(key, #list == 1 and list[1] or list)
+        end
       end
     end
   end
@@ -364,7 +373,7 @@ function M.build(form)
         return nil, kerr
       end
       add("keys", raw(reindent(text)))
-    else
+    elseif #csv(form.keys) > 0 then
       add("keys", csv(form.keys))
     end
   end
@@ -381,7 +390,9 @@ function M.build(form)
       local parsed = M.parse_repo(dep)
       deps[#deps + 1] = parsed and (parsed.short or parsed.url) or dep
     end
-    add("dependencies", deps)
+    if #deps > 0 then
+      add("dependencies", deps)
+    end
   end
 
   if not blank(form.build) then

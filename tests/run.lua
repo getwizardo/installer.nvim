@@ -2291,6 +2291,33 @@ test("native completion covers the vanilla Neovim command line", function()
   vim.fn.getcompletion = nil
 end)
 
+-- Spec generation regressions -------------------------------------------------
+test("spec: GitHub URLs with tree/blob/query paths normalise to owner/repo", function()
+  eq(Spec.parse_repo("https://github.com/owner/repo/tree/main").short, "owner/repo")
+  eq(Spec.parse_repo("https://github.com/owner/repo.git/").short, "owner/repo")
+  eq(Spec.parse_repo("https://github.com/owner/repo/blob/dev/README.md?plain=1#x").short, "owner/repo")
+  -- a non-GitHub url keeps the full url
+  eq(Spec.parse_repo("https://gitlab.com/owner/repo/tree/main").url, "https://gitlab.com/owner/repo/tree/main")
+  -- github-like hosts must not be matched by prefix
+  eq(Spec.parse_repo("https://github.com/owner/repo-evil.example").url, nil)
+end)
+
+test("spec: empty list fields are omitted instead of rendered as {}", function()
+  local gen = assert(Spec.generate({ repo = "owner/repo", keys = ",", event = " , ", cmd = ",", ft = "", dependencies = "," }, { header = false }))
+  eq(gen.source, 'return {\n  "owner/repo",\n}\n')
+end)
+
+test("spec: enabled/cond reject values that are neither boolean nor function", function()
+  local built, err = Spec.build({ repo = "owner/repo", enabled = "maybe" })
+  eq(built, nil)
+  assert(err and err:find("enabled", 1, true), tostring(err))
+  local _, cerr = Spec.build({ repo = "owner/repo", cond = "sometimes" })
+  assert(cerr and cerr:find("cond", 1, true), tostring(cerr))
+  local ok = assert(Spec.generate({ repo = "owner/repo", enabled = "false", cond = "function() return true end" }, { header = false }))
+  assert(ok.source:find("enabled = false", 1, true), ok.source)
+  assert(loadstring(ok.source), "generated spec must be valid Lua")
+end)
+
 print(("\n%d passed, %d failed"):format(pass, fail))
 if fail > 0 then
   os.exit(1)

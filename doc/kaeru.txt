@@ -109,7 +109,8 @@ their READMEs and install them with a single key.
 Each line of the modal is a field of the lazy.nvim spec. Only `Repository`
 is required. Fields map 1:1 to https://lazy.folke.io/spec:
 
-  Repository     `owner/repo`, `https://github.com/owner/repo` or any git URL
+  Repository     `owner/repo`, `https://github.com/owner/repo` (also with a
+                 trailing `.git`, `/tree/<branch>` or `/blob/...`) or any git URL
   File           name of the generated file (default derived from the repo)
   Name           spec `name`
   Lazy           spec `lazy` (true/false)
@@ -124,10 +125,32 @@ is required. Fields map 1:1 to https://lazy.folke.io/spec:
   Config         `true`, or `function` to generate a `config()` skeleton
   Pin            `true` -> `pin = true`
 
+Notes on the values:
+
+  - Empty fields are left out of the generated spec. A list field containing
+    only commas (e.g. `Keys: ,`) produces no `keys = {}` entry.
+  - `Keys`, `Dependencies` and `Build` also accept a raw Lua table, e.g.
+    `{ { "<leader>e", "<cmd>Neotree<cr>", desc = "Explorer" } }`. `Opts`
+    accepts a table literal, `Init` / `Config` accept a raw `function ... end`.
+    Each raw value is checked to be a valid Lua expression of the right type
+    before the file is written; `opts` and `keys` are only evaluated in a
+    sandbox, so references to plugins that are not installed yet
+    (`require("cmp")`, `vim.cmd.Neotree`) do not fail validation.
+  - `Lazy` and `Pin` take `true` / `false` (`yes`/`no`, `on`/`off` and `1`/`0`
+    also work). Any other value is an error. The `enabled` and `cond` spec
+    fields are not in the modal; when generating specs from Lua with
+    `require("kaeru.spec").generate()` they take `true` / `false` or a raw
+    `function() ... end`, and anything else is an error.
+  - Values that are not a valid number for `Priority`, or a repository that
+    is neither `owner/repo` nor a git URL, are rejected before writing.
+
 Keys inside the modal:
 
   <CR> / <C-s>      write the file and install
+  gs / <C-w>        write the file only, do not install
   <Tab> / <S-Tab>   next / previous field (also <CR>, <Up>, <Down> in insert)
+  <C-Space>         context-aware autocomplete for the current field
+  <C-r> / gp        fetch README.md of the repository and fill the fields
   <C-b>             browse GitHub and fill the repository field
   dd                clear the current field
   q / <Esc>         close
