@@ -1,8 +1,9 @@
 -- :Clina — NeoCodeium (`monkoose/neocodeium`) AI Coding IDE integration for Neovim
 -- Reference: https://github.com/monkoose/neocodeium
-local Config = require("installer.config")
-local Process = require("installer.process")
-local UI = require("installer.ui")
+local Config = require("kaeru.config")
+local Process = require("kaeru.process")
+local UI = require("kaeru.ui")
+local Compat = require("kaeru.compat")
 
 local M = {}
 
@@ -124,8 +125,8 @@ function M.neocodeium_available()
   return false, nil
 end
 
---- Return the canonical `InstallerForm` spec for `monkoose/neocodeium`.
----@return InstallerForm
+--- Return the canonical `KaeruForm` spec for `monkoose/neocodeium`.
+---@return KaeruForm
 function M.neocodeium_spec()
   return {
     repo = "monkoose/neocodeium",
@@ -156,7 +157,7 @@ function M.setup_neocodeium(opts)
   opts = opts or {}
   local ok, neocodeium = M.neocodeium_available()
   if ok and neocodeium then
-    neocodeium.setup(vim.tbl_deep_extend("force", {
+    neocodeium.setup(Compat.tbl_deep_extend("force", {
       enabled = true,
       manual = false,
       show_label = true,
@@ -166,7 +167,7 @@ function M.setup_neocodeium(opts)
           return false
         end
         local ft = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
-        if ft == "TelescopePrompt" or ft == "dap-repl" or ft == "installer-form" then
+        if ft == "TelescopePrompt" or ft == "dap-repl" or ft == "kaeru-form" then
           return false
         end
         return true
@@ -184,7 +185,7 @@ function M.setup_neocodeium(opts)
   end
 
   if vim and vim.api and vim.api.nvim_create_autocmd then
-    local group = vim.api.nvim_create_augroup("installer.clina.neocodeium", { clear = true })
+    local group = vim.api.nvim_create_augroup("kaeru.clina.neocodeium", { clear = true })
     vim.api.nvim_create_autocmd("User", {
       group = group,
       pattern = "NeoCodeiumCompletionDisplayed",
@@ -205,16 +206,16 @@ function M.setup_neocodeium(opts)
   end
 end
 
---- Install or save `monkoose/neocodeium` spec via `installer.nvim`.
+--- Install or save `monkoose/neocodeium` spec via `kaeru.nvim`.
 ---@param save_only? boolean
 ---@return boolean ok, string? path
 function M.install_neocodeium(save_only)
-  local Installer = require("installer")
+  local Kaeru = require("kaeru")
   local spec = M.neocodeium_spec()
   if save_only then
-    return Installer.save(spec, { force = true })
+    return Kaeru.save(spec, { force = true })
   end
-  return Installer.add(spec, { force = true })
+  return Kaeru.add(spec, { force = true })
 end
 
 -- NeoCodeium API wrappers ---------------------------------------------------------------
@@ -369,7 +370,7 @@ function M.run_ts_engine(payload, cb)
       cb(nil, M._fallback_synthesize(payload))
       return
     end
-    local out = vim.trim(res.stdout or "")
+    local out = Compat.trim(res.stdout or "")
     local ok, decoded = pcall(function()
       return vim.json and vim.json.decode(out) or vim.fn.json_decode(out)
     end)
@@ -505,7 +506,7 @@ end
 
 function M.send(prompt, opts)
   opts = opts or {}
-  prompt = vim.trim(prompt or "")
+  prompt = Compat.trim(prompt or "")
   if prompt == "" then
     return UI.notify("Enter a prompt for :Clina", vim.log.levels.WARN)
   end
@@ -586,7 +587,7 @@ end
 --- Open the `:Clina` NeoCodeium IDE Control Center modal in Neovim.
 ---@param initial_prompt? string
 function M.ide(initial_prompt)
-  if initial_prompt and vim.trim(initial_prompt) ~= "" then
+  if initial_prompt and Compat.trim(initial_prompt) ~= "" then
     M.send(initial_prompt)
     return
   end
@@ -597,7 +598,7 @@ function M.ide(initial_prompt)
     title = " :Clina · NeoCodeium (monkoose/neocodeium) AI Coding IDE ",
     width = width,
     height = height,
-    filetype = "installer-clina",
+    filetype = "kaeru-clina",
   })
   vim.wo[win].cursorline = true
 
@@ -630,7 +631,7 @@ function M.ide(initial_prompt)
     lines[#lines + 1] = ""
     lines[#lines + 1] = "  🔤 NeoCodeium Commands & Actions (press key in this dashboard):"
     lines[#lines + 1] = "    [i] Install / Save `lua/plugins/neocodeium.lua` spec to lazy.nvim"
-    lines[#lines + 1] = "    [s] Review `monkoose/neocodeium` spec in `:Installer` modal"
+    lines[#lines + 1] = "    [s] Review `monkoose/neocodeium` spec in `:Kaeru` modal"
     lines[#lines + 1] = "    [a] Authenticate (`:NeoCodeium auth`) — save Windsurf/Codeium API token"
     lines[#lines + 1] = "    [c] Open NeoCodeium Chat (`:NeoCodeium chat`) in browser"
     lines[#lines + 1] = "    [t] Toggle global NeoCodeium completion (`:NeoCodeium toggle`)"
@@ -660,7 +661,7 @@ function M.ide(initial_prompt)
   end)
   UI.map(buf, "s", function()
     close()
-    require("installer").open(M.neocodeium_spec())
+    require("kaeru").open(M.neocodeium_spec())
   end)
   UI.map(buf, "a", function()
     close()
@@ -688,7 +689,7 @@ function M.ide(initial_prompt)
   end)
   UI.map(buf, "w", function()
     close()
-    require("installer.starsky").open()
+    require("kaeru.starsky").open()
   end)
 
   render()
@@ -700,7 +701,7 @@ end
 ---@param bang? boolean
 function M.dispatch(args, range_text, bang)
   local sub = (args[1] or ""):lower()
-  local rest = table.concat(vim.list_slice(args, 2), " ")
+  local rest = table.concat(Compat.list_slice(args, 2), " ")
 
   if sub == "" or sub == "ide" or sub == "neocodeium" or sub == "open" then
     M.ide(rest ~= "" and rest or nil)
@@ -748,9 +749,12 @@ function M.dispatch(args, range_text, bang)
   elseif sub == "provider" or sub == "model" then
     M.select_provider(rest)
   elseif sub == "presets" or sub == "plugins" then
-    require("installer.ai").open()
+    require("kaeru.ai").open()
   elseif sub == "web" or sub == "starsky" then
-    require("installer.starsky").open()
+    require("kaeru.starsky").open()
+  elseif sub == "login" or sub == "logout" or sub == "whoami" then
+    -- The GitHub account is shared with `:Kaeru login` (a token file + `gh`).
+    require("kaeru.account")[sub]()
   elseif sub == "status" then
     M.status()
   else

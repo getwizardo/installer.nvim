@@ -4,7 +4,7 @@ const NEOCODEIUM_SUGGESTIONS: Record<string, string[]> = {
   lua: [
     'require("neocodeium").setup({ manual = false, show_label = true })',
     'vim.keymap.set("i", "<A-f>", function() require("neocodeium").accept() end)',
-    'require("installer").save({ repo = "monkoose/neocodeium", event = "VeryLazy" })',
+    'require("kaeru").save({ repo = "monkoose/neocodeium", event = "VeryLazy" })',
   ],
   typescript: [
     "export const neocodeiumStatus = { engine: 'monkoose/neocodeium', active: true };",
@@ -31,7 +31,7 @@ const BOOT_STEPS = [
   "Connecting GitHub Live Repository Autocomplete API ............ [  OK  ]",
   "Indexing https://mason-registry.dev (601 pkgs / 296 LSPs) ..... [  OK  ]",
   "Binding :Clina -> NeoCodeium (monkoose/neocodeium) ............ [  OK  ]",
-  "Starting :MusicPlayer 10-Band EQ & 2-Neovim TCP RPC ........... [  OK  ]",
+  "Starting :Kikru 10-Band EQ & 2-Neovim TCP RPC ........... [  OK  ]",
   "Initializing Dual-Pane SFTP Studio & Custom Web Components .... [  OK  ]",
   "Mounting shadcn/ui + Vaul Drawer & Code IDE Workspace ......... [READY ]",
 ];
@@ -186,7 +186,7 @@ export function registerStarskyWebComponents(): void {
             <textarea id="code-area" spellcheck="false"></textarea>
           </div>
           <div class="statusbar">
-            <span id="status-left"><span class="mode-pill">NORMAL</span> lua/installer/spec.lua</span>
+            <span id="status-left"><span class="mode-pill">NORMAL</span> lua/kaeru/spec.lua</span>
             <span id="status-right">NeoCodeium [1/3] · UTF-8 · Ln 1, Col 1</span>
           </div>
         `;
@@ -313,7 +313,7 @@ export function registerStarskyWebComponents(): void {
         }
         this.gutter.textContent = nums.join("\n");
 
-        const filepath = this.getAttribute("filepath") || "lua/installer/spec.lua";
+        const filepath = this.getAttribute("filepath") || "lua/kaeru/spec.lua";
         const lang = (this.getAttribute("language") || "lua").toUpperCase();
         const upto = this.textarea.value.slice(0, this.textarea.selectionStart || 0).split("\n");
         const ln = upto.length;
@@ -594,10 +594,10 @@ export function registerStarskyWebComponents(): void {
             }
           </style>
           <div class="term-out" id="term-out">[Starsky Neovim Ex-Command Terminal · Custom Web Component &lt;starsky-terminal&gt;]
-Type :Installer, :Clina, :NeoCodeium auth, :MusicPlayer server, or :Mason and press Enter.</div>
+Type :Kaeru, :Clina, :NeoCodeium auth, :Kikru server, or :Mason and press Enter.</div>
           <div class="term-in-row">
             <span class="prompt-char">:</span>
-            <input id="term-in" placeholder="Clina status | MusicPlayer server 41999 | Installer save folke/noice.nvim" />
+            <input id="term-in" placeholder="Clina status | Kikru server 41999 | Kaeru save folke/noice.nvim" />
           </div>
         `;
       }

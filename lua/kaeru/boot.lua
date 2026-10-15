@@ -1,5 +1,5 @@
--- ASCII Boot Animation for installer.nvim & Starsky (`:Installer boot`)
-local UI = require("installer.ui")
+-- ASCII Boot Animation for kaeru.nvim & Starsky (`:Kaeru boot`)
+local UI = require("kaeru.ui")
 
 local M = {}
 
@@ -19,7 +19,7 @@ M.boot_steps = {
   { id = "github", label = "Connecting GitHub Live Autocomplete API", detail = "api.github.com [READY]" },
   { id = "mason", label = "Mounting https://mason-registry.dev Catalog", detail = "601 pkgs / 296 LSPs [MOUNTED]" },
   { id = "clina", label = "Binding :Clina -> NeoCodeium (monkoose/neocodeium)", detail = "Ghost-Text + Windsurf [BOUND]" },
-  { id = "music", label = "Starting :MusicPlayer 10-Band EQ & 2-Nvim RPC", detail = "Server<->Client TCP [ONLINE]" },
+  { id = "music", label = "Starting :Kikru 10-Band EQ & 2-Nvim RPC", detail = "Server<->Client TCP [ONLINE]" },
   { id = "sftp", label = "Loading Dual-Pane SFTP Studio & SSH Workers", detail = "Batch SFTP [READY]" },
   { id = "web", label = "Booting Starsky Web Code IDE (Web Components + Vaul)", detail = "Next.js 16 TS [READY]" },
 }
@@ -59,7 +59,7 @@ function M.render_frame(step_idx, width)
 
   lines[#lines + 1] = ""
   if step_idx > total then
-    lines[#lines + 1] = "    ⚡ SYSTEM ONLINE — Press <CR> for :Installer, `c` for :Clina, `m` for :MusicPlayer, `q` to close"
+    lines[#lines + 1] = "    ⚡ SYSTEM ONLINE — Press <CR> for :Kaeru, `c` for :Clina, `m` for :Kikru, `q` to close"
   else
     lines[#lines + 1] = "    Booting subsystems… (press any key to skip)"
   end
@@ -73,10 +73,10 @@ function M.play(opts)
   local width = 90
   local height = #M.ascii_logo + #M.boot_steps + 9
   local buf, win = UI.open({
-    title = " installer.nvim · ASCII Boot Sequence ",
+    title = " kaeru.nvim · ASCII Boot Sequence ",
     width = width,
     height = height,
-    filetype = "installer-boot",
+    filetype = "kaeru-boot",
   })
 
   local step = 1
@@ -120,15 +120,15 @@ function M.play(opts)
   UI.map(buf, "<Space>", close_boot)
   UI.map(buf, "<CR>", function()
     close_boot()
-    require("installer").open()
+    require("kaeru").open()
   end)
   UI.map(buf, "c", function()
     close_boot()
-    require("installer.clina").ide()
+    require("kaeru.clina").ide()
   end)
   UI.map(buf, "m", function()
     close_boot()
-    require("installer.music").ui()
+    require("kaeru.kikru").ui()
   end)
 
   draw()

@@ -1,11 +1,11 @@
--- Starsky for Neovim Webclient integration (`:Installer starsky` / `:Clina web`).
+-- Starsky for Neovim Webclient integration (`:Kaeru starsky` / `:Clina web`).
 --
 -- Manages the Next.js TypeScript webclient & API server located in `starsky/`
--- inside the installer.nvim repository (or a custom directory configured in
+-- inside the kaeru.nvim repository (or a custom directory configured in
 -- `options.starsky.dir`).
-local Config = require("installer.config")
-local Process = require("installer.process")
-local UI = require("installer.ui")
+local Config = require("kaeru.config")
+local Process = require("kaeru.process")
+local UI = require("kaeru.ui")
 
 local M = {}
 

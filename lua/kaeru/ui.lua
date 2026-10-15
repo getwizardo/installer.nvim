@@ -1,9 +1,9 @@
 -- Small floating-window helpers shared by the modal form and the browser.
-local Config = require("installer.config")
+local Config = require("kaeru.config")
 
 local M = {}
 
-M.ns = vim.api.nvim_create_namespace("installer.nvim")
+M.ns = vim.api.nvim_create_namespace("kaeru.nvim")
 
 local has_title = vim.fn.has("nvim-0.9") == 1
 local has_footer = vim.fn.has("nvim-0.10") == 1
@@ -18,7 +18,7 @@ function M.size(value, total)
   return math.floor(value)
 end
 
----@class InstallerFloatOpts
+---@class KaeruFloatOpts
 ---@field title? string
 ---@field footer? string
 ---@field width? integer
@@ -30,7 +30,7 @@ end
 ---@field zindex? integer
 
 --- Create a scratch buffer + floating window.
----@param opts InstallerFloatOpts
+---@param opts KaeruFloatOpts
 ---@return integer buf, integer win
 function M.open(opts)
   opts = opts or {}
@@ -103,7 +103,7 @@ end
 ---@param msg string
 ---@param level? integer
 function M.notify(msg, level)
-  vim.notify(msg, level or vim.log.levels.INFO, { title = "installer.nvim" })
+  vim.notify(msg, level or vim.log.levels.INFO, { title = "kaeru.nvim" })
 end
 
 return M

@@ -11,15 +11,16 @@
 -- `restore` recreates the plugin directory from the archive before lazy.nvim
 -- clones it, which makes re-installs fast and possible offline. Falls back to
 -- `tar` when `zip`/`unzip` are missing (still saved as .nvimpack).
-local Config = require("installer.config")
-local Process = require("installer.process")
-local UI = require("installer.ui")
+local Config = require("kaeru.config")
+local Process = require("kaeru.process")
+local UI = require("kaeru.ui")
+local Compat = require("kaeru.compat")
 
 local M = {}
 
 local uv = vim.uv or vim.loop
 
----@class InstallerCacheEntry
+---@class KaeruCacheEntry
 ---@field name string
 ---@field format "zip"|"tar"|"bundle"
 ---@field file string          file name inside cache.dir
@@ -40,7 +41,7 @@ local function index_path()
   return M.dir() .. "/index.json"
 end
 
----@return table<string, InstallerCacheEntry>
+---@return table<string, KaeruCacheEntry>
 function M.index()
   local fd = io.open(index_path(), "r")
   if not fd then
@@ -51,7 +52,7 @@ function M.index()
   return ok and type(data) == "table" and data or {}
 end
 
----@param index table<string, InstallerCacheEntry>
+---@param index table<string, KaeruCacheEntry>
 local function save_index(index)
   local fd = assert(io.open(index_path(), "w"))
   fd:write(vim.json.encode(index))
@@ -59,7 +60,7 @@ local function save_index(index)
 end
 
 ---@param name string
----@return InstallerCacheEntry|nil
+---@return KaeruCacheEntry|nil
 function M.get(name)
   local entry = M.index()[name]
   if entry and uv.fs_stat(M.dir() .. "/" .. entry.file) then
@@ -139,7 +140,7 @@ end
 ---@param cb fun(commit: string|nil)
 local function head_commit(dir, cb)
   Process.run({ "git", "-C", dir, "rev-parse", "HEAD" }, function(res)
-    cb(res.code == 0 and vim.trim(res.stdout) or nil)
+    cb(res.code == 0 and Compat.trim(res.stdout) or nil)
   end)
 end
 
@@ -182,7 +183,7 @@ function M.pack(name, cb, opts)
     local run_opts = format == "zip" and { cwd = dir } or {}
     Process.run(args, run_opts, function(res)
       if res.code ~= 0 then
-        return cb(false, ("packing %s failed: %s"):format(name, vim.trim(res.stderr)))
+        return cb(false, ("packing %s failed: %s"):format(name, Compat.trim(res.stderr)))
       end
       local st = uv.fs_stat(cache_dir .. "/" .. file)
       local index = M.index()
@@ -289,7 +290,7 @@ function M.restore(name, cb, opts)
   Process.run(args, run_opts or {}, function(res)
     if res.code ~= 0 then
       vim.fn.delete(dir, "rf")
-      return cb(false, ("restoring %s failed: %s"):format(name, vim.trim(res.stderr)))
+      return cb(false, ("restoring %s failed: %s"):format(name, Compat.trim(res.stderr)))
     end
     local function finish()
       cb(true, ("Restored %s from %s (%s)"):format(name, entry.file, entry.format))
@@ -356,12 +357,12 @@ function M.list()
     )
   end
   if #names == 0 then
-    lines[#lines + 1] = "  (empty)  run :Installer cache pack all"
+    lines[#lines + 1] = "  (empty)  run :Kaeru cache pack all"
   end
   lines[#lines + 1] = ""
   lines[#lines + 1] = ("  %d archive(s), %s   <CR> restore  p re-pack  D remove  q close"):format(#names, M.human(total))
   local buf, win = UI.open({
-    title = "installer.nvim · plugin cache",
+    title = "kaeru.nvim · plugin cache",
     width = math.min(vim.o.columns - 4, 96),
     height = math.min(#lines, vim.o.lines - 6),
   })

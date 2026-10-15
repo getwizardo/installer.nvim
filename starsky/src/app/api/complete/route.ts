@@ -34,7 +34,7 @@ async function fetchJsonViaCurlOrFetch(
         "-H",
         "Accept: application/vnd.github+json",
         "-H",
-        "User-Agent: installer.nvim-starsky-autocomplete",
+        "User-Agent: kaeru.nvim-starsky-autocomplete",
         url,
       ],
       { timeout: 6000 }
@@ -45,7 +45,7 @@ async function fetchJsonViaCurlOrFetch(
       const res = await fetch(url, {
         headers: {
           Accept: "application/vnd.github+json",
-          "User-Agent": "installer.nvim-starsky-autocomplete",
+          "User-Agent": "kaeru.nvim-starsky-autocomplete",
         },
       });
       if (!res.ok) return null;

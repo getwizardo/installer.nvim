@@ -1,22 +1,22 @@
 -- AI coding presets: curated lazy.nvim specs for the most used AI plugins.
--- Disabled by default (`ai.enabled = false`), see `:help installer-ai`.
+-- Disabled by default (`ai.enabled = false`), see `:help kaeru-ai`.
 --
 -- Every preset mirrors the install snippet from the plugin's README at the time
 -- of writing; the modal lets you review/edit it before anything is written.
-local Config = require("installer.config")
-local UI = require("installer.ui")
+local Config = require("kaeru.config")
+local UI = require("kaeru.ui")
 
 local M = {}
 
----@class InstallerAiPreset
+---@class KaeruAiPreset
 ---@field repo string
 ---@field title string
 ---@field category "completion"|"chat"|"agent"|"tools"
 ---@field needs string      what you need (account / API key / CLI)
 ---@field desc string
----@field form InstallerForm values passed to the modal
+---@field form KaeruForm values passed to the modal
 
----@type InstallerAiPreset[]
+---@type KaeruAiPreset[]
 M.presets = {
   -- completion --------------------------------------------------------------
   {
@@ -290,7 +290,7 @@ function M.enabled()
   return Config.options.ai.enabled == true
 end
 
----@return InstallerAiPreset[]
+---@return KaeruAiPreset[]
 function M.list()
   local excluded = {}
   for _, repo in ipairs(Config.options.ai.exclude or {}) do
@@ -306,7 +306,7 @@ function M.list()
 end
 
 ---@param repo string
----@return InstallerAiPreset|nil
+---@return KaeruAiPreset|nil
 function M.get(repo)
   for _, p in ipairs(M.presets) do
     if p.repo:lower() == repo:lower() or p.title:lower() == repo:lower() then
@@ -316,34 +316,34 @@ function M.get(repo)
 end
 
 --- Open the modal prefilled with a preset.
----@param preset InstallerAiPreset
+---@param preset KaeruAiPreset
 function M.open_preset(preset)
-  require("installer").open(vim.deepcopy(preset.form))
+  require("kaeru").open(vim.deepcopy(preset.form))
 end
 
 --- Install a preset directly (bypasses the modal).
----@param preset InstallerAiPreset
+---@param preset KaeruAiPreset
 function M.install_preset(preset)
-  require("installer").add(vim.deepcopy(preset.form))
+  require("kaeru").add(vim.deepcopy(preset.form))
 end
 
 local function disabled_notice()
   UI.notify(
-    "AI coding presets are disabled.\nEnable them with:\n  require(\"installer\").setup({ ai = { enabled = true } })",
+    "AI coding presets are disabled.\nEnable them with:\n  require(\"kaeru\").setup({ ai = { enabled = true } })",
     vim.log.levels.WARN
   )
 end
 
---- Floating picker (`:Installer ai`).
+--- Floating picker (`:Kaeru ai`).
 function M.pick()
   if not M.enabled() then
     return disabled_notice()
   end
   local presets = M.list()
-  local lazy_mod = require("installer.lazy")
+  local lazy_mod = require("kaeru.lazy")
 
   -- rows: either a header or a preset
-  ---@type {header?: string, preset?: InstallerAiPreset}[]
+  ---@type {header?: string, preset?: KaeruAiPreset}[]
   local rows = {}
   for _, cat in ipairs(CATEGORY_ORDER) do
     local group = vim.tbl_filter(function(p)
@@ -359,10 +359,10 @@ function M.pick()
 
   local width = math.min(vim.o.columns - 4, 100)
   local buf, win = UI.open({
-    title = "installer.nvim · AI coding plugins",
+    title = "kaeru.nvim · AI coding plugins",
     width = width,
     height = math.min(#rows + 3, vim.o.lines - 6),
-    filetype = "installer-ai",
+    filetype = "kaeru-ai",
   })
   vim.wo[win].cursorline = true
 
@@ -411,7 +411,7 @@ function M.pick()
   UI.map(buf, "<Esc>", close)
   UI.map(buf, "C", function()
     close()
-    require("installer.clina").ide()
+    require("kaeru.clina").ide()
   end)
   UI.map(buf, "<CR>", function()
     local p = current()
@@ -436,7 +436,7 @@ function M.pick()
   UI.map(buf, "K", function()
     local p = current()
     if p then
-      local src = require("installer").preview(p.form)
+      local src = require("kaeru").preview(p.form)
       UI.notify(("%s — %s\nNeeds: %s\n\n%s"):format(p.title, p.desc, p.needs, src or ""))
     end
   end)
@@ -467,7 +467,7 @@ function M.pick()
 end
 
 function M.ide(prompt)
-  return require("installer.clina").ide(prompt)
+  return require("kaeru.clina").ide(prompt)
 end
 
 return M

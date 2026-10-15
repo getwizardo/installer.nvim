@@ -98,7 +98,7 @@ const QUICK_PROMPTS = [
     label: "Explain Architecture",
     mode: "chat",
     prompt:
-      "Explain how installer.nvim validates and saves lazy.nvim plugin specs",
+      "Explain how kaeru.nvim validates and saves lazy.nvim plugin specs",
   },
 ];
 
@@ -111,10 +111,10 @@ export default function ClinaIdeView({
   const [mcpTools, setMcpTools] = useState<ClinaMcpTool[]>([]);
   const [files, setFiles] = useState<ClinaFileNode[]>([]);
   const [contextFiles, setContextFiles] = useState<string[]>([
-    "lua/installer/spec.lua",
+    "lua/kaeru/spec.lua",
   ]);
   const [activeFile, setActiveFile] = useState<string>(
-    "lua/installer/spec.lua"
+    "lua/kaeru/spec.lua"
   );
   const [editorContent, setEditorContent] = useState<string>("");
   const [editorLanguage, setEditorLanguage] = useState<string>("lua");
@@ -168,7 +168,7 @@ export default function ClinaIdeView({
 
   useEffect(() => {
     loadWorkspace();
-    openFileInEditor("lua/installer/spec.lua");
+    openFileInEditor("lua/kaeru/spec.lua");
   }, []);
 
   const toggleContextFile = (relPath: string) => {
@@ -575,7 +575,7 @@ export default function ClinaIdeView({
                     className="btn btn-sm"
                     onClick={() => onLoadSpecIntoModal(m.specForm!)}
                   >
-                    <Plus size={12} /> Open in :Installer Spec Modal
+                    <Plus size={12} /> Open in :Kaeru Spec Modal
                   </button>
                 )}
               </div>

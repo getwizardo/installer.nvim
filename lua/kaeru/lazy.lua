@@ -5,7 +5,7 @@
 -- Writing a new file into that directory and calling
 -- `require("lazy.core.plugin").load()` is enough for lazy.nvim to pick it up;
 -- `require("lazy").install()` then clones it.
-local Config = require("installer.config")
+local Config = require("kaeru.config")
 
 local M = {}
 
@@ -159,7 +159,7 @@ function M.install(name, on_done, file)
         vim.schedule(function()
           local p = LazyConfig.plugins[target_name] or M.find_plugin(name)
           if p and p._ and p._.installed and not p._.loaded and p.lazy == false then
-            pcall(require("lazy.core.loader").load, p, { cmd = "Installer" })
+            pcall(require("lazy.core.loader").load, p, { cmd = "Kaeru" })
           end
           if on_done then
             on_done(p)

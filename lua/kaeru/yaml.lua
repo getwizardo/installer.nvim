@@ -1,4 +1,4 @@
--- A small dependency-free YAML reader/writer for `installer.yaml`.
+-- A small dependency-free YAML reader/writer for `kaeru.yaml`.
 --
 -- Supported subset (enough for configuration files):
 --   * block mappings and sequences (indentation based)

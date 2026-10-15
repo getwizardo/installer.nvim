@@ -1,22 +1,22 @@
-# installer.nvim
+# kaeru.nvim
 
 Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **from inside Neovim**.
 
-- `:Installer` opens a modal — fill in the repository and any lazy.nvim spec fields (`event`, `cmd`, `ft`, `keys`, `opts`, …) with **context-aware autocomplete** (`omnifunc` / live popup).
-- **Universal `README.md` & snippet parser** (`:Installer parse [owner/repo|README.md]`, `<C-r>` in modal, `p` in browser): parses installation snippets from **lazy.nvim, packer.nvim, vim-plug, pckr.nvim, mini.deps, vim.pack, paq-nvim, dein.vim, Vundle, rocks.nvim, `git clone`, `:MasonInstall`, and `require(...).setup(...)`** into a ready-to-install `lazy.nvim` spec.
+- `:Kaeru` opens a modal — fill in the repository and any lazy.nvim spec fields (`event`, `cmd`, `ft`, `keys`, `opts`, …) with **context-aware autocomplete** (`omnifunc` / live popup).
+- **Universal `README.md` & snippet parser** (`:Kaeru parse [owner/repo|README.md]`, `<C-r>` in modal, `p` in browser): parses installation snippets from **lazy.nvim, packer.nvim, vim-plug, pckr.nvim, mini.deps, vim.pack, paq-nvim, dein.vim, Vundle, rocks.nvim, `git clone`, `:MasonInstall`, and `require(...).setup(...)`** into a ready-to-install `lazy.nvim` spec.
 - A `lua/plugins/<name>.lua` spec file is written for you.
 - lazy.nvim reloads its specs and installs the plugin immediately, no restart needed.
-- `:Installer browse` searches **all Neovim plugins on GitHub** (`topic:neovim-plugin`), with README preview, `p` to parse the README spec, and one-key install.
+- `:Kaeru browse` searches **all Neovim plugins on GitHub** (`topic:neovim-plugin`), with README preview, `p` to parse the README spec, and one-key install.
 - **GitHub account**: sign in (gh CLI / token / device flow) for higher rate limits, starring and your starred list.
-- **AI coding presets & `:Clina` TypeScript AI Coding IDE**: curated specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub, plus **`:Clina`** — a full TypeScript AI Coding IDE (`lua/installer/clina.lua` + `starsky/src/lib/clina.ts`) with multi-provider support, MCP tool servers, workspace file context, unified diffs, and one-key patch application.
-- **SFTP & SFTP Studio UI** (`:Installer sftp` / `:Installer sftp ui`): dual-pane floating Local Project ↔ Remote Server SFTP Studio UI inside Neovim and in the Next.js Webclient, plus parallel `sftp` workers, upload-on-save, every sftp command, remote file browser, and multiple SSH keys / ssh-config / ProxyJump.
-- **`installer.yaml`**: all configuration in a global or per-project YAML file (built-in parser, no dependencies).
-- **Mason (all 601 servers built-in)**: install LSP servers, DAP adapters, linters, formatters, compilers and runtimes from the [mason.nvim](https://github.com/mason-org/mason.nvim) registry (with built-in catalog of all 601 Mason packages & 296 `lspconfig` server mappings for offline/instant autocomplete), `ensure_installed` in `installer.yaml`, and one-command scaffolds for lspconfig / nvim-dap / conform + nvim-lint.
+- **AI coding presets & `:Clina` TypeScript AI Coding IDE**: curated specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub, plus **`:Clina`** — a full TypeScript AI Coding IDE (`lua/kaeru/clina.lua` + `starsky/src/lib/clina.ts`) with multi-provider support, MCP tool servers, workspace file context, unified diffs, and one-key patch application.
+- **SFTP & SFTP Studio UI** (`:Kaeru sftp` / `:Kaeru sftp ui`): dual-pane floating Local Project ↔ Remote Server SFTP Studio UI inside Neovim and in the Next.js Webclient, plus parallel `sftp` workers, upload-on-save, every sftp command, remote file browser, and multiple SSH keys / ssh-config / ProxyJump.
+- **`kaeru.yaml`**: all configuration in a global or per-project YAML file (built-in parser, no dependencies).
+- **Mason (all 601 servers built-in)**: install LSP servers, DAP adapters, linters, formatters, compilers and runtimes from the [mason.nvim](https://github.com/mason-org/mason.nvim) registry (with built-in catalog of all 601 Mason packages & 296 `lspconfig` server mappings for offline/instant autocomplete), `ensure_installed` in `kaeru.yaml`, and one-command scaffolds for lspconfig / nvim-dap / conform + nvim-lint.
 - **Plugin cache**: installed plugins archived as `cache/<name>.nvimpack` (zip, `.git` included) or `.pack` (git bundle for large repos) and restored before install — offline re-installs.
-- **Starsky for Neovim Webclient** (`:Installer starsky` / `starsky/`): **Next.js 16 (TypeScript App Router)** webclient scaffolded via `yarn create next-app`, featuring the `:Installer` Spec Saver, `:Clina` TypeScript AI Coding IDE, SFTP Studio UI, all 601 Mason servers, 296 LSPconfig servers, and the universal 11-manager README parser.
+- **Starsky for Neovim Webclient** (`:Kaeru starsky` / `starsky/`): **Next.js 16 (TypeScript App Router)** webclient scaffolded via `yarn create next-app`, featuring the `:Kaeru` Spec Saver, `:Clina` TypeScript AI Coding IDE, SFTP Studio UI, all 601 Mason servers, 296 LSPconfig servers, and the universal 11-manager README parser.
 
 ```
-╭──────────────────── installer.nvim · add a plugin to lazy.nvim ────────────────────╮
+╭──────────────────── kaeru.nvim · add a plugin to lazy.nvim ────────────────────╮
 │  Repository    : folke/noice.nvim                                                  │
 │  File          :  lua/plugins/<file>.lua  (auto from repo)                         │
 │  Name          :  custom plugin name (optional)                                    │
@@ -38,7 +38,7 @@ Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **fro
 The form above generates `~/.config/nvim/lua/plugins/noice.lua`:
 
 ```lua
--- Generated by installer.nvim on 2026-10-14
+-- Generated by kaeru.nvim on 2026-10-14
 -- Spec reference: https://lazy.folke.io/spec
 return {
   "folke/noice.nvim",
@@ -60,10 +60,10 @@ return {
 ## Installation
 
 ```lua
--- lua/plugins/installer.lua
+-- lua/plugins/kaeru.lua
 return {
   "getwizardo/installer.nvim",
-  cmd = "Installer",
+  cmd = "Kaeru",
   opts = {},
 }
 ```
@@ -72,22 +72,22 @@ return {
 
 | Command                         | Description                                                            |
 | ------------------------------- | ---------------------------------------------------------------------- |
-| `:Installer`                    | Open the modal form                                                    |
-| `:Installer owner/repo`         | Open the modal prefilled with a repository                             |
-| `:Installer browse [query]`     | Browse Neovim plugins on GitHub                                        |
-| `:Installer search [query]`     | Search GitHub and pick with `vim.ui.select` (telescope/fzf-lua/…)      |
-| `:Installer add owner/repo`     | Write a bare `{ "owner/repo" }` spec and install right away            |
-| `:Installer save owner/repo`    | Write a plugin spec file to `lua/plugins/<file>.lua` without installing |
-| `:Installer parse [repo\|file]` | Parse any installer snippet from GitHub `README.md`, local file, or buffer |
-| `:Installer dir`                | Show where spec files are written                                      |
-| `:Installer ai [preset\|ide]`   | Curated AI coding plugins & `:Clina` AI Coding IDE                     |
+| `:Kaeru`                    | Open the modal form                                                    |
+| `:Kaeru owner/repo`         | Open the modal prefilled with a repository                             |
+| `:Kaeru browse [query]`     | Browse Neovim plugins on GitHub                                        |
+| `:Kaeru search [query]`     | Search GitHub and pick with `vim.ui.select` (telescope/fzf-lua/…)      |
+| `:Kaeru add owner/repo`     | Write a bare `{ "owner/repo" }` spec and install right away            |
+| `:Kaeru save owner/repo`    | Write a plugin spec file to `lua/plugins/<file>.lua` without installing |
+| `:Kaeru parse [repo\|file]` | Parse any installer snippet from GitHub `README.md`, local file, or buffer |
+| `:Kaeru dir`                | Show where spec files are written                                      |
+| `:Kaeru ai [preset\|ide]`   | Curated AI coding plugins & `:Clina` AI Coding IDE                     |
 | `:Clina [action]`               | `ide`, `agent`, `chat`, `edit`, `spec`, `apply`, `diff`, `provider`, `mcp`, `web` — TypeScript AI Coding IDE |
-| `:Installer login\|logout\|whoami` | GitHub account                                                     |
-| `:Installer sftp [action]`      | `ui` (dual-pane SFTP Studio), transfers, every sftp command, remote browser, shell |
-| `:Installer config [...]`       | `edit`, `project`, `reload`, `show` — manage `installer.yaml`           |
-| `:Installer cache [...]`        | `list`, `pack [name\|all]`, `restore <name>`, `remove`, `clean`, `dir`   |
-| `:Installer mason [...]`        | Mason picker, `lsp\|dap\|linter\|formatter`, `install`, `ensure`, `export`, `scaffold` — see below |
-| `:Installer starsky [...]`      | `start`, `stop`, `open`, `status`, `build` — Next.js TypeScript Starsky Webclient |
+| `:Kaeru login\|logout\|whoami` | GitHub account                                                     |
+| `:Kaeru sftp [action]`      | `ui` (dual-pane SFTP Studio), transfers, every sftp command, remote browser, shell |
+| `:Kaeru config [...]`       | `edit`, `project`, `reload`, `show` — manage `kaeru.yaml`           |
+| `:Kaeru cache [...]`        | `list`, `pack [name\|all]`, `restore <name>`, `remove`, `clean`, `dir`   |
+| `:Kaeru mason [...]`        | Mason picker, `lsp\|dap\|linter\|formatter`, `install`, `ensure`, `export`, `scaffold` — see below |
+| `:Kaeru starsky [...]`      | `start`, `stop`, `open`, `status`, `build` — Next.js TypeScript Starsky Webclient |
 
 ### Modal keys
 
@@ -113,7 +113,7 @@ return {
 | `o`           | Open on GitHub                                             |
 | `y`           | Yank `owner/repo`                                          |
 | `]` / `[`     | Next / previous page                                       |
-| `*`           | Star / unstar (needs `:Installer login`)                   |
+| `*`           | Star / unstar (needs `:Kaeru login`)                   |
 | `S`           | Toggle your starred repositories                           |
 | `s`           | Cycle sort: stars → updated → best-match                   |
 | `t`           | Toggle scope: `topic:neovim-plugin` ↔ all of GitHub        |
@@ -125,21 +125,21 @@ GitHub allows 10 unauthenticated searches per minute; signed-in users get 30.
 ## GitHub account
 
 ```vim
-:Installer login          " pick: GitHub CLI · paste a token · browser (device flow)
-:Installer whoami         " user + remaining search quota
-:Installer logout
+:Kaeru login          " pick: GitHub CLI · paste a token · browser (device flow)
+:Kaeru whoami         " user + remaining search quota
+:Kaeru logout
 ```
 
-Token resolution order: `github.token` → token saved by `:Installer login` → `$GITHUB_TOKEN`/`$GH_TOKEN` → `gh auth token`.
+Token resolution order: `github.token` → token saved by `:Kaeru login` → `$GITHUB_TOKEN`/`$GH_TOKEN` → `gh auth token`.
 The browser device flow needs your own OAuth app (`github.client_id`, with *Device Flow* enabled). Starring requires the `public_repo` scope (or the fine-grained *Starring* permission).
 
 ## AI coding plugins (opt-in)
 
 ```lua
-require("installer").setup({ ai = { enabled = true } })
+require("kaeru").setup({ ai = { enabled = true } })
 ```
 
-`:Installer ai` lists ready-made lazy.nvim specs, grouped by what they do:
+`:Kaeru ai` lists ready-made lazy.nvim specs, grouped by what they do:
 
 | Category | Presets |
 | --- | --- |
@@ -154,27 +154,27 @@ require("installer").setup({ ai = { enabled = true } })
 
 ```vim
 " transfers
-:Installer sftp init             " creates .nvim-sftp.json in the cwd
-:Installer sftp upload [path]    " current file, or a file / directory
-:Installer sftp upload-project   " all project files, N parallel sftp workers
-:Installer sftp sync             " only files changed since the last sync
-:Installer sftp download         " current file
-:Installer sftp download-project " whole remote tree (scp -r)
-:Installer sftp diff             " buffer vs remote copy (diffsplit)
+:Kaeru sftp init             " creates .nvim-sftp.json in the cwd
+:Kaeru sftp upload [path]    " current file, or a file / directory
+:Kaeru sftp upload-project   " all project files, N parallel sftp workers
+:Kaeru sftp sync             " only files changed since the last sync
+:Kaeru sftp download         " current file
+:Kaeru sftp download-project " whole remote tree (scp -r)
+:Kaeru sftp diff             " buffer vs remote copy (diffsplit)
 
 " every sftp command — paths are relative to remotePath unless absolute
-:Installer sftp ls [path]        :Installer sftp mkdir|rmdir|rm <path>
-:Installer sftp rename <a> <b>   :Installer sftp chmod|chown|chgrp <v> <path>
-:Installer sftp ln [-s] <a> <b>  :Installer sftp symlink <a> <b>
-:Installer sftp df [path]        :Installer sftp pwd | version
-:Installer sftp exec mkdir a; put x.txt a/x.txt     " raw sftp batch
-:Installer sftp run tail -n 50 logs/app.log         " any command over ssh
+:Kaeru sftp ls [path]        :Kaeru sftp mkdir|rmdir|rm <path>
+:Kaeru sftp rename <a> <b>   :Kaeru sftp chmod|chown|chgrp <v> <path>
+:Kaeru sftp ln [-s] <a> <b>  :Kaeru sftp symlink <a> <b>
+:Kaeru sftp df [path]        :Kaeru sftp pwd | version
+:Kaeru sftp exec mkdir a; put x.txt a/x.txt     " raw sftp batch
+:Kaeru sftp run tail -n 50 logs/app.log         " any command over ssh
 
 " sessions & tools
-:Installer sftp browse [path]    " remote file browser (open, download, upload, mkdir, rename, delete)
-:Installer sftp shell | ssh      " interactive sftp / shell in a terminal split
-:Installer sftp test             " connection test + the resolved command line
-:Installer sftp status | select
+:Kaeru sftp browse [path]    " remote file browser (open, download, upload, mkdir, rename, delete)
+:Kaeru sftp shell | ssh      " interactive sftp / shell in a terminal split
+:Kaeru sftp test             " connection test + the resolved command line
+:Kaeru sftp status | select
 ```
 
 ```json
@@ -194,11 +194,11 @@ require("installer").setup({ ai = { enabled = true } })
 }
 ```
 
-Keys are tried in order (`-i` each); `sftp.keys` / `sftp.options` in `installer.yaml` provide defaults for every profile, and `host` may be an alias from your ssh config. The file may be an array of profiles; profiles can also live in `sftp.profiles` (JSON or YAML). Uploads are git-aware (`git ls-files` + ignore globs), split round-robin across `sftp.concurrency` concurrent `sftp -b` processes, and create remote directories as needed. `password` works when `sshpass` is installed, but keys / ssh-agent are recommended. The config file is never uploaded — gitignore it if it holds secrets.
+Keys are tried in order (`-i` each); `sftp.keys` / `sftp.options` in `kaeru.yaml` provide defaults for every profile, and `host` may be an alias from your ssh config. The file may be an array of profiles; profiles can also live in `sftp.profiles` (JSON or YAML). Uploads are git-aware (`git ls-files` + ignore globs), split round-robin across `sftp.concurrency` concurrent `sftp -b` processes, and create remote directories as needed. `password` works when `sshpass` is installed, but keys / ssh-agent are recommended. The config file is never uploaded — gitignore it if it holds secrets.
 
-## Configuration — `installer.yaml`
+## Configuration — `kaeru.yaml`
 
-Everything below can be written in YAML instead of Lua. `:Installer config` creates and opens the global file (`~/.config/nvim/installer.yaml`); `:Installer config project` creates `./installer.yaml` for the current project (read via `vim.secure.read`, so you trust it once). Precedence: defaults < global < project < `setup()` opts. `:Installer config reload` / `show` re-read and print the effective configuration.
+Everything below can be written in YAML instead of Lua. `:Kaeru config` creates and opens the global file (`~/.config/nvim/kaeru.yaml`); `:Kaeru config project` creates `./kaeru.yaml` for the current project (read via `vim.secure.read`, so you trust it once). Precedence: defaults < global < project < `setup()` opts. `:Kaeru config reload` / `show` re-read and print the effective configuration.
 
 ```yaml
 after_write: install
@@ -235,28 +235,28 @@ Installed plugins are archived under `~/.cache/nvim/installer/`:
 `auto_pack` archives a plugin right after it is installed; `auto_restore` unpacks a cached plugin into the lazy.nvim root *before* `:Lazy install` runs, so re-installs need no network. Bundles get their `origin` reset to the real URL so `:Lazy update` keeps working.
 
 ```vim
-:Installer cache list              " <CR> restore · p re-pack · D remove
-:Installer cache pack all          " archive every installed plugin
-:Installer cache restore <name>    " ! to overwrite an existing directory
-:Installer cache clean             " drop archives of plugins no longer in the spec
+:Kaeru cache list              " <CR> restore · p re-pack · D remove
+:Kaeru cache pack all          " archive every installed plugin
+:Kaeru cache restore <name>    " ! to overwrite an existing directory
+:Kaeru cache clean             " drop archives of plugins no longer in the spec
 ```
 
 ## Mason (LSP / DAP / linters / formatters)
 
-`:Installer mason` opens a picker over the whole [mason.nvim](https://github.com/mason-org/mason.nvim) registry (the registry is refreshed once per session). Requires mason.nvim; if it is missing, `:Installer mason scaffold lsp` adds it to your lazy.nvim specs.
+`:Kaeru mason` opens a picker over the whole [mason.nvim](https://github.com/mason-org/mason.nvim) registry (the registry is refreshed once per session). Requires mason.nvim; if it is missing, `:Kaeru mason scaffold lsp` adds it to your lazy.nvim specs.
 
 ```vim
-:Installer mason                       " picker over every package
-:Installer mason lsp|dap|linter|formatter|compiler|runtime [query]
-:Installer mason ft                    " packages for the current filetype
-:Installer mason install lua_ls stylua debugpy   " lspconfig names, aliases or Mason names
-:Installer mason uninstall|update <name>
-:Installer mason upgrade               " update the registry, reinstall outdated packages
-:Installer mason ensure                " install everything in installer.yaml mason.ensure_installed
-:Installer mason export                " write the installed packages back to installer.yaml
-:Installer mason list                  " installed packages with versions
-:Installer mason scaffold lsp|dap|tools
-:Installer mason ui                    " plain :Mason
+:Kaeru mason                       " picker over every package
+:Kaeru mason lsp|dap|linter|formatter|compiler|runtime [query]
+:Kaeru mason ft                    " packages for the current filetype
+:Kaeru mason install lua_ls stylua debugpy   " lspconfig names, aliases or Mason names
+:Kaeru mason uninstall|update <name>
+:Kaeru mason upgrade               " update the registry, reinstall outdated packages
+:Kaeru mason ensure                " install everything in kaeru.yaml mason.ensure_installed
+:Kaeru mason export                " write the installed packages back to kaeru.yaml
+:Kaeru mason list                  " installed packages with versions
+:Kaeru mason scaffold lsp|dap|tools
+:Kaeru mason ui                    " plain :Mason
 ```
 
 Picker keys: type to filter (name, lspconfig name, language, description), `<Tab>`/`/` switch between prompt and list, `<CR>`/`i` install, `x` uninstall, `u` update, `<Space>` mark several then `<CR>` to install them `concurrency` at a time, `f` cycle category, `l` filter by the filetype you came from, `t` installed only, `K` details, `o` homepage, `y` yank name, `U` refresh registry, `M` open `:Mason`, `?` help, `q` close.
@@ -265,12 +265,12 @@ Scaffolds write ready-to-use lazy.nvim specs into your plugins directory and ins
 
 | `scaffold` | File | Plugins |
 | --- | --- | --- |
-| `lsp` | `lua/plugins/mason.lua` | mason.nvim, mason-lspconfig.nvim, nvim-lspconfig (`ensure_installed` from `installer.yaml`) |
+| `lsp` | `lua/plugins/mason.lua` | mason.nvim, mason-lspconfig.nvim, nvim-lspconfig (`ensure_installed` from `kaeru.yaml`) |
 | `dap` | `lua/plugins/dap.lua` | nvim-dap, nvim-dap-ui, nvim-nio, mason-nvim-dap.nvim |
-| `tools` | `lua/plugins/tools.lua` | mason-tool-installer.nvim, conform.nvim, nvim-lint |
+| `tools` | `lua/plugins/tools.lua` | mason-tool-kaeru.nvim, conform.nvim, nvim-lint |
 
 ```yaml
-# installer.yaml
+# kaeru.yaml
 mason:
   ensure_installed: [lua-language-server, lua_ls, stylua, debugpy]  # Mason or lspconfig names
   auto_ensure: false        # run `ensure` after setup()
@@ -282,8 +282,8 @@ mason:
 ## Configuration (Lua)
 
 ```lua
-require("installer").setup({
-  config = { global = vim.fn.stdpath("config") .. "/installer.yaml", project = "installer.yaml" },
+require("kaeru").setup({
+  config = { global = vim.fn.stdpath("config") .. "/kaeru.yaml", project = "kaeru.yaml" },
   -- nil = auto-detect from lazy.nvim's `{ import = "plugins" }`,
   -- or a directory string / function returning one
   plugins_dir = nil,
@@ -304,7 +304,7 @@ require("installer").setup({
   ai = { enabled = false, exclude = {} },
   cache = {
     enabled = true,
-    dir = vim.fn.stdpath("cache") .. "/installer",
+    dir = vim.fn.stdpath("cache") .. "/kaeru",
     pack_threshold = 50 * 1024 * 1024,
     auto_pack = true,
     auto_restore = true,
@@ -325,23 +325,23 @@ require("installer").setup({
 ## Lua API
 
 ```lua
-local installer = require("installer")
-installer.open({ repo = "folke/noice.nvim" })        -- modal
-installer.browse({ query = "telescope" })            -- GitHub browser
-installer.search("colorscheme")                      -- vim.ui.select picker
-installer.add({ repo = "folke/todo-comments.nvim", event = "VeryLazy", opts = "{}" })
-print(installer.preview({ repo = "folke/flash.nvim", keys = "s, S" }))
-installer.account.login("gh")                        -- or "token" / "device"
-installer.ai.pick()                                  -- AI presets picker
-installer.sftp.upload_project()                      -- parallel upload
-installer.sftp.run("git pull")                       -- command over ssh
-installer.cache.pack("noice.nvim")                   -- archive a plugin
-installer.config.dump()                              -- effective config as YAML
+local kaeru = require("kaeru")
+kaeru.open({ repo = "folke/noice.nvim" })        -- modal
+kaeru.browse({ query = "telescope" })            -- GitHub browser
+kaeru.search("colorscheme")                      -- vim.ui.select picker
+kaeru.add({ repo = "folke/todo-comments.nvim", event = "VeryLazy", opts = "{}" })
+print(kaeru.preview({ repo = "folke/flash.nvim", keys = "s, S" }))
+kaeru.account.login("gh")                        -- or "token" / "device"
+kaeru.ai.pick()                                  -- AI presets picker
+kaeru.sftp.upload_project()                      -- parallel upload
+kaeru.sftp.run("git pull")                       -- command over ssh
+kaeru.cache.pack("noice.nvim")                   -- archive a plugin
+kaeru.config.dump()                              -- effective config as YAML
 ```
 
 ## How it works
 
-lazy.nvim merges every `lua/<module>/*.lua` file for each `{ import = "<module>" }` entry in your spec. installer.nvim
+lazy.nvim merges every `lua/<module>/*.lua` file for each `{ import = "<module>" }` entry in your spec. kaeru.nvim
 
 1. reads the import modules from `require("lazy.core.config").spec.modules` and resolves the first one inside `stdpath("config")` (usually `~/.config/nvim/lua/plugins`);
 2. writes `<file>.lua` returning a single spec table;
@@ -349,9 +349,9 @@ lazy.nvim merges every `lua/<module>/*.lua` file for each `{ import = "<module>"
 
 Generated files are plain lazy.nvim specs — edit them freely afterwards.
 
-## Universal `README.md` Installer Parser
+## Universal `README.md` Kaeru Parser
 
-`:Installer parse` (or `:Installer readme`) parses installation blocks from any plugin's `README.md` (on GitHub, in a local file, or in the current buffer/visual selection) and converts them into a `lazy.nvim` spec:
+`:Kaeru parse` (or `:Kaeru readme`) parses installation blocks from any plugin's `README.md` (on GitHub, in a local file, or in the current buffer/visual selection) and converts them into a `lazy.nvim` spec:
 
 - **lazy.nvim**: `{ "owner/repo", event = ..., opts = ..., dependencies = ... }`, `return { ... }`, `require("lazy").setup(...)`
 - **packer.nvim**: `use 'owner/repo'`, `use { 'owner/repo', requires = ..., run = ..., opt = true, as = ... }`
@@ -364,10 +364,10 @@ Generated files are plain lazy.nvim specs — edit them freely afterwards.
 - **rocks.nvim / `git clone` / `:MasonInstall` / `require("...").setup({...})`**
 
 ```vim
-:Installer parse folke/noice.nvim      " fetch GitHub README, parse spec, open modal
-:Installer! parse folke/noice.nvim     " fetch GitHub README, parse spec, install immediately
-:Installer parse ./README.md           " parse all plugin specs from a local README.md
-:'<,'>Installer parse                  " parse selected snippet in current buffer
+:Kaeru parse folke/noice.nvim      " fetch GitHub README, parse spec, open modal
+:Kaeru! parse folke/noice.nvim     " fetch GitHub README, parse spec, install immediately
+:Kaeru parse ./README.md           " parse all plugin specs from a local README.md
+:'<,'>Kaeru parse                  " parse selected snippet in current buffer
 ```
 
 ## `:Clina` — NeoCodeium (`monkoose/neocodeium`) AI Coding Integration
@@ -383,42 +383,42 @@ Generated files are plain lazy.nvim specs — edit them freely afterwards.
 :Clina chat                            " open NeoCodeium Windsurf Chat in browser
 ```
 
-## `:MusicPlayer` — Built-in Player with 10-Band EQ, Visualizer, Radio & 2-Neovim Device Controller
+## `:Kikru` — Built-in Player with 10-Band EQ, Visualizer, Radio & 2-Neovim Device Controller
 
-`:MusicPlayer` provides a floating music & radio studio inside Neovim and in the Starsky Web IDE, including a **2-Neovim Device Controller (`Server <-> Client`)** over TCP (`vim.uv.new_tcp()`):
+`:Kikru` provides a floating music & radio studio inside Neovim and in the Starsky Web IDE, including a **2-Neovim Device Controller (`Server <-> Client`)** over TCP (`vim.uv.new_tcp()`):
 
 ```vim
-:MusicPlayer                           " open the floating :MusicPlayer studio (EQ, Visualizer, Radio)
-:MusicPlayer server 41999              " start the 2-Neovim TCP Server on Neovim Instance #1
-:MusicPlayer connect 127.0.0.1:41999   " connect Neovim Instance #2 as a synced Client
-:MusicPlayer eq synthwave              " apply a 10-band EQ preset (lofi-coding, synthwave, bass-boost, flat, ...)
-:MusicPlayer visualizer spectrum       " switch real-time ASCII visualizer (spectrum, wave, vu, matrix, starfield)
+:Kikru                           " open the floating :Kikru studio (EQ, Visualizer, Radio)
+:Kikru server 41999              " start the 2-Neovim TCP Server on Neovim Instance #1
+:Kikru connect 127.0.0.1:41999   " connect Neovim Instance #2 as a synced Client
+:Kikru eq synthwave              " apply a 10-band EQ preset (lofi-coding, synthwave, bass-boost, flat, ...)
+:Kikru visualizer spectrum       " switch real-time ASCII visualizer (spectrum, wave, vu, matrix, starfield)
 ```
 
-## `:Installer boot` — ASCII Boot Animation
+## `:Kaeru boot` — ASCII Boot Animation
 
 ```vim
-:Installer boot                        " play the interactive STARSKY / INSTALLER.NVIM ASCII boot sequence
+:Kaeru boot                        " play the interactive STARSKY / INSTALLER.NVIM ASCII boot sequence
 ```
 
 ## Starsky Code IDE for Neovim (`starsky/`)
 
-Starsky is the **Next.js 16 (TypeScript App Router)** Code IDE for `installer.nvim` built with **W3C Custom Elements / Web Components (`customElements.define`)** and **shadcn/ui + `vaul` Drawer**:
+Starsky is the **Next.js 16 (TypeScript App Router)** Code IDE for `kaeru.nvim` built with **W3C Custom Elements / Web Components (`customElements.define`)** and **shadcn/ui + `vaul` Drawer**:
 
 - **Real Web Components (`starsky/src/components/webComponents.ts`)**:
   - `<starsky-code-editor>` — Shadow DOM code editor with line numbers, status bar, and **NeoCodeium (`monkoose/neocodeium`)** inline ghost-text completions (`<A-f>` accept, `<A-w>` word, `<A-a>` line, `<A-e>` cycle).
   - `<starsky-ascii-boot>` — Shadow DOM animated ASCII boot terminal.
-  - `<starsky-eq-visualizer>` — Shadow DOM 60fps canvas spectrum & waveform visualizer for `:MusicPlayer`.
+  - `<starsky-eq-visualizer>` — Shadow DOM 60fps canvas spectrum & waveform visualizer for `:Kikru`.
   - `<starsky-terminal>` — Shadow DOM interactive Neovim Ex-command terminal.
-- **shadcn/ui + `vaul` Drawers (`starsky/src/components/ui/drawer.tsx`)**: slide-up `:MusicPlayer` Studio Drawer and Quick `:Installer` Spec Builder Drawer.
+- **shadcn/ui + `vaul` Drawers (`starsky/src/components/ui/drawer.tsx`)**: slide-up `:Kikru` Studio Drawer and Quick `:Kaeru` Spec Builder Drawer.
 - **Live GitHub API Plugin Autocomplete (`/api/complete`)**: queries `https://api.github.com/search/repositories` live as you type in `repo` or `dependencies`.
 - **Official [`https://mason-registry.dev/`](https://mason-registry.dev/) Explorer**: all **601 official Mason packages** and **296 `lspconfig` mappings** synced with `https://mason-registry.dev/registry/list`.
-- **Dual-Pane SFTP Studio UI** (`:Installer sftp ui` in Neovim and in the Web IDE).
+- **Dual-Pane SFTP Studio UI** (`:Kaeru sftp ui` in Neovim and in the Web IDE).
 
 ```vim
-:Installer starsky start               " start the Next.js TypeScript Code IDE and open browser
-:Installer starsky status              " check server status
-:Installer starsky stop                " stop the webclient
+:Kaeru starsky start               " start the Next.js TypeScript Code IDE and open browser
+:Kaeru starsky status              " check server status
+:Kaeru starsky stop                " stop the webclient
 ```
 
 Or from the shell:

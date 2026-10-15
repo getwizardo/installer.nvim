@@ -2,7 +2,7 @@
 -- and a small concurrent worker pool used by the SFTP module.
 local M = {}
 
----@class InstallerProcResult
+---@class KaeruProcResult
 ---@field code integer
 ---@field stdout string
 ---@field stderr string
@@ -10,7 +10,7 @@ local M = {}
 --- Run a command asynchronously; `cb` is called on the main loop.
 ---@param args string[]
 ---@param opts? {cwd?: string, env?: table<string,string>, stdin?: string}
----@param cb fun(res: InstallerProcResult)
+---@param cb fun(res: KaeruProcResult)
 function M.run(args, opts, cb)
   if type(opts) == "function" then
     cb, opts = opts, {}

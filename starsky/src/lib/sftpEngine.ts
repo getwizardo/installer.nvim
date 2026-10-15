@@ -37,7 +37,7 @@ export interface SftpTransferRecord {
   timestamp: string;
 }
 
-const SANDBOX_REMOTE_ROOT = "/tmp/installer-sftp-remote";
+const SANDBOX_REMOTE_ROOT = "/tmp/kaeru-sftp-remote";
 const transferHistory: SftpTransferRecord[] = [];
 
 function ensureSandboxRemote(): void {
@@ -53,7 +53,7 @@ function ensureSandboxRemote(): void {
       [
         "-- Remote Neovim server configuration (/srv/nvim-remote/init.lua)",
         'vim.g.mapleader = " "',
-        'require("installer").setup({',
+        'require("kaeru").setup({',
         '  after_write = "install",',
         "  sftp = { upload_on_save = true },",
         "})",
@@ -125,7 +125,7 @@ export function getSftpProfiles(): SftpProfile[] {
       uploadOnSave: true,
       ignore: [".git", "node_modules", ".next"],
       mode: "sandbox",
-      source: "built-in remote sandbox (/tmp/installer-sftp-remote)",
+      source: "built-in remote sandbox (/tmp/kaeru-sftp-remote)",
     });
   }
 
@@ -140,7 +140,7 @@ export function getSftpProfiles(): SftpProfile[] {
       uploadOnSave: false,
       ignore: [".git", "node_modules", ".next", "dist"],
       mode: "sandbox",
-      source: "installer.yamlpreset",
+      source: "kaeru.yamlpreset",
     });
   }
 

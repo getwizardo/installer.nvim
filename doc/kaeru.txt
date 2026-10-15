@@ -1,40 +1,40 @@
-*installer.txt*          Add plugins to lazy.nvim from inside Neovim
+*kaeru.txt*          Add plugins to lazy.nvim from inside Neovim
 
 ==============================================================================
-CONTENTS                                                   *installer-contents*
+CONTENTS                                                   *kaeru-contents*
 
-  1. Introduction ................................. |installer-introduction|
-  2. Requirements ................................. |installer-requirements|
-  3. Setup ........................................ |installer-setup|
-  4. Commands ..................................... |installer-commands|
-  5. The modal .................................... |installer-modal|
-  6. The GitHub browser ........................... |installer-browser|
-  7. Configuration ................................ |installer-configuration|
-  8. Lua API ...................................... |installer-api|
-  9. How it works ................................. |installer-internals|
- 10. GitHub account ............................... |installer-account|
- 11. AI coding plugins ............................ |installer-ai|
- 12. SFTP ......................................... |installer-sftp|
- 13. installer.yaml ............................... |installer-yaml|
- 14. Plugin cache ................................. |installer-cache|
- 15. Mason ........................................ |installer-mason|
+  1. Introduction ................................. |kaeru-introduction|
+  2. Requirements ................................. |kaeru-requirements|
+  3. Setup ........................................ |kaeru-setup|
+  4. Commands ..................................... |kaeru-commands|
+  5. The modal .................................... |kaeru-modal|
+  6. The GitHub browser ........................... |kaeru-browser|
+  7. Configuration ................................ |kaeru-configuration|
+  8. Lua API ...................................... |kaeru-api|
+  9. How it works ................................. |kaeru-internals|
+ 10. GitHub account ............................... |kaeru-account|
+ 11. AI coding plugins ............................ |kaeru-ai|
+ 12. SFTP ......................................... |kaeru-sftp|
+ 13. kaeru.yaml ............................... |kaeru-yaml|
+ 14. Plugin cache ................................. |kaeru-cache|
+ 15. Mason ........................................ |kaeru-mason|
 
 ==============================================================================
-1. INTRODUCTION                                        *installer-introduction*
+1. INTRODUCTION                                        *kaeru-introduction*
 
-installer.nvim lets you add a plugin to a |lazy.nvim| configuration without
+kaeru.nvim lets you add a plugin to a |lazy.nvim| configuration without
 leaving Neovim:
 
-  - open a modal (`:Installer`), fill in the repository and any lazy.nvim
+  - open a modal (`:Kaeru`), fill in the repository and any lazy.nvim
     spec fields you want (event, cmd, ft, keys, opts, ...),
   - a `lua/plugins/<name>.lua` spec file is written for you,
   - lazy.nvim reloads its specs and installs the plugin right away.
 
-You can also browse GitHub for Neovim plugins (`:Installer browse`), preview
+You can also browse GitHub for Neovim plugins (`:Kaeru browse`), preview
 their READMEs and install them with a single key.
 
 ==============================================================================
-2. REQUIREMENTS                                        *installer-requirements*
+2. REQUIREMENTS                                        *kaeru-requirements*
 
   - Neovim >= 0.8
   - lazy.nvim (https://github.com/folke/lazy.nvim) with a `{ import = ... }`
@@ -42,54 +42,54 @@ their READMEs and install them with a single key.
   - `curl` for the GitHub browser.
 
 ==============================================================================
-3. SETUP                                                      *installer-setup*
+3. SETUP                                                      *kaeru-setup*
 >lua
-  -- lua/plugins/installer.lua
+  -- lua/plugins/kaeru.lua
   return {
-    "getwizardo/installer.nvim",
-    cmd = "Installer",
+    "getwizardo/kaeru.nvim",
+    cmd = "Kaeru",
     opts = {},
   }
 <
 ==============================================================================
-4. COMMANDS                                                *installer-commands*
+4. COMMANDS                                                *kaeru-commands*
 
-:Installer [modal] [owner/repo]                                   *:Installer*
+:Kaeru [modal] [owner/repo]                                   *:Kaeru*
     Open the modal form, optionally prefilled with a repository.
 
-:Installer browse [query]                                  *:Installer-browse*
-    Open the GitHub browser (see |installer-browser|).
+:Kaeru browse [query]                                  *:Kaeru-browse*
+    Open the GitHub browser (see |kaeru-browser|).
 
-:Installer search [query]                                  *:Installer-search*
+:Kaeru search [query]                                  *:Kaeru-search*
     Search GitHub and pick a result with |vim.ui.select()| (works with
     telescope/fzf-lua/dressing UIs).
 
-:Installer[!] add {owner/repo}                                *:Installer-add*
+:Kaeru[!] add {owner/repo}                                *:Kaeru-add*
     Write a bare spec `{ "owner/repo" }` and install it immediately.
     With `!` existing files/plugins are overwritten without asking.
 
-:Installer dir                                                *:Installer-dir*
+:Kaeru dir                                                *:Kaeru-dir*
     Show the directory spec files are written to.
 
-:Installer ai [preset]                                         *:Installer-ai*
-    Curated AI coding plugins (see |installer-ai|). Opt-in.
+:Kaeru ai [preset]                                         *:Kaeru-ai*
+    Curated AI coding plugins (see |kaeru-ai|). Opt-in.
 
-:Installer login [gh|token|device]                          *:Installer-login*
-:Installer logout                                          *:Installer-logout*
-:Installer whoami                                          *:Installer-whoami*
-    GitHub account (see |installer-account|).
+:Kaeru login [gh|token|device]                          *:Kaeru-login*
+:Kaeru logout                                          *:Kaeru-logout*
+:Kaeru whoami                                          *:Kaeru-whoami*
+    GitHub account (see |kaeru-account|).
 
-:Installer sftp {action} [args]                              *:Installer-sftp*
-    SFTP upload / download / sync and every sftp command (see |installer-sftp|).
+:Kaeru sftp {action} [args]                              *:Kaeru-sftp*
+    SFTP upload / download / sync and every sftp command (see |kaeru-sftp|).
 
-:Installer config [edit|project|reload|show]               *:Installer-config*
-    Manage `installer.yaml` (see |installer-yaml|).
+:Kaeru config [edit|project|reload|show]               *:Kaeru-config*
+    Manage `kaeru.yaml` (see |kaeru-yaml|).
 
-:Installer cache [list|pack|restore|remove|clean|dir]       *:Installer-cache*
-    Local plugin cache (see |installer-cache|).
+:Kaeru cache [list|pack|restore|remove|clean|dir]       *:Kaeru-cache*
+    Local plugin cache (see |kaeru-cache|).
 
 ==============================================================================
-5. THE MODAL                                                  *installer-modal*
+5. THE MODAL                                                  *kaeru-modal*
 
 Each line of the modal is a field of the lazy.nvim spec. Only `Repository`
 is required. Fields map 1:1 to https://lazy.folke.io/spec:
@@ -118,7 +118,7 @@ Keys inside the modal:
   q / <Esc>         close
 
 ==============================================================================
-6. THE GITHUB BROWSER                                       *installer-browser*
+6. THE GITHUB BROWSER                                       *kaeru-browser*
 
 Results come from the GitHub search API, restricted by default to
 repositories tagged with the `neovim-plugin` topic (press `t` to search all
@@ -127,7 +127,7 @@ of GitHub). Typing `owner/repo` looks that repository up directly.
   <CR>        open the modal prefilled with the selected plugin
   i           quick install with a bare spec
   K           preview the README
-  *           star / unstar the repository (needs |:Installer-login|)
+  *           star / unstar the repository (needs |:Kaeru-login|)
   S           toggle a list of your starred repositories
   o           open the repository in your web browser
   y           yank `owner/repo`
@@ -141,10 +141,10 @@ GitHub allows 10 unauthenticated searches per minute. Set `$GITHUB_TOKEN`
 (or `github.token`) to raise it to 30.
 
 ==============================================================================
-7. CONFIGURATION                                      *installer-configuration*
+7. CONFIGURATION                                      *kaeru-configuration*
 
 Defaults: >lua
-  require("installer").setup({
+  require("kaeru").setup({
     plugins_dir = nil,          -- auto-detect from lazy.nvim, or a path/function
     after_write = "install",    -- "install" | "edit" | "none"
     confirm_overwrite = true,
@@ -161,21 +161,21 @@ Defaults: >lua
   })
 <
 ==============================================================================
-8. LUA API                                                      *installer-api*
+8. LUA API                                                      *kaeru-api*
 
-require("installer").open({ repo = "folke/noice.nvim" })    open the modal
-require("installer").browse({ query = "telescope" })        open the browser
-require("installer").search("colorscheme")                  vim.ui.select picker
-require("installer").add({ repo = "...", event = "VeryLazy", opts = "{}" })
+require("kaeru").open({ repo = "folke/noice.nvim" })    open the modal
+require("kaeru").browse({ query = "telescope" })        open the browser
+require("kaeru").search("colorscheme")                  vim.ui.select picker
+require("kaeru").add({ repo = "...", event = "VeryLazy", opts = "{}" })
                                                             write + install
-require("installer").preview(form)                          generated source
-require("installer").plugins_dir()                          target directory
+require("kaeru").preview(form)                          generated source
+require("kaeru").plugins_dir()                          target directory
 
 ==============================================================================
-9. HOW IT WORKS                                           *installer-internals*
+9. HOW IT WORKS                                           *kaeru-internals*
 
 lazy.nvim merges every `lua/<module>/*.lua` file for each `{ import = module }`
-entry in your spec. installer.nvim:
+entry in your spec. kaeru.nvim:
 
   1. reads the import modules from `require("lazy.core.config").spec.modules`
      and resolves the first one inside |stdpath|("config") (usually
@@ -186,18 +186,18 @@ entry in your spec. installer.nvim:
      lazy.nvim UI and clones the plugin.
 
 ==============================================================================
-10. GITHUB ACCOUNT                                          *installer-account*
+10. GITHUB ACCOUNT                                          *kaeru-account*
 
 Signing in raises the search rate limit (10 -> 30 requests/minute), lets you
 star plugins from the browser and shows your starred repositories.
 
 Token resolution order: >
   1. github.token from setup()
-  2. the token saved by :Installer login   (stdpath("data")/installer/github_token)
+  2. the token saved by :Kaeru login   (stdpath("data")/kaeru/github_token)
   3. $GITHUB_TOKEN / $GH_TOKEN
   4. `gh auth token` (GitHub CLI)
 <
-`:Installer login` offers three methods:
+`:Kaeru login` offers three methods:
 
   gh      reuse the GitHub CLI session (`gh auth login` first)
   token   paste a personal access token (classic: `public_repo`; fine-grained:
@@ -205,13 +205,13 @@ Token resolution order: >
   device  browser sign-in through the OAuth device flow. Requires your own
           OAuth app: set `github.client_id` (enable "Device Flow" on the app).
 
-`:Installer whoami` shows the signed-in user and the remaining search quota.
-`:Installer logout` deletes the saved token only.
+`:Kaeru whoami` shows the signed-in user and the remaining search quota.
+`:Kaeru logout` deletes the saved token only.
 
 ==============================================================================
-11. AI CODING PLUGINS                                            *installer-ai*
+11. AI CODING PLUGINS                                            *kaeru-ai*
 
-`:Installer ai` opens a list of well-known AI coding plugins with ready-made
+`:Kaeru ai` opens a list of well-known AI coding plugins with ready-made
 lazy.nvim specs, grouped as: inline completion (copilot.lua, copilot.vim,
 supermaven, windsurf/codeium, minuet-ai), chat & inline edits (codecompanion,
 avante, CopilotChat, gp, parrot, gen), coding agents (sidekick, claudecode,
@@ -219,23 +219,23 @@ opencode, claude-code, nvim-aider) and add-ons (mcphub, copilot-cmp,
 blink-copilot).
 
 The feature is OFF by default. Enable it with: >lua
-  require("installer").setup({ ai = { enabled = true } })
+  require("kaeru").setup({ ai = { enabled = true } })
 <
 Keys: `<CR>` review the spec in the modal, `i` install right away, `K` show
 details and the generated spec, `o` open on GitHub. A `●` marks plugins that
-are already in your config. `:Installer ai owner/repo` opens one preset
-directly (`:Installer! ai owner/repo` installs it).
+are already in your config. `:Kaeru ai owner/repo` opens one preset
+directly (`:Kaeru! ai owner/repo` installs it).
 
 Presets only write the spec; API keys, CLIs and subscriptions (shown on the
 right of each row) are still up to you.
 
 ==============================================================================
-12. SFTP                                                       *installer-sftp*
+12. SFTP                                                       *kaeru-sftp*
 
 Upload, download and sync project files with OpenSSH `sftp`/`scp`. Project
 uploads are split across `sftp.concurrency` parallel sftp processes.
 
-Create a profile with `:Installer sftp init`, which writes
+Create a profile with `:Kaeru sftp init`, which writes
 `.nvim-sftp.json` into the current directory: >json
   {
     "name": "production",
@@ -261,43 +261,43 @@ SSH keys and options ~
   sshConfigFile     alternative ssh config (`-F`); `host` may be an alias
   proxyJump         bastion host (`-o ProxyJump=...`)
   options           extra `-o` options, e.g. {"ServerAliveInterval": 30}
-  sftp.keys         (installer.yaml / setup) default keys for every profile
-  sftp.options      (installer.yaml / setup) default `-o` options
+  sftp.keys         (kaeru.yaml / setup) default keys for every profile
+  sftp.options      (kaeru.yaml / setup) default `-o` options
 
 Transfers: >
-  :Installer sftp upload [path]     upload the current file (or a file/dir)
-  :Installer sftp upload-project    upload every project file (git-aware)
-  :Installer sftp sync              upload files changed since the last sync
-  :Installer sftp download          download the current file
-  :Installer sftp download-project  download the whole remote tree (scp -r)
-  :Installer sftp diff              diff the buffer against the remote copy
+  :Kaeru sftp upload [path]     upload the current file (or a file/dir)
+  :Kaeru sftp upload-project    upload every project file (git-aware)
+  :Kaeru sftp sync              upload files changed since the last sync
+  :Kaeru sftp download          download the current file
+  :Kaeru sftp download-project  download the whole remote tree (scp -r)
+  :Kaeru sftp diff              diff the buffer against the remote copy
 <
 sftp commands (paths are relative to remotePath unless absolute): >
-  :Installer sftp ls [path]                 :Installer sftp df [path]
-  :Installer sftp mkdir <path>              :Installer sftp rmdir <path>
-  :Installer sftp rm <path>                 :Installer sftp rename <old> <new>
-  :Installer sftp chmod <mode> <path>       :Installer sftp chown <uid> <path>
-  :Installer sftp chgrp <gid> <path>        :Installer sftp ln [-s] <old> <new>
-  :Installer sftp symlink <old> <new>       :Installer sftp pwd
-  :Installer sftp version
-  :Installer sftp exec <cmd>; <cmd>; ...    raw sftp batch commands
-  :Installer sftp run <shell command>       run over ssh, cwd = remotePath
+  :Kaeru sftp ls [path]                 :Kaeru sftp df [path]
+  :Kaeru sftp mkdir <path>              :Kaeru sftp rmdir <path>
+  :Kaeru sftp rm <path>                 :Kaeru sftp rename <old> <new>
+  :Kaeru sftp chmod <mode> <path>       :Kaeru sftp chown <uid> <path>
+  :Kaeru sftp chgrp <gid> <path>        :Kaeru sftp ln [-s] <old> <new>
+  :Kaeru sftp symlink <old> <new>       :Kaeru sftp pwd
+  :Kaeru sftp version
+  :Kaeru sftp exec <cmd>; <cmd>; ...    raw sftp batch commands
+  :Kaeru sftp run <shell command>       run over ssh, cwd = remotePath
 <
 Sessions and tools: >
-  :Installer sftp browse [path]     remote file browser (float)
-  :Installer sftp shell             interactive `sftp` in a terminal split
-  :Installer sftp ssh               interactive shell on the host (cd remotePath)
-  :Installer sftp test              connection test + resolved command line
-  :Installer sftp status            list profiles and last sync times
-  :Installer sftp select            choose the active profile
-  :Installer sftp init              create .nvim-sftp.json
+  :Kaeru sftp browse [path]     remote file browser (float)
+  :Kaeru sftp shell             interactive `sftp` in a terminal split
+  :Kaeru sftp ssh               interactive shell on the host (cd remotePath)
+  :Kaeru sftp test              connection test + resolved command line
+  :Kaeru sftp status            list profiles and last sync times
+  :Kaeru sftp select            choose the active profile
+  :Kaeru sftp init              create .nvim-sftp.json
 <
 Remote browser keys: `<CR>` open directory / open file (temporary copy),
 `-` parent, `d` download into the project, `u` upload a local file, `m`
 mkdir, `R` rename, `D` delete, `r` refresh, `y` yank the remote path, `q`.
 
 With `uploadOnSave` (per profile) or `sftp.upload_on_save` (global) every
-`:write` uploads the file (requires `require("installer").setup()`).
+`:write` uploads the file (requires `require("kaeru").setup()`).
 
 File lists come from `git ls-files --cached --others --exclude-standard` when
 the project is a git repository, otherwise from a recursive glob, then filtered
@@ -305,17 +305,17 @@ by `sftp.ignore` + the profile's `ignore` (globs matched against the relative
 path and every path segment).
 
 ==============================================================================
-13. INSTALLER.YAML                                             *installer-yaml*
+13. INSTALLER.YAML                                             *kaeru-yaml*
 
 Every option of `setup()` can live in a YAML file instead:
 
-  global   `stdpath("config")/installer.yaml`   (`:Installer config`)
-  project  `./installer.yaml`, searched upwards from the cwd
-           (`:Installer config project`). Read with |vim.secure.read()|, so
+  global   `stdpath("config")/kaeru.yaml`   (`:Kaeru config`)
+  project  `./kaeru.yaml`, searched upwards from the cwd
+           (`:Kaeru config project`). Read with |vim.secure.read()|, so
            you are asked to trust a project file once.
 
 Precedence: defaults < global file < project file < `setup()` opts.
-`:Installer config reload` re-reads the files, `:Installer config show`
+`:Kaeru config reload` re-reads the files, `:Kaeru config show`
 prints the effective configuration as YAML. The parser is built in (no
 dependencies) and supports mappings, sequences, flow `[a, b]` / `{k: v}`,
 quoted strings, `|` / `>` block scalars and comments; anchors and tags are
@@ -343,10 +343,10 @@ Example: >yaml
         uploadOnSave: true
 <
 ==============================================================================
-14. PLUGIN CACHE                                              *installer-cache*
+14. PLUGIN CACHE                                              *kaeru-cache*
 
-installer.nvim keeps archives of installed plugins in `cache.dir`
-(`stdpath("cache")/installer`):
+kaeru.nvim keeps archives of installed plugins in `cache.dir`
+(`stdpath("cache")/kaeru`):
 
   <name>.nvimpack   zip archive of the whole plugin directory - every file and
                     folder inside it, `.git` included (tar.gz when `zip` is
@@ -358,41 +358,41 @@ installer.nvim keeps archives of installed plugins in `cache.dir`
                     URL so `:Lazy update` keeps working.
   index.json        format, size, commit, url and date per plugin
 
-With `cache.auto_pack` a plugin is archived right after installer.nvim
+With `cache.auto_pack` a plugin is archived right after kaeru.nvim
 installs it; with `cache.auto_restore` a cached plugin is unpacked into the
 lazy.nvim root before `:Lazy install` runs, so re-installing (or installing
 on a machine that shares the cache directory) needs no network. Archives
 whose commit matches the installed one are not rewritten.
 
 Commands: >
-  :Installer cache list              browse the cache (<CR> restore, p re-pack, D remove)
-  :Installer cache pack [name|all]   archive one plugin / every installed plugin
-  :Installer cache restore <name>    unpack into the lazy.nvim root (! overwrites)
-  :Installer cache remove <name>
-  :Installer cache clean             drop archives of plugins no longer in your spec
-  :Installer cache dir
+  :Kaeru cache list              browse the cache (<CR> restore, p re-pack, D remove)
+  :Kaeru cache pack [name|all]   archive one plugin / every installed plugin
+  :Kaeru cache restore <name>    unpack into the lazy.nvim root (! overwrites)
+  :Kaeru cache remove <name>
+  :Kaeru cache clean             drop archives of plugins no longer in your spec
+  :Kaeru cache dir
 <
 ==============================================================================
-15. MASON                                                     *installer-mason*
+15. MASON                                                     *kaeru-mason*
 
-`:Installer mason` integrates mason.nvim (https://github.com/mason-org/mason.nvim):
+`:Kaeru mason` integrates mason.nvim (https://github.com/mason-org/mason.nvim):
 LSP servers, DAP adapters, linters, formatters, compilers and runtimes. The
 registry is refreshed once per session (`mason.refresh_registry`). When
-mason.nvim is not installed you are offered `:Installer mason scaffold lsp`.
+mason.nvim is not installed you are offered `:Kaeru mason scaffold lsp`.
 
 Commands: >
-  :Installer mason [query]                picker over every package
-  :Installer mason lsp|dap|linter|formatter|compiler|runtime [query]
-  :Installer mason ft                     packages for the current filetype
-  :Installer mason install <name>...      Mason names, lspconfig names or aliases
-  :Installer mason <name>...              shortcut for install
-  :Installer mason uninstall|update <name>...
-  :Installer mason upgrade                update registry + reinstall outdated
-  :Installer mason ensure                 install `mason.ensure_installed`
-  :Installer mason export                 write installed names to installer.yaml
-  :Installer mason list                   installed packages with versions
-  :Installer mason scaffold lsp|dap|tools write lazy.nvim specs and install them
-  :Installer mason ui                     :Mason
+  :Kaeru mason [query]                picker over every package
+  :Kaeru mason lsp|dap|linter|formatter|compiler|runtime [query]
+  :Kaeru mason ft                     packages for the current filetype
+  :Kaeru mason install <name>...      Mason names, lspconfig names or aliases
+  :Kaeru mason <name>...              shortcut for install
+  :Kaeru mason uninstall|update <name>...
+  :Kaeru mason upgrade                update registry + reinstall outdated
+  :Kaeru mason ensure                 install `mason.ensure_installed`
+  :Kaeru mason export                 write installed names to kaeru.yaml
+  :Kaeru mason list                   installed packages with versions
+  :Kaeru mason scaffold lsp|dap|tools write lazy.nvim specs and install them
+  :Kaeru mason ui                     :Mason
 <
 Picker keys: >
   (type)         filter by name, lspconfig name, language, description
@@ -410,9 +410,9 @@ Picker keys: >
 Scaffolds (written to the lazy.nvim plugins dir, then installed): >
   lsp    lua/plugins/mason.lua   mason.nvim, mason-lspconfig.nvim, nvim-lspconfig
   dap    lua/plugins/dap.lua     nvim-dap, nvim-dap-ui, nvim-nio, mason-nvim-dap.nvim
-  tools  lua/plugins/tools.lua   mason-tool-installer.nvim, conform.nvim, nvim-lint
+  tools  lua/plugins/tools.lua   mason-tool-kaeru.nvim, conform.nvim, nvim-lint
 <
-installer.yaml keys: >
+kaeru.yaml keys: >
   mason:
     ensure_installed: [lua-language-server, stylua, debugpy]
     auto_ensure: false          # run ensure after setup()
@@ -420,7 +420,7 @@ installer.yaml keys: >
     concurrency: 2              # parallel installs
     open_ui_on_install: false
 <
-Lua API: `require("installer").mason.pick{category="LSP"}`, `.install(name)`,
+Lua API: `require("kaeru").mason.pick{category="LSP"}`, `.install(name)`,
 `.install_many(names)`, `.ensure()`, `.export()`, `.scaffold(kind)`,
 `.packages{category=, query=, installed=, language=}`, `.resolve(name)`.
 

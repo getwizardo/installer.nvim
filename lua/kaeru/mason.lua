@@ -6,8 +6,9 @@
 --                                        homepage, deprecation, neovim.lspconfig
 --   registry.get_package(name):install(opts, cb) / :uninstall()
 --   registry.refresh(cb) / registry.update(cb)
-local Config = require("installer.config")
-local UI = require("installer.ui")
+local Config = require("kaeru.config")
+local UI = require("kaeru.ui")
+local Compat = require("kaeru.compat")
 
 local M = {}
 
@@ -40,7 +41,7 @@ function M.open_registry(name)
   return url
 end
 
----@class InstallerMasonPackage
+---@class KaeruMasonPackage
 ---@field name string
 ---@field description string
 ---@field categories string[]
@@ -93,7 +94,7 @@ end
 ---@param spec table
 ---@param has_reg boolean
 ---@param registry? table
----@return InstallerMasonPackage
+---@return KaeruMasonPackage
 local function to_pkg(spec, has_reg, registry)
   return {
     name = spec.name,
@@ -103,12 +104,12 @@ local function to_pkg(spec, has_reg, registry)
     homepage = spec.homepage or "",
     installed = has_reg and registry.is_installed(spec.name) or false,
     deprecated = spec.deprecated or (spec.deprecation and (spec.deprecation.message or spec.deprecation.since)) or nil,
-    lspconfig = spec.lspconfig or vim.tbl_get(spec, "neovim", "lspconfig"),
+    lspconfig = spec.lspconfig or Compat.tbl_get(spec, "neovim", "lspconfig"),
     aliases = (has_reg and registry.get_package_aliases and registry.get_package_aliases(spec.name)) or {},
   }
 end
 
---- Return raw package specs from `mason-registry` when loaded, or from `installer.mason_data`.
+--- Return raw package specs from `mason-registry` when loaded, or from `kaeru.mason_data`.
 ---@return table[] specs, boolean has_reg, table? registry
 local function raw_specs()
   local ok, registry = pcall(require, "mason-registry")
@@ -118,7 +119,7 @@ local function raw_specs()
       return specs, true, registry
     end
   end
-  local ok_d, data = pcall(require, "installer.mason_data")
+  local ok_d, data = pcall(require, "kaeru.mason_data")
   if ok_d and data and data.packages then
     return data.packages, false, nil
   end
@@ -127,7 +128,7 @@ end
 
 --- All packages (optionally filtered).
 ---@param opts? {category?: string, query?: string, installed?: boolean, language?: string}
----@return InstallerMasonPackage[]
+---@return KaeruMasonPackage[]
 function M.packages(opts)
   opts = opts or {}
   local specs, has_reg, registry = raw_specs()
@@ -137,7 +138,7 @@ function M.packages(opts)
   for _, spec in ipairs(specs) do
     local p = to_pkg(spec, has_reg, registry)
     local keep = true
-    if opts.category and not vim.tbl_contains(p.categories, opts.category) then
+    if opts.category and not Compat.tbl_contains(p.categories, opts.category) then
       keep = false
     end
     if keep and opts.installed and not p.installed then
@@ -386,12 +387,12 @@ function M.resolve(name)
     if spec.name == name then
       return spec.name
     end
-    local lspc = spec.lspconfig or vim.tbl_get(spec, "neovim", "lspconfig")
+    local lspc = spec.lspconfig or Compat.tbl_get(spec, "neovim", "lspconfig")
     if lspc == name then
       return spec.name
     end
     local aliases = (has_reg and registry.get_package_aliases and registry.get_package_aliases(spec.name)) or {}
-    if vim.tbl_contains(aliases, name) then
+    if Compat.tbl_contains(aliases, name) then
       return spec.name
     end
   end
@@ -402,7 +403,7 @@ end
 ---@param names string[]
 ---@param cb? fun(installed: integer, failed: string[])
 function M.install_many(names, cb)
-  local Process = require("installer.process")
+  local Process = require("kaeru.process")
   local tasks = {}
   for _, name in ipairs(names) do
     tasks[#tasks + 1] = function(done)
@@ -430,11 +431,11 @@ function M.install_many(names, cb)
   end)
 end
 
---- Install everything listed in `mason.ensure_installed` (installer.yaml / setup).
+--- Install everything listed in `mason.ensure_installed` (kaeru.yaml / setup).
 function M.ensure()
   local list = Config.options.mason.ensure_installed or {}
   if #list == 0 then
-    return UI.notify("mason.ensure_installed is empty (installer.yaml / setup)", vim.log.levels.WARN)
+    return UI.notify("mason.ensure_installed is empty (kaeru.yaml / setup)", vim.log.levels.WARN)
   end
   M.ensure_registry(function(ready)
     if not ready then
@@ -457,7 +458,7 @@ function M.ensure()
   end)
 end
 
---- Write the installed package names into the global installer.yaml (`mason.ensure_installed`).
+--- Write the installed package names into the global kaeru.yaml (`mason.ensure_installed`).
 function M.export()
   if not M.available() then
     return missing()
@@ -465,7 +466,7 @@ function M.export()
   local registry = require("mason-registry")
   local names = registry.get_installed_package_names()
   table.sort(names)
-  local Yaml = require("installer.yaml")
+  local Yaml = require("kaeru.yaml")
   local path = Config.options.config.global
   local data = {}
   if uv.fs_stat(path) then
@@ -526,7 +527,7 @@ function M.upgrade()
         end
       end
       if pending == 0 then
-        UI.notify("Mason: registry updated. Use :Installer mason update <name> to reinstall a package")
+        UI.notify("Mason: registry updated. Use :Kaeru mason update <name> to reinstall a package")
       end
     end)
   end)
@@ -541,7 +542,7 @@ local SCAFFOLDS = {
     source = function(installed)
       local servers = {}
       for _, p in ipairs(installed) do
-        if p.lspconfig and vim.tbl_contains(p.categories, "LSP") then
+        if p.lspconfig and Compat.tbl_contains(p.categories, "LSP") then
           servers[#servers + 1] = ("      %q,"):format(p.lspconfig)
         end
       end
@@ -558,7 +559,7 @@ local SCAFFOLDS = {
         '    event = { "BufReadPre", "BufNewFile" },',
         '    dependencies = { "mason-org/mason.nvim", "neovim/nvim-lspconfig" },',
         "    opts = {",
-        "      -- servers installed through installer.nvim / :Mason",
+        "      -- servers installed through kaeru.nvim / :Mason",
         "      ensure_installed = {",
         table.concat(servers, "\n"),
         "      },",
@@ -577,7 +578,7 @@ local SCAFFOLDS = {
     source = function(installed)
       local adapters = {}
       for _, p in ipairs(installed) do
-        if vim.tbl_contains(p.categories, "DAP") then
+        if Compat.tbl_contains(p.categories, "DAP") then
           adapters[#adapters + 1] = ("      %q,"):format(p.name)
         end
       end
@@ -622,7 +623,7 @@ local SCAFFOLDS = {
     source = function(installed)
       local tools = {}
       for _, p in ipairs(installed) do
-        if vim.tbl_contains(p.categories, "Linter") or vim.tbl_contains(p.categories, "Formatter") then
+        if Compat.tbl_contains(p.categories, "Linter") or Compat.tbl_contains(p.categories, "Formatter") then
           tools[#tools + 1] = ("      %q,"):format(p.name)
         end
       end
@@ -672,13 +673,13 @@ local SCAFFOLDS = {
 function M.scaffold(kind)
   local def = SCAFFOLDS[kind or "lsp"]
   if not def then
-    return UI.notify("Usage: :Installer mason scaffold lsp|dap|tools", vim.log.levels.WARN)
+    return UI.notify("Usage: :Kaeru mason scaffold lsp|dap|tools", vim.log.levels.WARN)
   end
   local installed = {}
   if M.available() then
     installed = M.packages({ installed = true })
   end
-  local Lazy = require("installer.lazy")
+  local Lazy = require("kaeru.lazy")
   local dir = Lazy.plugins_dir()
   vim.fn.mkdir(dir, "p")
   local path = dir .. "/" .. def.file .. ".lua"
@@ -687,7 +688,7 @@ function M.scaffold(kind)
   end
   local fd = assert(io.open(path, "w"))
   if Config.options.header then
-    fd:write("-- Generated by installer.nvim (:Installer mason scaffold " .. kind .. ")\n")
+    fd:write("-- Generated by kaeru.nvim (:Kaeru mason scaffold " .. kind .. ")\n")
   end
   fd:write(def.source(installed))
   fd:close()
@@ -709,14 +710,14 @@ end
 
 local CAT_ICON = { LSP = "LSP", DAP = "DAP", Linter = "LNT", Formatter = "FMT", Compiler = "CMP", Runtime = "RUN" }
 
----@class InstallerMasonPickerOpts
+---@class KaeruMasonPickerOpts
 ---@field query? string
 ---@field category? string
 ---@field language? string
 ---@field installed?
 
---- Floating package picker (`:Installer mason`).
----@param opts? InstallerMasonPickerOpts
+--- Floating package picker (`:Kaeru mason`).
+---@param opts? KaeruMasonPickerOpts
 function M.pick(opts)
   opts = opts or {}
   M.ensure_registry(function(ready)
@@ -744,7 +745,7 @@ function M.pick(opts)
       height = height - 3,
       row = row + 3,
       col = col,
-      filetype = "installer-mason",
+      filetype = "kaeru-mason",
       enter = false,
     })
     vim.wo[list_win].cursorline = true
@@ -776,7 +777,7 @@ function M.pick(opts)
         language = state.language,
         installed = state.installed,
       })
-      local marked = vim.tbl_count(state.marked)
+      local marked = Compat.tbl_count(state.marked)
       local out = {
         ("  %d packages · category: %s · language: %s · %s%s"):format(
           #state.items,
@@ -832,7 +833,7 @@ function M.pick(opts)
       return state.items[vim.api.nvim_win_get_cursor(list_win)[1] - 1]
     end
     local function targets()
-      local names = vim.tbl_keys(state.marked)
+      local names = Compat.tbl_keys(state.marked)
       if #names > 0 then
         table.sort(names)
         return names
@@ -1012,7 +1013,7 @@ function M.pick(opts)
       }, "\n"))
     end, "Help")
 
-    local group = vim.api.nvim_create_augroup("installer.mason", { clear = true })
+    local group = vim.api.nvim_create_augroup("kaeru.mason", { clear = true })
     local timer
     vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
       group = group,
@@ -1030,7 +1031,7 @@ function M.pick(opts)
         timer:start(120, 0, function()
           vim.schedule(function()
             if valid() then
-              state.query = vim.trim(vim.api.nvim_buf_get_lines(prompt_buf, 0, 1, false)[1] or "")
+              state.query = Compat.trim(vim.api.nvim_buf_get_lines(prompt_buf, 0, 1, false)[1] or "")
               render()
             end
           end)

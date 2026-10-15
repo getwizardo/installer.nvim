@@ -24,17 +24,18 @@
 --   }
 --
 -- The file may also be a JSON array of such objects. The same profiles can be
--- written in `installer.yaml` under `sftp.profiles` (see :help installer-yaml).
+-- written in `kaeru.yaml` under `sftp.profiles` (see :help kaeru-yaml).
 -- `host` may be an alias from your ssh config.
-local Config = require("installer.config")
-local Process = require("installer.process")
-local UI = require("installer.ui")
+local Config = require("kaeru.config")
+local Process = require("kaeru.process")
+local UI = require("kaeru.ui")
+local Compat = require("kaeru.compat")
 
 local M = {}
 
 local uv = vim.uv or vim.loop
 
----@class InstallerSftpProfile
+---@class KaeruSftpProfile
 ---@field name string
 ---@field host string
 ---@field port? integer
@@ -109,7 +110,7 @@ local function ignored(rel, patterns)
   return false
 end
 
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@return string[]
 local function ignore_patterns(profile)
   local globs = vim.list_extend({ Config.options.sftp.config_file }, Config.options.sftp.ignore or {})
@@ -131,7 +132,7 @@ local function report(ok, msg)
   UI.notify(msg, ok and vim.log.levels.INFO or vim.log.levels.ERROR)
 end
 
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param rel string
 ---@return string
 function M.remote_path(profile, rel)
@@ -153,7 +154,7 @@ local function find_config(start)
 end
 
 ---@param path string
----@return InstallerSftpProfile[]|nil, string? err
+---@return KaeruSftpProfile[]|nil, string? err
 local function read_config(path)
   local fd = io.open(path, "r")
   if not fd then
@@ -181,7 +182,7 @@ end
 
 --- All profiles that apply to `file` (or cwd).
 ---@param file? string
----@return InstallerSftpProfile[], string? err
+---@return KaeruSftpProfile[], string? err
 function M.profiles(file)
   local start = file and file ~= "" and vim.fn.fnamemodify(file, ":p:h") or vim.fn.getcwd()
   local list, err = {}, nil
@@ -210,7 +211,7 @@ end
 
 --- Pick a profile (asks when several match).
 ---@param file? string
----@param cb fun(profile: InstallerSftpProfile|nil)
+---@param cb fun(profile: KaeruSftpProfile|nil)
 function M.select(file, cb)
   local list, err = M.profiles(file)
   if err then
@@ -218,7 +219,7 @@ function M.select(file, cb)
   end
   if #list == 0 then
     UI.notify(
-      ("No SFTP profile found. Create %s with :Installer sftp init"):format(Config.options.sftp.config_file),
+      ("No SFTP profile found. Create %s with :Kaeru sftp init"):format(Config.options.sftp.config_file),
       vim.log.levels.WARN
     )
     return cb(nil)
@@ -269,7 +270,7 @@ end
 -- Command construction ------------------------------------------------------------
 
 --- Private keys for a profile, in the order ssh should try them.
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@return string[]
 function M.keys(profile)
   local keys = {}
@@ -301,7 +302,7 @@ local function opt_value(v)
   return tostring(v)
 end
 
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param cmd "sftp"|"scp"|"ssh"
 ---@return string[]|nil args, string? err
 function M.base_cmd(profile, cmd)
@@ -324,8 +325,8 @@ function M.base_cmd(profile, cmd)
   if profile.proxyJump and profile.proxyJump ~= "" then
     vim.list_extend(args, { "-o", "ProxyJump=" .. profile.proxyJump })
   end
-  local options = vim.tbl_extend("force", Config.options.sftp.options or {}, profile.options or {})
-  local names = vim.tbl_keys(options)
+  local options = Compat.tbl_extend("force", Config.options.sftp.options or {}, profile.options or {})
+  local names = Compat.tbl_keys(options)
   table.sort(names)
   for _, name in ipairs(names) do
     vim.list_extend(args, { "-o", name .. "=" .. opt_value(options[name]) })
@@ -344,7 +345,7 @@ function M.base_cmd(profile, cmd)
   return args
 end
 
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@return string
 function M.target(profile)
   if profile.username and profile.username ~= "" then
@@ -354,7 +355,7 @@ function M.target(profile)
 end
 
 --- Build the contents of an sftp batch file that uploads `rels`.
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param rels string[] relative paths
 ---@return string
 function M.upload_batch(profile, rels)
@@ -383,11 +384,11 @@ function M.upload_batch(profile, rels)
 end
 
 --- Resolve a user supplied remote path: absolute stays, relative is under remotePath.
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param path? string
 ---@return string
 function M.resolve(profile, path)
-  path = path and vim.trim(path) or ""
+  path = path and Compat.trim(path) or ""
   if path == "" or path == "." then
     return (profile.remotePath:gsub("/+$", ""))
   end
@@ -398,7 +399,7 @@ function M.resolve(profile, path)
 end
 
 --- Run sftp batch commands and return the (echo-stripped) output.
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param commands string[]
 ---@param cb fun(ok: boolean, output: string, err: string)
 function M.batch(profile, commands, cb)
@@ -417,12 +418,12 @@ function M.batch(profile, commands, cb)
         out[#out + 1] = line
       end
     end
-    cb(res.code == 0, table.concat(out, "\n"), vim.trim(res.stderr or ""))
+    cb(res.code == 0, table.concat(out, "\n"), Compat.trim(res.stderr or ""))
   end)
 end
 
 --- Run a shell command on the remote host (cwd = remotePath).
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param command string
 ---@param cb fun(ok: boolean, output: string, err: string)
 function M.ssh(profile, command, cb)
@@ -433,12 +434,12 @@ function M.ssh(profile, command, cb)
   local args = vim.deepcopy(base)
   vim.list_extend(args, { M.target(profile), ("cd %s && %s"):format(q(profile.remotePath), command) })
   Process.run(args, function(res)
-    cb(res.code == 0, vim.trim(res.stdout or ""), vim.trim(res.stderr or ""))
+    cb(res.code == 0, Compat.trim(res.stdout or ""), Compat.trim(res.stderr or ""))
   end)
 end
 
 --- Full argv for an interactive session (used by `shell` / `ssh` and `keys`).
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param cmd "sftp"|"ssh"
 ---@return string[]|nil, string? err
 function M.interactive_cmd(profile, cmd)
@@ -499,7 +500,7 @@ end
 -- File discovery ---------------------------------------------------------------------
 
 --- List project files relative to the profile root (git-aware, ignore-filtered).
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@return string[]
 function M.list_files(profile)
   local root = profile.root
@@ -551,13 +552,13 @@ end
 
 -- Transfers ---------------------------------------------------------------------------
 
----@class InstallerSftpResult
+---@class KaeruSftpResult
 ---@field ok boolean
 ---@field files integer
 ---@field err? string
 
 --- Upload `rels` with up to `sftp.concurrency` parallel sftp processes.
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param rels string[]
 ---@param cb fun(ok: boolean, summary: string)
 ---@param opts? {quiet?: boolean}
@@ -620,7 +621,7 @@ function M.upload(profile, rels, cb, opts)
 end
 
 --- Download a single remote file (counterpart of the local `rel`).
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param rel string
 ---@param cb fun(ok: boolean, msg: string)
 function M.download(profile, rel, cb)
@@ -637,13 +638,13 @@ function M.download(profile, rel, cb)
     if res.code == 0 then
       cb(true, "Downloaded " .. rel .. " from " .. profile.name)
     else
-      cb(false, "Download failed: " .. vim.trim(res.stderr))
+      cb(false, "Download failed: " .. Compat.trim(res.stderr))
     end
   end)
 end
 
 --- Download the whole remote tree into the project root (uses scp -r).
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param cb fun(ok: boolean, msg: string)
 function M.download_project(profile, cb)
   local base, err = M.base_cmd(profile, "scp")
@@ -657,7 +658,7 @@ function M.download_project(profile, cb)
     if res.code == 0 then
       cb(true, "Downloaded project from " .. profile.name)
     else
-      cb(false, "Download failed: " .. vim.trim(res.stderr))
+      cb(false, "Download failed: " .. Compat.trim(res.stderr))
     end
   end)
 end
@@ -666,12 +667,12 @@ end
 
 local function state_file(profile)
   local key = vim.fn.sha256(profile.root .. "|" .. profile.host .. "|" .. profile.remotePath)
-  local dir = vim.fn.stdpath("state") .. "/installer/sftp"
+  local dir = vim.fn.stdpath("state") .. "/kaeru/sftp"
   vim.fn.mkdir(dir, "p")
   return dir .. "/" .. key:sub(1, 16) .. ".json"
 end
 
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@return number last sync time (seconds), 0 when never synced
 function M.last_sync(profile)
   local fd = io.open(state_file(profile), "r")
@@ -683,7 +684,7 @@ function M.last_sync(profile)
   return ok and tonumber(data.synced_at) or 0
 end
 
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param t number
 function M.set_last_sync(profile, t)
   local fd = io.open(state_file(profile), "w")
@@ -694,7 +695,7 @@ function M.set_last_sync(profile, t)
 end
 
 --- Files changed since the last sync.
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@return string[]
 function M.changed_files(profile)
   local since = M.last_sync(profile)
@@ -828,7 +829,7 @@ local function show_output(title, text)
   end)
 end
 
----@param profile InstallerSftpProfile
+---@param profile KaeruSftpProfile
 ---@param cmd string
 ---@param args string[]
 local function run_simple(profile, cmd, args)
@@ -871,7 +872,7 @@ function M.command(cmd, args)
     return UI.notify("Unknown sftp command: " .. cmd, vim.log.levels.ERROR)
   end
   if #args < def.min then
-    return UI.notify("Usage: :Installer sftp " .. def.usage, vim.log.levels.WARN)
+    return UI.notify("Usage: :Kaeru sftp " .. def.usage, vim.log.levels.WARN)
   end
   M.select(vim.api.nvim_buf_get_name(0), function(profile)
     if not profile then
@@ -910,8 +911,8 @@ end
 --- Run raw sftp batch commands, separated by `;`.
 ---@param text string
 function M.exec(text)
-  if not text or vim.trim(text) == "" then
-    return UI.notify("Usage: :Installer sftp exec <sftp commands separated by ;>", vim.log.levels.WARN)
+  if not text or Compat.trim(text) == "" then
+    return UI.notify("Usage: :Kaeru sftp exec <sftp commands separated by ;>", vim.log.levels.WARN)
   end
   M.select(vim.api.nvim_buf_get_name(0), function(profile)
     if not profile then
@@ -919,7 +920,7 @@ function M.exec(text)
     end
     local commands = {}
     for part in text:gmatch("[^;]+") do
-      part = vim.trim(part)
+      part = Compat.trim(part)
       if part ~= "" then
         commands[#commands + 1] = part
       end
@@ -933,8 +934,8 @@ end
 --- Run a shell command on the remote host.
 ---@param text string
 function M.run(text)
-  if not text or vim.trim(text) == "" then
-    return UI.notify("Usage: :Installer sftp run <command>", vim.log.levels.WARN)
+  if not text or Compat.trim(text) == "" then
+    return UI.notify("Usage: :Kaeru sftp run <command>", vim.log.levels.WARN)
   end
   M.select(vim.api.nvim_buf_get_name(0), function(profile)
     if not profile then
@@ -970,7 +971,7 @@ function M.test()
       return
     end
     local args = M.base_cmd(profile, "sftp") or {}
-    local shown = vim.tbl_map(function(a)
+    local shown = Compat.tbl_map(function(a)
       return a == profile.password and "******" or a
     end, args)
     local keys = M.keys(profile)
@@ -1031,7 +1032,7 @@ function M.browse(start_path)
       title = ("sftp · %s"):format(profile.name),
       width = math.min(vim.o.columns - 4, 100),
       height = math.min(vim.o.lines - 6, 30),
-      filetype = "installer-sftp",
+      filetype = "kaeru-sftp",
     })
     vim.wo[win].cursorline = true
     vim.bo[buf].modifiable = false
@@ -1113,7 +1114,7 @@ function M.browse(start_path)
           end
           close()
           vim.cmd.edit(vim.fn.fnameescape(tmp))
-          vim.b.installer_sftp_remote = { profile = profile.name, path = join(e.name) }
+          vim.b.kaeru_sftp_remote = { profile = profile.name, path = join(e.name) }
           UI.notify("Opened remote copy of " .. e.name .. " (temporary file)")
         end)
       end
@@ -1220,7 +1221,7 @@ function M.upload_path(path)
     end
     if is_dir(path) then
       local sub = relative(profile.root, path)
-      local files = vim.tbl_filter(function(rel)
+      local files = Compat.tbl_filter(function(rel)
         return sub == nil or rel:sub(1, #sub + 1) == sub .. "/"
       end, M.list_files(profile))
       return M.upload(profile, files, report)
@@ -1265,7 +1266,7 @@ function M.status()
     UI.notify(err, vim.log.levels.ERROR)
   end
   if #list == 0 then
-    return UI.notify("No SFTP profiles for this project (:Installer sftp init)", vim.log.levels.WARN)
+    return UI.notify("No SFTP profiles for this project (:Kaeru sftp init)", vim.log.levels.WARN)
   end
   local lines = {}
   for _, p in ipairs(list) do
@@ -1285,7 +1286,7 @@ end
 
 --- Upload-on-save autocmd (installed by setup()).
 function M.setup_autocmd()
-  local group = vim.api.nvim_create_augroup("installer.sftp", { clear = true })
+  local group = vim.api.nvim_create_augroup("kaeru.sftp", { clear = true })
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = group,
     callback = function(ev)
@@ -1425,7 +1426,7 @@ function M.ui(profile_name)
     height = header_h,
     style = "minimal",
     border = Config.options.ui.border or "rounded",
-    title = " installer.nvim · SFTP Studio ",
+    title = " kaeru.nvim · SFTP Studio ",
     title_pos = "center",
   })
   local left_win = vim.api.nvim_open_win(left_buf, true, {
@@ -1540,7 +1541,7 @@ function M.ui(profile_name)
     local lines = { string.format("  🌐 %s:%s (%s)", profile.host or "remote", remote_cwd, remote_status) }
     if profile._unconfigured then
       lines[#lines + 1] = "  No SFTP profile configured for this workspace."
-      lines[#lines + 1] = "  Press `i` to create sftp.json or configure `sftp.profiles` in installer.yaml."
+      lines[#lines + 1] = "  Press `i` to create sftp.json or configure `sftp.profiles` in kaeru.yaml."
     else
       for _, e in ipairs(remote_entries) do
         local icon = e.type == "dir" and "▸ " or (e.type == "link" and "→ " or "  ")
@@ -1759,7 +1760,7 @@ function M.ui(profile_name)
         return UI.notify("Configure an SFTP profile first (`i`)", vim.log.levels.WARN)
       end
       vim.ui.input({ prompt = ("SSH (%s@%s): "):format(profile.username or "", profile.host or "") }, function(cmd)
-        if not cmd or vim.trim(cmd) == "" then
+        if not cmd or Compat.trim(cmd) == "" then
           return
         end
         status_text = "Running SSH: " .. cmd
@@ -1817,7 +1818,7 @@ function M.ui(profile_name)
             end
             close_all()
             vim.cmd.edit(vim.fn.fnameescape(tmp))
-            vim.b.installer_sftp_remote = { profile = profile.name, path = full_remote }
+            vim.b.kaeru_sftp_remote = { profile = profile.name, path = full_remote }
             UI.notify("Opened remote copy of " .. e.name)
           end)
         end
@@ -1825,7 +1826,7 @@ function M.ui(profile_name)
     end)
     UI.map(buf, "m", function()
       vim.ui.input({ prompt = ("New %s directory: "):format(pane_kind) }, function(name)
-        if not name or vim.trim(name) == "" then
+        if not name or Compat.trim(name) == "" then
           return
         end
         if pane_kind == "local" then

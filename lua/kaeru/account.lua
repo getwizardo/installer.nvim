@@ -2,27 +2,28 @@
 --
 -- Token sources, in order:
 --   1. `github.token` from setup()
---   2. a token saved by `:Installer login` (stdpath("data")/installer/github_token, mode 0600)
+--   2. a token saved by `:Kaeru login` (stdpath("data")/kaeru/github_token, mode 0600)
 --   3. $GITHUB_TOKEN / $GH_TOKEN
 --   4. `gh auth token` (GitHub CLI), cached for the session
 --
--- `:Installer login` supports: GitHub CLI, pasting a personal access token, or the
+-- `:Kaeru login` supports: GitHub CLI, pasting a personal access token, or the
 -- OAuth device flow (https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#device-flow)
 -- when `github.client_id` is configured.
-local Config = require("installer.config")
-local Process = require("installer.process")
+local Config = require("kaeru.config")
+local Process = require("kaeru.process")
+local Compat = require("kaeru.compat")
 
 local M = {}
 
 local uv = vim.uv or vim.loop
 
----@class InstallerUser
+---@class KaeruUser
 ---@field login string
 ---@field name string|nil
 ---@field avatar_url string
 ---@field html_url string
 
----@type InstallerUser|nil
+---@type KaeruUser|nil
 M.user = nil
 ---@type string|nil cached token from `gh auth token`
 M._gh_token = nil
@@ -30,7 +31,7 @@ M._gh_token = nil
 M.starred = {}
 
 local function token_file()
-  return vim.fn.stdpath("data") .. "/installer/github_token"
+  return vim.fn.stdpath("data") .. "/kaeru/github_token"
 end
 
 ---@return string|nil
@@ -39,7 +40,7 @@ local function read_saved_token()
   if not fd then
     return nil
   end
-  local t = vim.trim(fd:read("*a") or "")
+  local t = Compat.trim(fd:read("*a") or "")
   fd:close()
   return t ~= "" and t or nil
 end
@@ -90,7 +91,7 @@ function M.gh_token(cb)
     return cb(nil)
   end
   Process.run({ "gh", "auth", "token" }, function(res)
-    local t = vim.trim(res.stdout or "")
+    local t = Compat.trim(res.stdout or "")
     if res.code == 0 and t ~= "" then
       M._gh_token = t
       cb(t)
@@ -113,13 +114,13 @@ function M.ensure_token(cb)
 end
 
 --- Fetch /user and cache it.
----@param cb fun(err: string|nil, user: InstallerUser|nil)
+---@param cb fun(err: string|nil, user: KaeruUser|nil)
 function M.fetch_user(cb)
   M.ensure_token(function(token)
     if not token then
       return cb(nil, nil)
     end
-    require("installer.github").get_json("https://api.github.com/user", function(err, data)
+    require("kaeru.github").get_json("https://api.github.com/user", function(err, data)
       if err then
         return cb(err, nil)
       end
@@ -139,7 +140,7 @@ end
 ---@param token string
 ---@param cb? fun(ok: boolean, err?: string)
 function M.login_with_token(token, cb)
-  token = vim.trim(token)
+  token = Compat.trim(token)
   if token == "" then
     return cb and cb(false, "empty token")
   end
@@ -176,13 +177,13 @@ function M.login_device_flow(cb)
       "-H",
       "Accept: application/json",
       "-H",
-      "User-Agent: installer.nvim",
+      "User-Agent: kaeru.nvim",
       "-d",
       body,
       url,
     }, function(res)
       if res.code ~= 0 then
-        return done("curl failed: " .. vim.trim(res.stderr))
+        return done("curl failed: " .. Compat.trim(res.stderr))
       end
       local ok, data = pcall(vim.json.decode, res.stdout)
       if not ok then
@@ -200,7 +201,7 @@ function M.login_device_flow(cb)
         return cb(false, err or ("device flow error: " .. vim.inspect(data)))
       end
       local msg = ("Open %s and enter the code: %s"):format(data.verification_uri, data.user_code)
-      vim.notify(msg, vim.log.levels.INFO, { title = "installer.nvim · GitHub login", timeout = false })
+      vim.notify(msg, vim.log.levels.INFO, { title = "kaeru.nvim · GitHub login", timeout = false })
       vim.fn.setreg("+", data.user_code)
       if vim.ui.open then
         pcall(vim.ui.open, data.verification_uri)
@@ -264,10 +265,10 @@ function M.login_device_flow(cb)
   )
 end
 
---- Interactive login (`:Installer login`).
+--- Interactive login (`:Kaeru login`).
 ---@param method? "gh"|"token"|"device"
 function M.login(method)
-  local UI = require("installer.ui")
+  local UI = require("kaeru.ui")
   local function finish(ok, err)
     if ok then
       UI.notify(("Signed in to GitHub as %s"):format(M.user and M.user.login or "?"))
@@ -323,21 +324,21 @@ function M.logout()
   M.user = nil
   M._gh_token = nil
   M.starred = {}
-  require("installer.ui").notify("Signed out of GitHub (env tokens and the GitHub CLI are not touched)")
+  require("kaeru.ui").notify("Signed out of GitHub (env tokens and the GitHub CLI are not touched)")
 end
 
---- `:Installer whoami`
+--- `:Kaeru whoami`
 function M.whoami()
-  local UI = require("installer.ui")
+  local UI = require("kaeru.ui")
   M.fetch_user(function(err, user)
     if err then
       return UI.notify(err, vim.log.levels.ERROR)
     end
     if not user then
-      return UI.notify("Not signed in. Run :Installer login", vim.log.levels.WARN)
+      return UI.notify("Not signed in. Run :Kaeru login", vim.log.levels.WARN)
     end
     local _, source = M.token()
-    require("installer.github").get_json("https://api.github.com/rate_limit", function(rerr, data)
+    require("kaeru.github").get_json("https://api.github.com/rate_limit", function(rerr, data)
       local rl = ""
       if not rerr and data and data.resources then
         local s = data.resources.search
@@ -363,7 +364,7 @@ function M.is_starred(full_name, cb)
   end
   local args = M.curl_args("https://api.github.com/user/starred/" .. full_name, { "-o", "/dev/null", "-w", "%{http_code}" })
   Process.run(args, function(res)
-    local code = vim.trim(res.stdout)
+    local code = Compat.trim(res.stdout)
     if code == "204" then
       M.starred[full_name] = true
       cb(nil, true)
@@ -385,7 +386,7 @@ function M.set_star(full_name, star, cb)
     { "-X", star and "PUT" or "DELETE", "-H", "Content-Length: 0", "-o", "/dev/null", "-w", "%{http_code}" }
   )
   Process.run(args, function(res)
-    local code = vim.trim(res.stdout)
+    local code = Compat.trim(res.stdout)
     if code == "204" then
       M.starred[full_name] = star
       cb(nil)
@@ -399,9 +400,9 @@ end
 
 --- List the signed-in user's starred repositories.
 ---@param page integer
----@param cb fun(err: string|nil, items: InstallerRepo[]|nil)
+---@param cb fun(err: string|nil, items: KaeruRepo[]|nil)
 function M.list_starred(page, cb)
-  local GitHub = require("installer.github")
+  local GitHub = require("kaeru.github")
   local url = ("https://api.github.com/user/starred?per_page=%d&page=%d&sort=created"):format(
     math.min(Config.options.github.per_page, 100),
     page
@@ -435,7 +436,7 @@ function M.curl_args(url, extra)
     "-H",
     "X-GitHub-Api-Version: 2022-11-28",
     "-H",
-    "User-Agent: installer.nvim",
+    "User-Agent: kaeru.nvim",
   }
   local token = M.token()
   if token then

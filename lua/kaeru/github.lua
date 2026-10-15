@@ -2,7 +2,8 @@
 --
 -- Search API: https://docs.github.com/en/rest/search/search#search-repositories
 -- Unauthenticated requests are limited to 10 searches/minute, authenticated to 30.
-local Config = require("installer.config")
+local Config = require("kaeru.config")
+local Compat = require("kaeru.compat")
 
 local M = {}
 
@@ -11,7 +12,7 @@ local M = {}
 
 local API = "https://api.github.com"
 
----@class InstallerRepo
+---@class KaeruRepo
 ---@field full_name string
 ---@field description string
 ---@field stars integer
@@ -21,7 +22,7 @@ local API = "https://api.github.com"
 ---@field archived boolean
 ---@field language string|nil
 
----@type table<string, {items: InstallerRepo[], total: integer}>
+---@type table<string, {items: KaeruRepo[], total: integer}>
 M._cache = {}
 
 ---@param s string
@@ -34,7 +35,7 @@ end
 
 ---@return string|nil
 function M.token()
-  return (require("installer.account").token())
+  return (require("kaeru.account").token())
 end
 
 ---@param url string
@@ -45,14 +46,14 @@ local function curl_args(url, extra_headers)
   for _, h in ipairs(extra_headers or {}) do
     vim.list_extend(extra, { "-H", h })
   end
-  return require("installer.account").curl_args(url, extra)
+  return require("kaeru.account").curl_args(url, extra)
 end
 
 --- Run a command asynchronously and call `cb(code, stdout, stderr)` on the main loop.
 ---@param args string[]
 ---@param cb fun(code: integer, stdout: string, stderr: string)
 function M.run(args, cb)
-  require("installer.process").run(args, function(res)
+  require("kaeru.process").run(args, function(res)
     cb(res.code, res.stdout, res.stderr)
   end)
 end
@@ -64,7 +65,7 @@ end
 function M.get_json(url, cb, headers)
   M.run(curl_args(url, headers), function(code, stdout, stderr)
     if code ~= 0 then
-      return cb(("curl failed (%d): %s"):format(code, vim.trim(stderr)), nil)
+      return cb(("curl failed (%d): %s"):format(code, Compat.trim(stderr)), nil)
     end
     local ok, data = pcall(vim.json.decode, stdout, { luanil = { object = true, array = true } })
     if not ok then
@@ -82,7 +83,7 @@ function M.get_json(url, cb, headers)
 end
 
 ---@param item table
----@return InstallerRepo
+---@return KaeruRepo
 function M.to_repo(item)
   return {
     full_name = item.full_name,
@@ -96,7 +97,7 @@ function M.to_repo(item)
   }
 end
 
----@class InstallerSearchOpts
+---@class KaeruSearchOpts
 ---@field query? string   free text
 ---@field page? integer
 ---@field per_page? integer
@@ -104,11 +105,11 @@ end
 ---@field broad? boolean  search beyond the `neovim-plugin` topic
 
 --- Build the `q=` string for the search API.
----@param opts InstallerSearchOpts
+---@param opts KaeruSearchOpts
 ---@return string
 function M.build_query(opts)
   local gh = Config.options.github
-  local q = vim.trim(opts.query or "")
+  local q = Compat.trim(opts.query or "")
   -- if the user typed owner/repo, look it up directly by name
   if q:match("^[%w_.-]+/[%w_.-]+$") then
     return q .. " in:name"
@@ -121,8 +122,8 @@ function M.build_query(opts)
 end
 
 --- Search GitHub repositories.
----@param opts InstallerSearchOpts
----@param cb fun(err: string|nil, result: {items: InstallerRepo[], total: integer, page: integer}|nil)
+---@param opts KaeruSearchOpts
+---@param cb fun(err: string|nil, result: {items: KaeruRepo[], total: integer, page: integer}|nil)
 function M.search(opts, cb)
   opts = opts or {}
   local gh = Config.options.github
@@ -170,7 +171,7 @@ function M.readme(full_name, cb)
   end
   M.run(args, function(code, stdout, stderr)
     if code ~= 0 then
-      return cb(("curl failed (%d): %s"):format(code, vim.trim(stderr)), nil)
+      return cb(("curl failed (%d): %s"):format(code, Compat.trim(stderr)), nil)
     end
     if stdout:match('^%s*{%s*"message"') then
       local ok, data = pcall(vim.json.decode, stdout)

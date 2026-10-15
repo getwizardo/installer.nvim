@@ -1,8 +1,9 @@
--- `:Installer browse` - search GitHub for Neovim plugins and pick one.
-local UI = require("installer.ui")
-local Config = require("installer.config")
-local GitHub = require("installer.github")
-local Account = require("installer.account")
+-- `:Kaeru browse` - search GitHub for Neovim plugins and pick one.
+local UI = require("kaeru.ui")
+local Config = require("kaeru.config")
+local GitHub = require("kaeru.github")
+local Account = require("kaeru.account")
+local Compat = require("kaeru.compat")
 
 local M = {}
 
@@ -10,7 +11,7 @@ local uv = vim.uv or vim.loop
 
 local SORTS = { "stars", "updated", "best-match" }
 
----@class InstallerBrowserState
+---@class KaeruBrowserState
 ---@field prompt_buf integer
 ---@field prompt_win integer
 ---@field list_buf integer
@@ -20,13 +21,13 @@ local SORTS = { "stars", "updated", "best-match" }
 ---@field page integer
 ---@field sort string
 ---@field broad boolean
----@field items InstallerRepo[]
+---@field items KaeruRepo[]
 ---@field total integer
 ---@field loading boolean
 ---@field error? string
 ---@field request integer
 ---@field timer? uv_timer_t
----@field on_choose fun(repo: InstallerRepo)
+---@field on_choose fun(repo: KaeruRepo)
 ---@field closing boolean
 ---@field mode "search"|"starred"
 local State = nil
@@ -53,7 +54,7 @@ end
 
 local function status_text()
   local s = State
-  local who = Account.user and (" · @" .. Account.user.login) or " · not signed in (:Installer login)"
+  local who = Account.user and (" · @" .. Account.user.login) or " · not signed in (:Kaeru login)"
   if s.loading then
     return "  Searching GitHub…" .. who
   elseif s.error then
@@ -200,7 +201,7 @@ local function schedule_search()
         return
       end
       local text = vim.api.nvim_buf_get_lines(State.prompt_buf, 0, 1, false)[1] or ""
-      text = vim.trim(text)
+      text = Compat.trim(text)
       if text ~= State.query then
         State.query = text
         State.page = 1
@@ -210,7 +211,7 @@ local function schedule_search()
   end)
 end
 
----@return InstallerRepo|nil
+---@return KaeruRepo|nil
 local function current()
   if not valid() then
     return nil
@@ -297,13 +298,13 @@ local function parse_and_open()
   local full_name = repo.full_name
   M.close()
   UI.notify("Fetching and parsing README.md for " .. full_name .. "…")
-  require("installer.parser").parse_github(full_name, function(err, res)
+  require("kaeru.parser").parse_github(full_name, function(err, res)
     if err or not res or not res.primary then
       UI.notify("Opening bare spec for " .. full_name .. (err and (" (" .. err .. ")") or ""))
-      return require("installer").open({ repo = full_name })
+      return require("kaeru").open({ repo = full_name })
     end
     UI.notify(("Parsed %s spec from %s README.md"):format(res.primary_manager or "plugin", full_name))
-    require("installer").open(res.primary)
+    require("kaeru").open(res.primary)
   end)
 end
 
@@ -313,7 +314,7 @@ local function quick_install()
     return
   end
   M.close()
-  require("installer").add({ repo = repo.full_name })
+  require("kaeru").add({ repo = repo.full_name })
 end
 
 local function open_in_browser()
@@ -440,7 +441,7 @@ local function toggle_star()
     if user then
       go()
     else
-      UI.notify("Sign in first: :Installer login", vim.log.levels.WARN)
+      UI.notify("Sign in first: :Kaeru login", vim.log.levels.WARN)
     end
   end)
 end
@@ -466,7 +467,7 @@ local function toggle_starred_view()
     if user and valid() then
       go()
     else
-      UI.notify("Sign in first: :Installer login", vim.log.levels.WARN)
+      UI.notify("Sign in first: :Kaeru login", vim.log.levels.WARN)
     end
   end)
 end
@@ -481,7 +482,7 @@ local function show_help()
     "  o         open on GitHub",
     "  y         yank owner/repo",
     "  ]  / [    next / previous page",
-    "  *         star / unstar (needs :Installer login)",
+    "  *         star / unstar (needs :Kaeru login)",
     "  S         toggle: your starred repositories",
     "  s         cycle sort (stars, updated, best-match)",
     "  t         toggle scope (topic:neovim-plugin / all of GitHub)",
@@ -490,11 +491,11 @@ local function show_help()
   }, "\n"))
 end
 
----@class InstallerBrowserOpts
+---@class KaeruBrowserOpts
 ---@field query? string
----@field on_choose? fun(repo: InstallerRepo)
+---@field on_choose? fun(repo: KaeruRepo)
 
----@param opts? InstallerBrowserOpts
+---@param opts? KaeruBrowserOpts
 function M.open(opts)
   opts = opts or {}
   M.close()
@@ -513,7 +514,7 @@ function M.open(opts)
     height = height - 3,
     row = row + 3,
     col = col,
-    filetype = "installer-browser",
+    filetype = "kaeru-browser",
     enter = false,
   })
   vim.wo[list_win].cursorline = true
@@ -525,7 +526,7 @@ function M.open(opts)
     height = 1,
     row = row,
     col = col,
-    filetype = "installer-prompt",
+    filetype = "kaeru-prompt",
   })
   vim.api.nvim_buf_set_lines(prompt_buf, 0, -1, false, { opts.query or "" })
 
@@ -534,7 +535,7 @@ function M.open(opts)
     prompt_win = prompt_win,
     list_buf = list_buf,
     list_win = list_win,
-    query = vim.trim(opts.query or ""),
+    query = Compat.trim(opts.query or ""),
     page = 1,
     sort = Config.options.github.sort,
     broad = false,
@@ -545,7 +546,7 @@ function M.open(opts)
     closing = false,
     mode = "search",
     on_choose = opts.on_choose or function(repo)
-      require("installer").open({ repo = repo.full_name })
+      require("kaeru").open({ repo = repo.full_name })
     end,
   }
 
@@ -601,7 +602,7 @@ function M.open(opts)
   lmap("<C-c>", M.close, "Close")
 
   -- autocmds --------------------------------------------------------------
-  local group = vim.api.nvim_create_augroup("installer.browser", { clear = true })
+  local group = vim.api.nvim_create_augroup("kaeru.browser", { clear = true })
   vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged", "TextChangedP" }, {
     group = group,
     buffer = prompt_buf,

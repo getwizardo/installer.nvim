@@ -1,19 +1,19 @@
--- installer.nvim - add plugins to a lazy.nvim config from inside Neovim.
+-- kaeru.nvim - add plugins to a lazy.nvim config from inside Neovim.
 --
---   :Installer                 open the modal form
---   :Installer browse [query]  browse Neovim plugins on GitHub
---   :Installer add owner/repo  write a bare spec and install right away
---   :Installer save owner/repo write a spec file without running :Lazy install
---   :Installer parse [target]  parse any installer snippet / README.md into a spec
---   :Installer ai              curated AI coding plugins & Clina AI Coding IDE
---   :Installer login|whoami    GitHub account
---   :Installer sftp [action]   SFTP UI / upload / download / sync over SFTP
---   :Installer starsky         Next.js Starsky webclient
+--   :Kaeru                 open the modal form
+--   :Kaeru browse [query]  browse Neovim plugins on GitHub
+--   :Kaeru add owner/repo  write a bare spec and install right away
+--   :Kaeru save owner/repo write a spec file without running :Lazy install
+--   :Kaeru parse [target]  parse any installer snippet / README.md into a spec
+--   :Kaeru ai              curated AI coding plugins & Clina AI Coding IDE
+--   :Kaeru login|whoami    GitHub account
+--   :Kaeru sftp [action]   SFTP UI / upload / download / sync over SFTP
+--   :Kaeru starsky         Next.js Starsky webclient
 --   :Clina [action]            TypeScript AI Coding IDE for Neovim
-local Config = require("installer.config")
-local Spec = require("installer.spec")
-local Lazy = require("installer.lazy")
-local UI = require("installer.ui")
+local Config = require("kaeru.config")
+local Spec = require("kaeru.spec")
+local Lazy = require("kaeru.lazy")
+local UI = require("kaeru.ui")
 
 local M = {}
 
@@ -21,14 +21,18 @@ local uv = vim.uv or vim.loop
 
 M._setup_done = false
 
----@param opts? InstallerOptions
+---@param opts? KaeruOptions
 function M.setup(opts)
   Config.setup(opts)
   M._setup_done = true
-  require("installer.sftp").setup_autocmd()
+  require("kaeru.sftp").setup_autocmd()
+  pcall(function()
+    require("kaeru.complete").setup_cmdline()
+  end)
+  require("kaeru.kikru").ensure()
   if Config.options.mason and Config.options.mason.auto_ensure then
     vim.schedule(function()
-      local mason = require("installer.mason")
+      local mason = require("kaeru.mason")
       if mason.available() then
         mason.ensure()
       end
@@ -43,83 +47,85 @@ function M.ensure_setup()
   end
 end
 
---- Re-read installer.yaml files.
+--- Re-read kaeru.yaml files.
 function M.reload()
   Config.reload()
-  require("installer.sftp").setup_autocmd()
+  require("kaeru.sftp").setup_autocmd()
   local files = {}
   for _, f in ipairs(Config.loaded_files) do
     files[#files + 1] = ("%s: %s%s"):format(f.kind, vim.fn.fnamemodify(f.path, ":~"), f.err and (" (" .. f.err .. ")") or "")
   end
-  UI.notify("Configuration reloaded" .. (#files > 0 and ("\n" .. table.concat(files, "\n")) or "\n(no installer.yaml found)"))
+  UI.notify("Configuration reloaded" .. (#files > 0 and ("\n" .. table.concat(files, "\n")) or "\n(no kaeru.yaml found)"))
 end
 
 --- Lazily loaded sub-modules.
 M.account = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.account")[k]
+    return require("kaeru.account")[k]
   end,
 })
 M.ai = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.ai")[k]
+    return require("kaeru.ai")[k]
   end,
 })
 M.clina = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.clina")[k]
+    return require("kaeru.clina")[k]
   end,
 })
-M.music = setmetatable({}, {
+M.kikru = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.music")[k]
+    return require("kaeru.kikru")[k]
   end,
 })
+-- `require("kaeru").music` is the pre-2.0 name of the player façade.
+M.music = M.kikru
 M.boot = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.boot")[k]
+    return require("kaeru.boot")[k]
   end,
 })
 M.sftp = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.sftp")[k]
+    return require("kaeru.sftp")[k]
   end,
 })
 M.cache = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.cache")[k]
+    return require("kaeru.cache")[k]
   end,
 })
 M.mason = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.mason")[k]
+    return require("kaeru.mason")[k]
   end,
 })
 M.parser = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.parser")[k]
+    return require("kaeru.parser")[k]
   end,
 })
 M.complete = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.complete")[k]
+    return require("kaeru.complete")[k]
   end,
 })
 M.starsky = setmetatable({}, {
   __index = function(_, k)
-    return require("installer.starsky")[k]
+    return require("kaeru.starsky")[k]
   end,
 })
 M.config = Config
 
 --- Open the modal form. `values` prefill fields (e.g. `{ repo = "folke/noice.nvim" }`).
----@param values? InstallerForm|string
+---@param values? KaeruForm|string
 function M.open(values)
   M.ensure_setup()
   if type(values) == "string" and values ~= "" then
     values = { repo = values }
   end
-  require("installer.form").open({
+  require("kaeru.form").open({
     values = values,
     on_submit = function(form, action_opts)
       return M.add(form, action_opts)
@@ -128,17 +134,17 @@ function M.open(values)
 end
 
 --- Open the GitHub browser.
----@param opts? InstallerBrowserOpts
+---@param opts? KaeruBrowserOpts
 function M.browse(opts)
   M.ensure_setup()
-  require("installer.browser").open(opts)
+  require("kaeru.browser").open(opts)
 end
 
 --- Search GitHub and pick a plugin with `vim.ui.select` (works with any picker UI).
 ---@param query? string
 function M.search(query)
   M.ensure_setup()
-  local GitHub = require("installer.github")
+  local GitHub = require("kaeru.github")
   UI.notify("Searching GitHub for " .. (query and query ~= "" and ("%q"):format(query) or "Neovim plugins") .. "…")
   GitHub.search({ query = query, per_page = 50 }, function(err, result)
     if err then
@@ -175,7 +181,7 @@ local function is_interactive()
 end
 
 --- Write a spec file without running `:Lazy install` (saves only).
----@param form InstallerForm
+---@param form KaeruForm
 ---@param opts? {force?: boolean, overwrite?: boolean}
 ---@return boolean ok, string? path, table? generated
 function M.save(form, opts)
@@ -184,7 +190,7 @@ function M.save(form, opts)
 end
 
 --- Write a spec file and (optionally) let lazy.nvim install the plugin.
----@param form InstallerForm
+---@param form KaeruForm
 ---@param opts? {after_write?: "install"|"edit"|"none", force?: boolean, overwrite?: boolean}
 ---@return boolean ok, string? path, table? generated
 function M.add(form, opts)
@@ -286,7 +292,7 @@ function M.add(form, opts)
     local function install(restored)
       local ok, ierr = Lazy.install(generated.name, function(plugin)
         if cache_opts.enabled and cache_opts.auto_pack and plugin and plugin._ and plugin._.installed then
-          require("installer.cache").pack(generated.name, function(pok, pmsg)
+          require("kaeru.cache").pack(generated.name, function(pok, pmsg)
             if not pok then
               UI.notify(pmsg, vim.log.levels.WARN)
             end
@@ -305,7 +311,7 @@ function M.add(form, opts)
         UI.notify(("Wrote %s\n%s"):format(rel, tostring(ierr)), vim.log.levels.WARN)
       end
     end
-    local Cache = require("installer.cache")
+    local Cache = require("kaeru.cache")
     if cache_opts.enabled and cache_opts.auto_restore and Cache.get(generated.name) and not Cache.plugin_dir(generated.name) then
       Cache.restore(generated.name, function(rok, rmsg)
         if not rok then
@@ -326,7 +332,7 @@ function M.add(form, opts)
 end
 
 --- Preview the Lua source the form would generate (no file is written).
----@param form InstallerForm
+---@param form KaeruForm
 ---@return string|nil source, string? err, table? generated
 function M.preview(form)
   M.ensure_setup()
@@ -337,11 +343,13 @@ function M.preview(form)
   return generated.source, nil, generated
 end
 
---- Parse any plugin manager snippet or README markdown into `InstallerForm` tables and lazy.nvim specs.
+--- Parse any plugin manager snippet or README markdown into `KaeruForm` tables
+--- and lazy.nvim specs (deduplicated, best guess first).
 ---@param text string
+---@param opts? {repo?: string}
 ---@return table[] results, string? err
-function M.parse(text)
-  return require("installer.parser").parse_all(text)
+function M.parse(text, opts)
+  return require("kaeru.parser").parse_all(text, opts)
 end
 
 --- Directory where spec files are written (resolved the same way `add()` does).

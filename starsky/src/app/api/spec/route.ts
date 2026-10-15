@@ -5,7 +5,7 @@ import {
   listSavedSpecs,
   deleteSavedSpec,
   getDefaultPluginsDir,
-  InstallerForm,
+  KaeruForm,
 } from "@/lib/luaBridge";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       | "save"
       | "list"
       | "delete";
-    const form = (body.form || {}) as InstallerForm;
+    const form = (body.form || {}) as KaeruForm;
     const customDir = body.dir as string | undefined;
 
     if (action === "list") {

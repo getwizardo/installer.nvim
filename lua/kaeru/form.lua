@@ -1,16 +1,16 @@
--- The `:Installer` modal: a floating form whose fields map to a lazy.nvim spec.
-local UI = require("installer.ui")
-local Spec = require("installer.spec")
-local Config = require("installer.config")
+-- The `:Kaeru` modal: a floating form whose fields map to a lazy.nvim spec.
+local UI = require("kaeru.ui")
+local Spec = require("kaeru.spec")
+local Config = require("kaeru.config")
 
 local M = {}
 
----@class InstallerField
+---@class KaeruField
 ---@field key string
 ---@field label string
 ---@field hint string
 
----@type InstallerField[]
+---@type KaeruField[]
 M.fields = {
   { key = "repo", label = "Repository", hint = "owner/repo or a git URL (required)" },
   { key = "file", label = "File", hint = "lua/plugins/<file>.lua  (auto from repo)" },
@@ -36,10 +36,10 @@ M.fields = {
 local LABEL_WIDTH = 13
 local PREFIX_LEN = 2 + LABEL_WIDTH + 3 -- "  " .. label .. " : "
 
----@class InstallerFormState
+---@class KaeruFormState
 ---@field buf integer
 ---@field win integer
----@field on_submit fun(form: InstallerForm): boolean
+---@field on_submit fun(form: KaeruForm): boolean
 local State = nil
 
 --- Collapse newlines into spaces so `nvim_buf_set_lines` never errors on multi-line values.
@@ -51,7 +51,7 @@ function M.sanitize_value(value)
   return s
 end
 
----@param field InstallerField
+---@param field KaeruField
 ---@param value string
 ---@return string
 local function format_line(field, value)
@@ -74,7 +74,7 @@ local function valid()
 end
 
 --- Read the current field values from the buffer.
----@return InstallerForm
+---@return KaeruForm
 function M.read()
   local form = {}
   if not valid() then
@@ -227,7 +227,7 @@ function M.set(key, value)
 end
 
 --- Apply multiple fields from a parsed form table without overwriting user-populated fields unless `overwrite` is true.
----@param values InstallerForm
+---@param values KaeruForm
 ---@param overwrite? boolean
 function M.fill(values, overwrite)
   if not valid() or type(values) ~= "table" then
@@ -253,7 +253,7 @@ local function parse_readme_into_form()
     UI.notify("Enter a repository (owner/repo) first, then press <C-r> to parse its README.md", vim.log.levels.WARN)
     return
   end
-  local Parser = require("installer.parser")
+  local Parser = require("kaeru.parser")
   UI.notify("Parsing README.md for " .. repo .. "…")
   Parser.parse_github(repo, function(err, res)
     if not valid() then
@@ -303,7 +303,7 @@ local function browse()
   vim.cmd("stopinsert")
   local query = Spec._trim(M.read().repo)
   local win = State.win
-  require("installer.browser").open({
+  require("kaeru.browser").open({
     query = query,
     on_choose = function(repo)
       if vim.api.nvim_win_is_valid(win) then
@@ -316,12 +316,12 @@ local function browse()
   })
 end
 
----@class InstallerFormOpenOpts
----@field values? InstallerForm       prefilled values
----@field on_submit fun(form: InstallerForm, action_opts?: table): boolean  return true to close the modal
+---@class KaeruFormOpenOpts
+---@field values? KaeruForm       prefilled values
+---@field on_submit fun(form: KaeruForm, action_opts?: table): boolean  return true to close the modal
 
----@param opts InstallerFormOpenOpts|InstallerForm
----@param on_submit_fn? fun(form: InstallerForm, action_opts?: table): boolean
+---@param opts KaeruFormOpenOpts|KaeruForm
+---@param on_submit_fn? fun(form: KaeruForm, action_opts?: table): boolean
 function M.open(opts, on_submit_fn)
   opts = opts or {}
   if on_submit_fn or (opts.values == nil and opts.on_submit == nil and next(opts) ~= nil) then
@@ -332,10 +332,10 @@ function M.open(opts, on_submit_fn)
   local width = 84
   local height = #M.fields + 2
   local buf, win = UI.open({
-    title = "installer.nvim · add a plugin to lazy.nvim",
+    title = "kaeru.nvim · add a plugin to lazy.nvim",
     width = width,
     height = height,
-    filetype = "installer-form",
+    filetype = "kaeru-form",
   })
   State = { buf = buf, win = win, on_submit = opts.on_submit or function()
     return true
@@ -350,12 +350,12 @@ function M.open(opts, on_submit_fn)
   vim.bo[buf].buftype = "acwrite"
   vim.bo[buf].modified = false
   vim.bo[buf].undolevels = 100
-  pcall(vim.api.nvim_buf_set_name, buf, "installer://spec")
-  vim.bo[buf].omnifunc = "v:lua.require'installer.complete'.omnifunc"
-  vim.bo[buf].completefunc = "v:lua.require'installer.complete'.omnifunc"
+  pcall(vim.api.nvim_buf_set_name, buf, "kaeru://spec")
+  vim.bo[buf].omnifunc = "v:lua.require'kaeru.complete'.omnifunc"
+  vim.bo[buf].completefunc = "v:lua.require'kaeru.complete'.omnifunc"
   decorate()
 
-  local Complete = require("installer.complete")
+  local Complete = require("kaeru.complete")
 
   -- keymaps -------------------------------------------------------------
   local map = function(lhs, rhs, modes, desc)
@@ -424,7 +424,7 @@ function M.open(opts, on_submit_fn)
   end, { buffer = buf, expr = true, nowait = true })
 
   -- autocmds ------------------------------------------------------------
-  local group = vim.api.nvim_create_augroup("installer.form." .. buf, { clear = true })
+  local group = vim.api.nvim_create_augroup("kaeru.form." .. buf, { clear = true })
   vim.api.nvim_create_autocmd("BufWriteCmd", {
     group = group,
     buffer = buf,

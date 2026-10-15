@@ -1,8 +1,8 @@
--- Universal installer snippet & README.md parser for installer.nvim.
+-- Universal installer snippet & README.md parser for kaeru.nvim.
 --
 -- Parses plugin installation instructions from README.md files, markdown buffers,
 -- or raw snippets across Neovim / Vim plugin managers and converts them into
--- `InstallerForm` tables ready for `Spec.generate()` or the `:Installer` modal:
+-- `KaeruForm` tables ready for `Spec.generate()` or the `:Kaeru` modal:
 --
 --   * lazy.nvim      ({ "owner/repo", ... }, return { ... }, require("lazy").setup(...))
 --   * packer.nvim    (use "owner/repo", use { "owner/repo", requires = ..., run = ... })
@@ -15,21 +15,21 @@
 --   * Vundle/Bundle  (Plugin 'owner/repo', Bundle 'owner/repo')
 --   * rocks.nvim     (:Rocks install ..., rocks.toml [plugins] entries)
 --   * git clone      (git clone [-b branch] https://github.com/owner/repo.git)
---   * Mason          (:MasonInstall pkg1 pkg2, :Installer mason install ...)
+--   * Mason          (:MasonInstall pkg1 pkg2, :Kaeru mason install ...)
 --   * setup() blocks (require("mod").setup({ ... }) merged into opts when applicable)
-local Spec = require("installer.spec")
+local Spec = require("kaeru.spec")
 
 local M = {}
 
----@class InstallerParsedSpec
+---@class KaeruParsedSpec
 ---@field manager string        "lazy"|"packer"|"pckr"|"vim-plug"|"mini.deps"|"vim.pack"|"paq"|"dein"|"vundle"|"rocks"|"git"
 ---@field repo string           normalised owner/repo or URL
----@field form InstallerForm    ready for Spec.generate / Form.open
+---@field form KaeruForm    ready for Spec.generate / Form.open
 ---@field score integer         richness score (higher = more fields / more native to lazy.nvim)
 
----@class InstallerParseResult
----@field specs InstallerParsedSpec[]
----@field primary InstallerForm|nil
+---@class KaeruParseResult
+---@field specs KaeruParsedSpec[]
+---@field primary KaeruForm|nil
 ---@field primary_manager string|nil
 ---@field mason string[]
 ---@field setup_calls {module: string, opts: string}[]
@@ -405,10 +405,10 @@ local function format_dependencies_expr(expr)
   return expr
 end
 
---- Convert a parsed Lua table (`{positional, named}`) into an `InstallerParsedSpec`.
+--- Convert a parsed Lua table (`{positional, named}`) into an `KaeruParsedSpec`.
 ---@param tbl_src string
 ---@param managerHint? string
----@return InstallerParsedSpec[]
+---@return KaeruParsedSpec[]
 local function lua_table_to_specs(tbl_src, managerHint)
   local parsed = M.parse_lua_table_fields(tbl_src)
   local pos = parsed.positional
@@ -466,7 +466,7 @@ local function lua_table_to_specs(tbl_src, managerHint)
     end
   end
 
-  ---@type InstallerForm
+  ---@type KaeruForm
   local form = { repo = repo_candidate }
   local field_count = 0
   local function set(k, v)
@@ -627,7 +627,7 @@ end
 
 --- Parse Vimscript `Plug 'owner/repo', { ... }`, `dein#add(...)`, `Plugin '...'`, `Bundle '...'`.
 ---@param text string
----@return InstallerParsedSpec[]
+---@return KaeruParsedSpec[]
 local function parse_vimscript_specs(text)
   local specs = {}
   local plug_block_repos = {}
@@ -825,7 +825,7 @@ end
 
 --- Parse `git clone` shell commands and TOML (`rocks.toml`) entries.
 ---@param text string
----@return InstallerParsedSpec[]
+---@return KaeruParsedSpec[]
 local function parse_shell_and_toml_specs(text)
   local specs = {}
   for line in (text .. "\n"):gmatch("(.-)\n") do
@@ -887,7 +887,7 @@ end
 
 --- Parse Lua snippets for lazy.nvim, packer.nvim, pckr.nvim, mini.deps, vim.pack, paq-nvim.
 ---@param text string
----@return InstallerParsedSpec[]
+---@return KaeruParsedSpec[]
 local function parse_lua_specs(text)
   local specs = {}
   local seen_ranges = {}
@@ -1004,7 +1004,7 @@ local function parse_lua_specs(text)
   return specs
 end
 
---- Extract `:MasonInstall ...` / `:Installer mason install ...` packages from text.
+--- Extract `:MasonInstall ...` / `:Kaeru mason install ...` packages from text.
 ---@param text string
 ---@return string[]
 function M.extract_mason_packages(text)
@@ -1013,7 +1013,7 @@ function M.extract_mason_packages(text)
   for line in (text .. "\n"):gmatch("(.-)\n") do
     local tline = trim(line)
     local m_args = tline:match("^:?MasonInstall%s+(.+)$")
-      or tline:match("^:?Installer%s+mason%s+install%s+(.+)$")
+      or tline:match("^:?Kaeru%s+mason%s+install%s+(.+)$")
     if m_args then
       for pkg in m_args:gmatch("[%w_.-]+") do
         if not seen[pkg] then
@@ -1111,10 +1111,10 @@ end
 
 --- Merge complementary fields from lower-priority specs of the same repo into the best spec,
 --- and attach standalone `require("...").setup({...})` opts if `opts` and `config` are empty.
----@param specs InstallerParsedSpec[]
+---@param specs KaeruParsedSpec[]
 ---@param setup_calls {module: string, opts: string}[]
 ---@param target_repo? string
----@return InstallerForm|nil primary, string|nil manager
+---@return KaeruForm|nil primary, string|nil manager
 local function select_and_merge_primary(specs, setup_calls, target_repo)
   if #specs == 0 then
     return nil, nil
@@ -1175,7 +1175,7 @@ end
 --- Parse any README.md or installer snippet text.
 ---@param text string
 ---@param opts? {repo?: string}
----@return InstallerParseResult
+---@return KaeruParseResult
 function M.parse(text, opts)
   opts = opts or {}
   local blocks = M.extract_blocks(text or "")
@@ -1241,10 +1241,56 @@ function M.parse(text, opts)
   }
 end
 
+--- Deduplicate parsed specs into `{ repo, manager, form, score }` items, best
+--- guess first (keeps the highest-scoring form per repository).
+---@param result KaeruParseResult
+---@return {repo: string, manager: string, form: KaeruForm, score: number}[]
+function M.unique_specs(result)
+  local seen = {}
+  local items = {}
+  for _, spec in ipairs(result.specs or {}) do
+    if spec.repo and not seen[spec.repo:lower()] then
+      seen[spec.repo:lower()] = true
+      local merged = select_and_merge_primary(result.specs, result.setup_calls, spec.repo) or spec.form
+      items[#items + 1] = {
+        repo = spec.repo,
+        manager = spec.manager,
+        form = merged,
+        score = spec.score or 0,
+      }
+    end
+  end
+  table.sort(items, function(a, b)
+    if a.score == b.score then
+      return a.repo < b.repo
+    end
+    return a.score > b.score
+  end)
+  return items
+end
+
+--- Parse text into *deduplicated* `{ repo, manager, form, score }` items.
+--- This is what `:Kaeru parse`, the modal (`<C-r>`) and the Starsky web
+--- client use to offer "install this / install all".
+---@param text string
+---@param opts? {repo?: string}
+---@return {repo: string, manager: string, form: KaeruForm, score: number}[] items, string? err
+function M.parse_all(text, opts)
+  local result = M.parse(text, opts)
+  local items = M.unique_specs(result)
+  if #items == 0 then
+    if #(result.mason or {}) > 0 then
+      return {}, nil
+    end
+    return {}, "no plugin installer snippets found"
+  end
+  return items, nil
+end
+
 --- Read a local file (e.g. `README.md`) and parse all installer snippets from it.
 ---@param path? string
 ---@param opts? {repo?: string}
----@return InstallerParseResult|nil, string? err
+---@return KaeruParseResult|nil, string? err
 function M.parse_file(path, opts)
   path = path and trim(path) or ""
   if path == "" then
@@ -1264,13 +1310,13 @@ end
 
 --- Fetch a repository's README.md from GitHub and parse its installer spec(s).
 ---@param repo string
----@param cb fun(err: string|nil, result: InstallerParseResult|nil)
+---@param cb fun(err: string|nil, result: KaeruParseResult|nil)
 function M.parse_github(repo, cb)
   local parsed, perr = Spec.parse_repo(repo)
   if not parsed or not parsed.short then
     return cb(perr or "Expected a GitHub repository (owner/repo)", nil)
   end
-  local GitHub = require("installer.github")
+  local GitHub = require("kaeru.github")
   GitHub.readme(parsed.short, function(err, markdown)
     if err then
       return cb(err, nil)
@@ -1280,13 +1326,13 @@ function M.parse_github(repo, cb)
   end)
 end
 
---- Interactive command entry point (`:Installer parse [target]`).
+--- Interactive command entry point (`:Kaeru parse [target]`).
 ---@param target? string  owner/repo, file path, or empty (current buffer / README.md)
 ---@param opts? {bang?: boolean, range?: {line1: integer, line2: integer}}
 function M.command(target, opts)
   opts = opts or {}
-  local UI = require("installer.ui")
-  local installer = require("installer")
+  local UI = require("kaeru.ui")
+  local kaeru = require("kaeru")
   target = trim(target)
 
   local function handle_result(result, source_label)
@@ -1296,31 +1342,20 @@ function M.command(target, opts)
 
     if #result.mason > 0 and #result.specs == 0 then
       UI.notify(("Found Mason packages in %s: %s"):format(source_label, table.concat(result.mason, ", ")))
-      require("installer.mason").install_many(result.mason)
+      require("kaeru.mason").install_many(result.mason)
       return
     end
 
-    -- Deduplicate specs by repo (keeping highest-scoring form per repo)
-    local by_repo = {}
-    local unique = {}
-    for _, s in ipairs(result.specs) do
-      local key = s.repo:lower()
-      if not by_repo[key] then
-        local merged_form = select_and_merge_primary(result.specs, result.setup_calls, s.repo)
-        local item = { repo = s.repo, manager = s.manager, form = merged_form or s.form, score = s.score }
-        by_repo[key] = item
-        unique[#unique + 1] = item
-      end
-    end
+    local unique = M.unique_specs(result)
 
     if #unique == 1 or (target ~= "" and Spec.parse_repo(target) and result.primary) then
       local form = result.primary or unique[1].form
       local mgr = result.primary_manager or unique[1].manager
       UI.notify(("Parsed %s spec for %s from %s"):format(mgr, form.repo, source_label))
       if opts.bang then
-        installer.add(form, { force = true })
+        kaeru.add(form, { force = true })
       else
-        installer.open(form)
+        kaeru.open(form)
       end
       return
     end
@@ -1350,12 +1385,12 @@ function M.command(target, opts)
       end
       if choice.all then
         for _, u in ipairs(unique) do
-          installer.add(u.form, { force = opts.bang })
+          kaeru.add(u.form, { force = opts.bang })
         end
       elseif opts.bang then
-        installer.add(choice.spec.form, { force = true })
+        kaeru.add(choice.spec.form, { force = true })
       else
-        installer.open(choice.spec.form)
+        kaeru.open(choice.spec.form)
       end
     end)
   end
@@ -1404,7 +1439,7 @@ function M.command(target, opts)
 
   local res, err = M.parse_file("README.md")
   if not res then
-    return UI.notify("Usage: :Installer parse [owner/repo | README.md] (" .. tostring(err) .. ")", vim.log.levels.WARN)
+    return UI.notify("Usage: :Kaeru parse [owner/repo | README.md] (" .. tostring(err) .. ")", vim.log.levels.WARN)
   end
   handle_result(res, "README.md")
 end

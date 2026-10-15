@@ -1,67 +1,83 @@
-if vim.g.loaded_installer_nvim then
+if vim.g.loaded_kaeru_nvim then
   return
 end
-vim.g.loaded_installer_nvim = true
+vim.g.loaded_kaeru_nvim = true
 
 if vim.fn.has("nvim-0.8") ~= 1 then
-  vim.notify("installer.nvim requires Neovim >= 0.8", vim.log.levels.ERROR)
+  vim.notify("kaeru.nvim requires Neovim >= 0.8", vim.log.levels.ERROR)
   return
 end
 
-local Complete = require("installer.complete")
-local mason_actions = Complete.mason_actions
+local Complete = require("kaeru.complete")
+local Compat = require("kaeru.compat")
+local mason_actions = Complete.words(Complete.mason_actions)
 local mason_scaffolds = Complete.mason_scaffolds
-local sftp_actions = Complete.sftp_actions
-local cache_actions = Complete.cache_actions
-local config_actions = Complete.config_actions
-local starsky_actions = Complete.starsky_actions
+local sftp_actions = Complete.words(Complete.sftp_actions)
+local cache_actions = Complete.words(Complete.cache_actions)
+local config_actions = Complete.words(Complete.config_actions)
+local starsky_actions = Complete.words(Complete.starsky_actions)
 
-vim.api.nvim_create_user_command("Installer", function(cmd)
-  local installer = require("installer")
-  installer.ensure_setup()
+--- Completion callback shared by every user command: rich items (word + menu +
+--- info) when the editor can show them, plain words otherwise.
+---@param cmdline string
+---@param cursorpos integer
+---@return table
+local function complete(cmdline, cursorpos)
+  local items = Complete.complete_items(cmdline, cursorpos)
+  local Config = require("kaeru.config")
+  if (Config.options.complete or {}).items == "word" then
+    return Complete.words(items)
+  end
+  return items
+end
+
+vim.api.nvim_create_user_command("Kaeru", function(cmd)
+  local kaeru = require("kaeru")
+  kaeru.ensure_setup()
   local args = cmd.fargs
   local sub = args[1]
 
   if sub == nil or sub == "modal" then
-    installer.open(args[2] and { repo = args[2] } or nil)
+    kaeru.open(args[2] and { repo = args[2] } or nil)
   elseif sub == "browse" then
-    installer.browse({ query = table.concat(args, " ", 2) })
+    kaeru.browse({ query = table.concat(args, " ", 2) })
   elseif sub == "search" then
-    installer.search(table.concat(args, " ", 2))
+    kaeru.search(table.concat(args, " ", 2))
   elseif sub == "add" then
     if not args[2] then
-      vim.notify(":Installer add requires owner/repo", vim.log.levels.ERROR, { title = "installer.nvim" })
+      vim.notify(":Kaeru add requires owner/repo", vim.log.levels.ERROR, { title = "kaeru.nvim" })
       return
     end
-    installer.add({ repo = args[2] }, { force = cmd.bang })
+    kaeru.add({ repo = args[2] }, { force = cmd.bang })
   elseif sub == "save" then
     if not args[2] then
-      vim.notify(":Installer save requires owner/repo", vim.log.levels.ERROR, { title = "installer.nvim" })
+      vim.notify(":Kaeru save requires owner/repo", vim.log.levels.ERROR, { title = "kaeru.nvim" })
       return
     end
-    installer.save({ repo = args[2] }, { force = cmd.bang })
+    kaeru.save({ repo = args[2] }, { force = cmd.bang })
   elseif sub == "clina" then
-    require("installer.clina").dispatch(vim.list_slice(args, 2), nil, cmd.bang)
+    require("kaeru.clina").dispatch(Compat.list_slice(args, 2), nil, cmd.bang)
   elseif sub == "music" then
-    require("installer.music").dispatch(vim.list_slice(args, 2))
+    require("kaeru.kikru").dispatch(Compat.list_slice(args, 2))
+    return
   elseif sub == "boot" then
-    require("installer.boot").play()
+    require("kaeru.boot").play()
   elseif sub == "parse" or sub == "readme" then
     local target = table.concat(args, " ", 2)
-    require("installer.parser").command(target, {
+    require("kaeru.parser").command(target, {
       bang = cmd.bang,
       range = cmd.range and cmd.range > 0 and { line1 = cmd.line1, line2 = cmd.line2 } or nil,
     })
   elseif sub == "dir" then
-    vim.notify("Spec files are written to " .. installer.plugins_dir(), vim.log.levels.INFO, { title = "installer.nvim" })
+    vim.notify("Spec files are written to " .. kaeru.plugins_dir(), vim.log.levels.INFO, { title = "kaeru.nvim" })
   elseif sub == "ai" then
-    local ai = require("installer.ai")
+    local ai = require("kaeru.ai")
     if args[2] == "ide" or args[2] == "clina" then
-      return require("installer.clina").dispatch(vim.list_slice(args, 3))
+      return require("kaeru.clina").dispatch(Compat.list_slice(args, 3))
     elseif args[2] then
       local preset = ai.get(args[2])
       if not preset then
-        return vim.notify("Unknown AI preset: " .. args[2], vim.log.levels.ERROR, { title = "installer.nvim" })
+        return vim.notify("Unknown AI preset: " .. args[2], vim.log.levels.ERROR, { title = "kaeru.nvim" })
       end
       if not ai.enabled() then
         return ai.pick() -- shows the "disabled" notice
@@ -75,15 +91,15 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
       ai.pick()
     end
   elseif sub == "login" then
-    require("installer.account").login(args[2])
+    require("kaeru.account").login(args[2])
   elseif sub == "logout" then
-    require("installer.account").logout()
+    require("kaeru.account").logout()
   elseif sub == "whoami" then
-    require("installer.account").whoami()
+    require("kaeru.account").whoami()
   elseif sub == "sftp" then
-    local sftp = require("installer.sftp")
+    local sftp = require("kaeru.sftp")
     local action = args[2] or "ui"
-    local rest = vim.list_slice(args, 3)
+    local rest = Compat.list_slice(args, 3)
     local raw = table.concat(rest, " ")
     local actions = {
       ui = function()
@@ -126,14 +142,14 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
     elseif sftp.commands[action] then
       sftp.command(action, rest)
     else
-      vim.notify("Unknown sftp action: " .. action .. "\nUse: " .. table.concat(sftp_actions, ", "), vim.log.levels.ERROR, { title = "installer.nvim" })
+      vim.notify("Unknown sftp action: " .. action .. "\nUse: " .. table.concat(sftp_actions, ", "), vim.log.levels.ERROR, { title = "kaeru.nvim" })
     end
   elseif sub == "cache" then
-    local cache = require("installer.cache")
+    local cache = require("kaeru.cache")
     local action = args[2] or "list"
     local name = args[3]
     local function notify(ok, msg)
-      vim.notify(msg, ok and vim.log.levels.INFO or vim.log.levels.ERROR, { title = "installer.nvim" })
+      vim.notify(msg, ok and vim.log.levels.INFO or vim.log.levels.ERROR, { title = "kaeru.nvim" })
     end
     if action == "list" then
       cache.list()
@@ -149,24 +165,24 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
       end
     elseif action == "restore" then
       if not name then
-        return notify(false, "Usage: :Installer cache restore <plugin>")
+        return notify(false, "Usage: :Kaeru cache restore <plugin>")
       end
       cache.restore(name, notify, { force = cmd.bang })
     elseif action == "remove" then
       if not name then
-        return notify(false, "Usage: :Installer cache remove <plugin>")
+        return notify(false, "Usage: :Kaeru cache remove <plugin>")
       end
       cache.remove(name)
     else
       notify(false, "Unknown cache action: " .. action .. "\nUse: " .. table.concat(cache_actions, ", "))
     end
   elseif sub == "mason" then
-    local mason = require("installer.mason")
+    local mason = require("kaeru.mason")
     local function notify(ok, msg)
-      vim.notify(msg, ok and vim.log.levels.INFO or vim.log.levels.ERROR, { title = "installer.nvim" })
+      vim.notify(msg, ok and vim.log.levels.INFO or vim.log.levels.ERROR, { title = "kaeru.nvim" })
     end
     local action = args[2] or "pick"
-    local rest = vim.list_slice(args, 3)
+    local rest = Compat.list_slice(args, 3)
     if action == "registry" then
       local url = "https://mason-registry.dev/registry/list"
       if vim.ui and vim.ui.open then
@@ -175,7 +191,7 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
       return notify(true, "Opened " .. url .. " (601 Mason packages built-in)")
     end
     if action ~= "scaffold" and action ~= "pick" and action ~= "list" and action ~= "ft" and not mason.available() then
-      return notify(false, "mason.nvim is not installed. Run `:Installer mason scaffold lsp` to add it to your lazy.nvim specs.")
+      return notify(false, "mason.nvim is not installed. Run `:Kaeru mason scaffold lsp` to add it to your lazy.nvim specs.")
     end
     local category_map = { lsp = "LSP", dap = "DAP", linter = "Linter", formatter = "Formatter", compiler = "Compiler", runtime = "Runtime" }
     if action == "pick" then
@@ -184,19 +200,19 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
       mason.pick({ category = category_map[action], query = table.concat(rest, " ") })
     elseif action == "install" then
       if #rest == 0 then
-        return notify(false, "Usage: :Installer mason install <package> [<package>...]")
+        return notify(false, "Usage: :Kaeru mason install <package> [<package>...]")
       end
       mason.install_many(rest, notify)
     elseif action == "uninstall" then
       if #rest == 0 then
-        return notify(false, "Usage: :Installer mason uninstall <package>")
+        return notify(false, "Usage: :Kaeru mason uninstall <package>")
       end
       for _, name in ipairs(rest) do
         mason.uninstall(name, notify)
       end
     elseif action == "update" then
       if #rest == 0 then
-        return notify(false, "Usage: :Installer mason update <package>")
+        return notify(false, "Usage: :Kaeru mason update <package>")
       end
       for _, name in ipairs(rest) do
         mason.update(name)
@@ -215,38 +231,38 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
       vim.cmd("Mason")
     elseif action == "scaffold" then
       local kind = rest[1] or "lsp"
-      if not vim.tbl_contains(mason_scaffolds, kind) then
-        return notify(false, "Usage: :Installer mason scaffold " .. table.concat(mason_scaffolds, "|"))
+      if not Compat.tbl_contains(mason_scaffolds, kind) then
+        return notify(false, "Usage: :Kaeru mason scaffold " .. table.concat(mason_scaffolds, "|"))
       end
       mason.scaffold(kind)
     elseif not mason.resolve(action) then
       notify(false, "Unknown mason action: " .. action .. "\nUse: " .. table.concat(mason_actions, ", "))
     else
-      -- `:Installer mason <package>` is a shortcut for install.
+      -- `:Kaeru mason <package>` is a shortcut for install.
       mason.install_many({ action, unpack(rest) }, notify)
     end
   elseif sub == "config" then
-    local Config = require("installer.config")
+    local Config = require("kaeru.config")
     local action = args[2] or "edit"
     if action == "edit" then
       Config.edit()
     elseif action == "project" then
       Config.edit(vim.fn.getcwd() .. "/" .. Config.options.config.project)
     elseif action == "reload" then
-      installer.reload()
+      kaeru.reload()
     elseif action == "show" or action == "dump" then
       local buf = vim.api.nvim_create_buf(false, true)
       vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(Config.dump(), "\n", { plain = true }))
       vim.bo[buf].filetype = "yaml"
       vim.bo[buf].bufhidden = "wipe"
-      vim.api.nvim_buf_set_name(buf, "installer://config")
+      vim.api.nvim_buf_set_name(buf, "kaeru://config")
       vim.cmd("vsplit")
       vim.api.nvim_win_set_buf(0, buf)
     else
-      vim.notify("Unknown config action: " .. action .. "\nUse: " .. table.concat(config_actions, ", "), vim.log.levels.ERROR, { title = "installer.nvim" })
+      vim.notify("Unknown config action: " .. action .. "\nUse: " .. table.concat(config_actions, ", "), vim.log.levels.ERROR, { title = "kaeru.nvim" })
     end
   elseif sub == "starsky" or sub == "web" then
-    local starsky = require("installer.starsky")
+    local starsky = require("kaeru.starsky")
     local action = args[2] or "start"
     if action == "start" then
       starsky.start({ open = not cmd.bang })
@@ -259,27 +275,27 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
     elseif action == "build" then
       starsky.build()
     else
-      vim.notify("Unknown starsky action: " .. action .. "\nUse: " .. table.concat(starsky_actions, ", "), vim.log.levels.ERROR, { title = "installer.nvim" })
+      vim.notify("Unknown starsky action: " .. action .. "\nUse: " .. table.concat(starsky_actions, ", "), vim.log.levels.ERROR, { title = "kaeru.nvim" })
     end
   elseif sub:find("/", 1, true) or sub:find("://", 1, true) then
-    -- `:Installer folke/noice.nvim` opens the modal prefilled
-    installer.open({ repo = sub })
+    -- `:Kaeru folke/noice.nvim` opens the modal prefilled
+    kaeru.open({ repo = sub })
   else
-    vim.notify("Unknown subcommand: " .. sub, vim.log.levels.ERROR, { title = "installer.nvim" })
+    vim.notify("Unknown subcommand: " .. sub, vim.log.levels.ERROR, { title = "kaeru.nvim" })
   end
 end, {
   nargs = "*",
   bang = true,
   range = true,
-  desc = "installer.nvim: add plugins to lazy.nvim",
-  complete = function(arglead, cmdline, cursorpos)
-    return Complete.cmdline(arglead, cmdline, cursorpos)
+  desc = "kaeru.nvim: add plugins to lazy.nvim",
+  complete = function(_, cmdline, cursorpos)
+    return complete(cmdline, cursorpos)
   end,
 })
 
 vim.api.nvim_create_user_command("Clina", function(cmd)
-  local installer = require("installer")
-  installer.ensure_setup()
+  local kaeru = require("kaeru")
+  kaeru.ensure_setup()
   local range_text = nil
   if cmd.range and cmd.range > 0 then
     local ok, lines = pcall(vim.api.nvim_buf_get_lines, 0, cmd.line1 - 1, cmd.line2, false)
@@ -287,28 +303,38 @@ vim.api.nvim_create_user_command("Clina", function(cmd)
       range_text = table.concat(lines, "\n")
     end
   end
-  require("installer.clina").dispatch(cmd.fargs, range_text, cmd.bang)
+  require("kaeru.clina").dispatch(cmd.fargs, range_text, cmd.bang)
 end, {
   nargs = "*",
   bang = true,
   range = true,
   desc = ":Clina — NeoCodeium AI Coding IDE integration for Neovim",
-  complete = function(arglead, cmdline, cursorpos)
-    return Complete.clina_cmdline(arglead, cmdline, cursorpos)
+  complete = function(_, cmdline, cursorpos)
+    return complete(cmdline, cursorpos)
   end,
 })
 
-vim.api.nvim_create_user_command("MusicPlayer", function(cmd)
-  local installer = require("installer")
-  installer.ensure_setup()
-  require("installer.music").dispatch(cmd.fargs)
+vim.api.nvim_create_user_command("Kikru", function(cmd)
+  local kaeru = require("kaeru")
+  kaeru.ensure_setup()
+  local music = require("kaeru.kikru")
+  if cmd.bang and #cmd.fargs == 0 then
+    music.action("toggle")
+    return
+  end
+  music.dispatch(cmd.fargs)
 end, {
   nargs = "*",
   bang = true,
-  desc = ":MusicPlayer — Built-in Music Player with 10-band EQ, Visualizer, Radio & 2-Neovim Device Controller",
-  complete = function(arglead, cmdline, cursorpos)
-    return Complete.music_cmdline(arglead, cmdline, cursorpos)
+  desc = ":Kikru — Built-in Kikru Player with 10-band EQ, Visualizer, Radio & 2-Neovim Device Controller",
+  complete = function(_, cmdline, cursorpos)
+    return complete(cmdline, cursorpos)
   end,
 })
 
-
+-- Live `:` autocomplete (popup while typing, <Tab> cycling) + cmp/blink adapters.
+vim.schedule(function()
+  pcall(function()
+    require("kaeru.complete").setup_cmdline()
+  end)
+end)
