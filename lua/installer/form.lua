@@ -1,6 +1,7 @@
 -- The `:Installer` modal: a floating form whose fields map to a lazy.nvim spec.
 local UI = require("installer.ui")
 local Spec = require("installer.spec")
+local Config = require("installer.config")
 
 local M = {}
 
@@ -41,11 +42,20 @@ local PREFIX_LEN = 2 + LABEL_WIDTH + 3 -- "  " .. label .. " : "
 ---@field on_submit fun(form: InstallerForm): boolean
 local State = nil
 
+--- Collapse newlines into spaces so `nvim_buf_set_lines` never errors on multi-line values.
+---@param value? string
+---@return string
+function M.sanitize_value(value)
+  local s = tostring(value or "")
+  s = s:gsub("\r\n", "\n"):gsub("%s*\n%s*", " ")
+  return s
+end
+
 ---@param field InstallerField
 ---@param value string
 ---@return string
 local function format_line(field, value)
-  return string.format("  %-" .. LABEL_WIDTH .. "s : %s", field.label, value or "")
+  return string.format("  %-" .. LABEL_WIDTH .. "s : %s", field.label, M.sanitize_value(value))
 end
 
 ---@param line string
@@ -106,12 +116,18 @@ local function decorate()
       { { "" } },
       {
         { "  <CR>/<C-s> ", "Special" },
-        { "write & install   ", "Comment" },
+        { "install  ", "Comment" },
+        { "gs/:w ", "Special" },
+        { "save  ", "Comment" },
         { "<Tab>/<S-Tab> ", "Special" },
-        { "next/prev field   ", "Comment" },
+        { "field/complete  ", "Comment" },
+        { "<C-Space> ", "Special" },
+        { "autocomplete  ", "Comment" },
+        { "<C-r> ", "Special" },
+        { "parse README  ", "Comment" },
         { "<C-b> ", "Special" },
-        { "browse GitHub   ", "Comment" },
-        { "q/<Esc> ", "Special" },
+        { "browse  ", "Comment" },
+        { "q ", "Special" },
         { "close", "Comment" },
       },
     },
@@ -210,21 +226,74 @@ function M.set(key, value)
   end
 end
 
-local function submit()
+--- Apply multiple fields from a parsed form table without overwriting user-populated fields unless `overwrite` is true.
+---@param values InstallerForm
+---@param overwrite? boolean
+function M.fill(values, overwrite)
+  if not valid() or type(values) ~= "table" then
+    return
+  end
+  local current = M.read()
+  for _, field in ipairs(M.fields) do
+    local k = field.key
+    if values[k] and values[k] ~= "" then
+      if overwrite or not current[k] or Spec._trim(current[k]) == "" then
+        M.set(k, values[k])
+      end
+    end
+  end
+end
+
+local function parse_readme_into_form()
   if not valid() then
     return
+  end
+  local repo = Spec._trim(M.read().repo)
+  if repo == "" then
+    UI.notify("Enter a repository (owner/repo) first, then press <C-r> to parse its README.md", vim.log.levels.WARN)
+    return
+  end
+  local Parser = require("installer.parser")
+  UI.notify("Parsing README.md for " .. repo .. "…")
+  Parser.parse_github(repo, function(err, res)
+    if not valid() then
+      return
+    end
+    if err then
+      return UI.notify("Could not fetch README: " .. err, vim.log.levels.ERROR)
+    end
+    if not res or not res.primary then
+      return UI.notify("No install snippet found in " .. repo .. " README.md", vim.log.levels.WARN)
+    end
+    M.fill(res.primary, true)
+    UI.notify(("Filled spec fields from %s README.md (%s)"):format(repo, res.primary_manager or "detected"))
+  end)
+end
+
+local function submit(action_opts)
+  if not valid() then
+    return false
   end
   vim.cmd("stopinsert")
   local form = M.read()
   if Spec._trim(form.repo) == "" then
     UI.notify("Repository is required", vim.log.levels.WARN)
     edit_field(1)
-    return
+    return false
   end
   local on_submit = State.on_submit
-  if on_submit(form) then
-    M.close()
+  local ok = on_submit(form, action_opts)
+  if ok then
+    vim.bo[State.buf].modified = false
+    if not (action_opts and action_opts.keep_open) then
+      M.close()
+    end
   end
+  return ok
+end
+
+local function save_only()
+  return submit({ after_write = "none" })
 end
 
 local function browse()
@@ -249,14 +318,18 @@ end
 
 ---@class InstallerFormOpenOpts
 ---@field values? InstallerForm       prefilled values
----@field on_submit fun(form: InstallerForm): boolean  return true to close the modal
+---@field on_submit fun(form: InstallerForm, action_opts?: table): boolean  return true to close the modal
 
----@param opts InstallerFormOpenOpts
-function M.open(opts)
+---@param opts InstallerFormOpenOpts|InstallerForm
+---@param on_submit_fn? fun(form: InstallerForm, action_opts?: table): boolean
+function M.open(opts, on_submit_fn)
   opts = opts or {}
+  if on_submit_fn or (opts.values == nil and opts.on_submit == nil and next(opts) ~= nil) then
+    opts = { values = opts, on_submit = on_submit_fn }
+  end
   M.close()
 
-  local width = 78
+  local width = 84
   local height = #M.fields + 2
   local buf, win = UI.open({
     title = "installer.nvim · add a plugin to lazy.nvim",
@@ -274,27 +347,60 @@ function M.open(opts)
   end
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].modifiable = true
+  vim.bo[buf].buftype = "acwrite"
+  vim.bo[buf].modified = false
   vim.bo[buf].undolevels = 100
+  pcall(vim.api.nvim_buf_set_name, buf, "installer://spec")
+  vim.bo[buf].omnifunc = "v:lua.require'installer.complete'.omnifunc"
+  vim.bo[buf].completefunc = "v:lua.require'installer.complete'.omnifunc"
   decorate()
+
+  local Complete = require("installer.complete")
 
   -- keymaps -------------------------------------------------------------
   local map = function(lhs, rhs, modes, desc)
     UI.map(buf, lhs, rhs, modes, desc)
   end
-  map("<CR>", submit, "n", "Write spec & install")
-  map("<C-s>", submit, { "n", "i" }, "Write spec & install")
+  map("<CR>", function()
+    submit()
+  end, "n", "Write spec & install")
+  map("<C-s>", function()
+    submit()
+  end, { "n", "i" }, "Write spec & install")
+  map("gs", save_only, "n", "Save spec file only")
+  map("<C-w>", save_only, { "n", "i" }, "Save spec file only")
   map("q", M.close, "n", "Close")
   map("<Esc>", M.close, "n", "Close")
   map("<C-b>", browse, { "n", "i" }, "Browse GitHub")
+  map("<C-r>", parse_readme_into_form, { "n", "i" }, "Parse README.md for repo")
+  map("gp", parse_readme_into_form, "n", "Parse README.md for repo")
+  map("<C-Space>", function()
+    Complete.trigger(buf, win, true)
+  end, "i", "Trigger autocomplete")
+  map("<C-@>", function()
+    Complete.trigger(buf, win, true)
+  end, "i", "Trigger autocomplete")
   map("<Tab>", function()
-    move_field(1)
-  end, { "n", "i" }, "Next field")
+    if vim.fn.pumvisible() == 1 then
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-n>", true, false, true), "n", false)
+    else
+      move_field(1)
+    end
+  end, { "n", "i" }, "Next field / completion")
   map("<S-Tab>", function()
-    move_field(-1)
-  end, { "n", "i" }, "Previous field")
+    if vim.fn.pumvisible() == 1 then
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-p>", true, false, true), "n", false)
+    else
+      move_field(-1)
+    end
+  end, { "n", "i" }, "Previous field / completion")
   map("<CR>", function()
-    move_field(1)
-  end, "i", "Next field")
+    if vim.fn.pumvisible() == 1 then
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-y>", true, false, true), "n", false)
+    else
+      move_field(1)
+    end
+  end, "i", "Confirm completion / next field")
   map("<Down>", function()
     move_field(1)
   end, "i", "Next field")
@@ -319,12 +425,34 @@ function M.open(opts)
 
   -- autocmds ------------------------------------------------------------
   local group = vim.api.nvim_create_augroup("installer.form." .. buf, { clear = true })
-  vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+  vim.api.nvim_create_autocmd("BufWriteCmd", {
+    group = group,
+    buffer = buf,
+    callback = function()
+      submit()
+    end,
+  })
+  vim.api.nvim_create_autocmd("TextChanged", {
     group = group,
     buffer = buf,
     callback = function()
       repair()
       decorate()
+      vim.bo[buf].modified = false
+    end,
+  })
+  vim.api.nvim_create_autocmd("TextChangedI", {
+    group = group,
+    buffer = buf,
+    callback = function()
+      repair()
+      decorate()
+      vim.bo[buf].modified = false
+      if Config.options.ui and Config.options.ui.autocomplete ~= false then
+        if vim.fn.pumvisible() == 0 then
+          Complete.trigger(buf, win, false)
+        end
+      end
     end,
   })
   vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI", "InsertEnter" }, {

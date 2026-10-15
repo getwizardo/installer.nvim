@@ -1327,6 +1327,584 @@ function M.setup_autocmd()
   })
 end
 
+--- List entries in a local directory with type, size, permissions, and mtime (for SFTP UI).
+---@param dir string
+---@return {name: string, type: "dir"|"file"|"link", size: integer, mtime: string, path: string}[]
+function M.list_local_dir(dir)
+  dir = vim.fn.fnamemodify(vim.fn.expand(dir or "."), ":p"):gsub("/+$", "")
+  if dir == "" then
+    dir = "/"
+  end
+  local out = {}
+  local handle = uv and uv.fs_scandir and uv.fs_scandir(dir)
+  if handle then
+    while true do
+      local name, ftype = uv.fs_scandir_next(handle)
+      if not name then
+        break
+      end
+      if name ~= "." and name ~= ".." then
+        local full = dir .. "/" .. name
+        local st = uv.fs_stat(full)
+        local entry_type = (st and st.type == "directory") and "dir" or (ftype == "link" and "link" or "file")
+        out[#out + 1] = {
+          name = name,
+          type = entry_type,
+          size = st and st.size or 0,
+          mtime = st and st.mtime and os.date("%Y-%m-%d %H:%M", st.mtime.sec) or "",
+          path = full,
+        }
+      end
+    end
+  end
+  table.sort(out, function(a, b)
+    if (a.type == "dir") ~= (b.type == "dir") then
+      return a.type == "dir"
+    end
+    return a.name < b.name
+  end)
+  return out
+end
+
+--- Dual-pane floating SFTP UI (Local Project Explorer <-> Remote SFTP Server Explorer).
+---@param profile_name? string
+function M.ui(profile_name)
+  local file_hint = vim.api.nvim_buf_get_name(0)
+  local profiles = M.profiles(file_hint)
+  local profile = nil
+  if profile_name and profile_name ~= "" then
+    for _, p in ipairs(profiles) do
+      if p.name == profile_name then
+        profile = p
+        break
+      end
+    end
+  end
+  if not profile then
+    profile = profiles[1]
+  end
+  if not profile then
+    local cwd = vim.fn.getcwd()
+    profile = {
+      name = "unconfigured",
+      host = "example.com",
+      port = 22,
+      username = os.getenv("USER") or "deploy",
+      remotePath = "/var/www/app",
+      root = cwd,
+      source = "unconfigured (press `i` to create sftp.json)",
+      uploadOnSave = false,
+      _unconfigured = true,
+    }
+  end
+
+  local total_w = math.min(vim.o.columns - 4, 136)
+  local total_h = math.min(vim.o.lines - 4, 34)
+  local header_h = 4
+  local pane_h = math.max(10, total_h - header_h - 4)
+  local left_w = math.floor((total_w - 3) / 2)
+  local right_w = total_w - left_w - 3
+  local start_row = math.max(1, math.floor((vim.o.lines - total_h) / 2))
+  local start_col = math.max(1, math.floor((vim.o.columns - total_w) / 2))
+
+  local header_buf = vim.api.nvim_create_buf(false, true)
+  local left_buf = vim.api.nvim_create_buf(false, true)
+  local right_buf = vim.api.nvim_create_buf(false, true)
+  for _, b in ipairs({ header_buf, left_buf, right_buf }) do
+    vim.bo[b].buftype = "nofile"
+    vim.bo[b].bufhidden = "wipe"
+    vim.bo[b].swapfile = false
+    vim.bo[b].modifiable = false
+  end
+
+  local header_win = vim.api.nvim_open_win(header_buf, false, {
+    relative = "editor",
+    row = start_row,
+    col = start_col,
+    width = total_w,
+    height = header_h,
+    style = "minimal",
+    border = Config.options.ui.border or "rounded",
+    title = " installer.nvim · SFTP Studio ",
+    title_pos = "center",
+  })
+  local left_win = vim.api.nvim_open_win(left_buf, true, {
+    relative = "editor",
+    row = start_row + header_h + 2,
+    col = start_col,
+    width = left_w,
+    height = pane_h,
+    style = "minimal",
+    border = Config.options.ui.border or "rounded",
+    title = " Local Project ",
+    title_pos = "left",
+  })
+  local right_win = vim.api.nvim_open_win(right_buf, false, {
+    relative = "editor",
+    row = start_row + header_h + 2,
+    col = start_col + left_w + 2,
+    width = right_w,
+    height = pane_h,
+    style = "minimal",
+    border = Config.options.ui.border or "rounded",
+    title = " Remote Server ",
+    title_pos = "left",
+  })
+  vim.wo[left_win].cursorline = true
+  vim.wo[right_win].cursorline = true
+
+  local local_cwd = profile.root or vim.fn.getcwd()
+  local remote_cwd = (profile.remotePath or "/"):gsub("/+$", "")
+  if remote_cwd == "" then
+    remote_cwd = "/"
+  end
+  local local_entries = {}
+  local remote_entries = {}
+  local active_pane = "local"
+  local status_text = profile._unconfigured and "No sftp.json found — press `i` to initialize" or "Ready"
+  local remote_status = "idle"
+  local closed = false
+
+  local function close_all()
+    if closed then
+      return
+    end
+    closed = true
+    for _, w in ipairs({ header_win, left_win, right_win }) do
+      if w and vim.api.nvim_win_is_valid(w) then
+        pcall(vim.api.nvim_win_close, w, true)
+      end
+    end
+  end
+
+  local function render_header()
+    if closed or not vim.api.nvim_buf_is_valid(header_buf) then
+      return
+    end
+    local last = not profile._unconfigured and M.last_sync(profile) or 0
+    local sync_str = last > 0 and os.date("%Y-%m-%d %H:%M", last) or "never"
+    local line1 = string.format(
+      "  Profile: %s (%s@%s:%s)  →  %s   [last sync: %s]   [%s]",
+      profile.name,
+      profile.username or "user",
+      profile.host or "host",
+      tostring(profile.port or 22),
+      profile.remotePath or "/",
+      sync_str,
+      status_text
+    )
+    local line2 = string.format(
+      "  Active Pane: %-7s │ Local: %-34s │ Remote: %s",
+      active_pane:upper(),
+      vim.fn.fnamemodify(local_cwd, ":~"),
+      remote_cwd
+    )
+    local line3 = "  <Tab> pane  <CR> open  - up  u upload  d download  s sync  D diff  m mkdir  R rename  x del  ! ssh"
+    local line4 = "  p switch profile  t test connection  i init/edit sftp.json  r refresh  y yank path  q close"
+    UI.set_lines(header_buf, { line1, line2, line3, line4 })
+    vim.api.nvim_buf_clear_namespace(header_buf, UI.ns, 0, -1)
+    vim.api.nvim_buf_set_extmark(header_buf, UI.ns, 0, 0, { end_col = #line1, hl_group = "Title" })
+    vim.api.nvim_buf_set_extmark(header_buf, UI.ns, 1, 0, { end_col = #line2, hl_group = "Identifier" })
+    vim.api.nvim_buf_set_extmark(header_buf, UI.ns, 2, 0, { end_col = #line3, hl_group = "Comment" })
+    vim.api.nvim_buf_set_extmark(header_buf, UI.ns, 3, 0, { end_col = #line4, hl_group = "Comment" })
+  end
+
+  local function render_local()
+    if closed or not vim.api.nvim_buf_is_valid(left_buf) then
+      return
+    end
+    local lines = { string.format("  📁 %s (%d items)", vim.fn.fnamemodify(local_cwd, ":~"), #local_entries) }
+    for _, e in ipairs(local_entries) do
+      local icon = e.type == "dir" and "▸ " or "  "
+      local name = e.name .. (e.type == "dir" and "/" or "")
+      local size_str = e.type == "dir" and "<DIR>" or tostring(e.size)
+      lines[#lines + 1] = string.format("  %s%-30s %8s  %s", icon, name, size_str, e.mtime or "")
+    end
+    if #local_entries == 0 then
+      lines[#lines + 1] = "  (empty directory)"
+    end
+    UI.set_lines(left_buf, lines)
+    vim.api.nvim_buf_clear_namespace(left_buf, UI.ns, 0, -1)
+    vim.api.nvim_buf_set_extmark(left_buf, UI.ns, 0, 0, { end_col = #lines[1], hl_group = "Title" })
+    for i, e in ipairs(local_entries) do
+      if e.type == "dir" then
+        vim.api.nvim_buf_set_extmark(left_buf, UI.ns, i, 0, { end_col = #lines[i + 1], hl_group = "Directory", strict = false })
+      end
+    end
+  end
+
+  local function render_remote()
+    if closed or not vim.api.nvim_buf_is_valid(right_buf) then
+      return
+    end
+    local lines = { string.format("  🌐 %s:%s (%s)", profile.host or "remote", remote_cwd, remote_status) }
+    if profile._unconfigured then
+      lines[#lines + 1] = "  No SFTP profile configured for this workspace."
+      lines[#lines + 1] = "  Press `i` to create sftp.json or configure `sftp.profiles` in installer.yaml."
+    else
+      for _, e in ipairs(remote_entries) do
+        local icon = e.type == "dir" and "▸ " or (e.type == "link" and "→ " or "  ")
+        local name = e.name .. (e.type == "dir" and "/" or "")
+        local size_str = e.type == "dir" and "<DIR>" or tostring(e.size or "")
+        lines[#lines + 1] = string.format("  %s%-30s %8s  %s", icon, name, size_str, e.mtime or "")
+      end
+      if #remote_entries == 0 and remote_status == "ready" then
+        lines[#lines + 1] = "  (empty remote directory)"
+      end
+    end
+    UI.set_lines(right_buf, lines)
+    vim.api.nvim_buf_clear_namespace(right_buf, UI.ns, 0, -1)
+    vim.api.nvim_buf_set_extmark(right_buf, UI.ns, 0, 0, { end_col = #lines[1], hl_group = "Title" })
+    for i, e in ipairs(remote_entries) do
+      if e.type == "dir" and lines[i + 1] then
+        vim.api.nvim_buf_set_extmark(right_buf, UI.ns, i, 0, { end_col = #lines[i + 1], hl_group = "Directory", strict = false })
+      end
+    end
+  end
+
+  local function refresh_local()
+    local_entries = M.list_local_dir(local_cwd)
+    render_local()
+    render_header()
+    if vim.api.nvim_win_is_valid(left_win) and #local_entries > 0 then
+      local row = vim.api.nvim_win_get_cursor(left_win)[1]
+      if row < 2 then
+        pcall(vim.api.nvim_win_set_cursor, left_win, { 2, 0 })
+      end
+    end
+  end
+
+  local function refresh_remote()
+    if profile._unconfigured then
+      remote_entries = {}
+      remote_status = "unconfigured"
+      render_remote()
+      render_header()
+      return
+    end
+    remote_status = "loading…"
+    render_remote()
+    M.batch(profile, { "ls -la " .. q(remote_cwd) }, function(ok, out, err)
+      if closed then
+        return
+      end
+      if not ok then
+        remote_entries = {}
+        remote_status = "offline: " .. (err ~= "" and err or "connection failed")
+        status_text = "Remote unreachable (press `t` to diagnose)"
+        render_remote()
+        render_header()
+        return
+      end
+      remote_entries = M.parse_ls(out)
+      remote_status = string.format("%d items", #remote_entries)
+      status_text = "Connected to " .. profile.name
+      render_remote()
+      render_header()
+      if vim.api.nvim_win_is_valid(right_win) and #remote_entries > 0 then
+        local row = vim.api.nvim_win_get_cursor(right_win)[1]
+        if row < 2 then
+          pcall(vim.api.nvim_win_set_cursor, right_win, { 2, 0 })
+        end
+      end
+    end)
+  end
+
+  local function current_local()
+    if not vim.api.nvim_win_is_valid(left_win) then
+      return nil
+    end
+    local row = vim.api.nvim_win_get_cursor(left_win)[1]
+    return local_entries[row - 1]
+  end
+
+  local function current_remote()
+    if not vim.api.nvim_win_is_valid(right_win) then
+      return nil
+    end
+    local row = vim.api.nvim_win_get_cursor(right_win)[1]
+    return remote_entries[row - 1]
+  end
+
+  local function switch_pane()
+    if active_pane == "local" then
+      active_pane = "remote"
+      if vim.api.nvim_win_is_valid(right_win) then
+        vim.api.nvim_set_current_win(right_win)
+      end
+    else
+      active_pane = "local"
+      if vim.api.nvim_win_is_valid(left_win) then
+        vim.api.nvim_set_current_win(left_win)
+      end
+    end
+    render_header()
+  end
+
+  local function bind_common(buf, pane_kind)
+    UI.map(buf, "q", close_all)
+    UI.map(buf, "<Esc>", close_all)
+    UI.map(buf, "<Tab>", switch_pane)
+    UI.map(buf, "r", function()
+      refresh_local()
+      refresh_remote()
+    end)
+    UI.map(buf, "i", function()
+      close_all()
+      M.init()
+    end)
+    UI.map(buf, "t", function()
+      M.test()
+    end)
+    UI.map(buf, "p", function()
+      local all = M.profiles(file_hint)
+      if #all == 0 then
+        return UI.notify("No SFTP profiles configured yet. Press `i` to create sftp.json.", vim.log.levels.WARN)
+      end
+      vim.ui.select(all, {
+        prompt = "Select SFTP Profile",
+        format_item = function(item)
+          return string.format("%s — %s@%s:%s (%s)", item.name, item.username or "", item.host, item.remotePath, item.source)
+        end,
+      }, function(chosen)
+        if chosen then
+          profile = chosen
+          M._last[chosen.root] = chosen.name
+          local_cwd = chosen.root
+          remote_cwd = (chosen.remotePath or "/"):gsub("/+$", "")
+          refresh_local()
+          refresh_remote()
+        end
+      end)
+    end)
+    UI.map(buf, "s", function()
+      if profile._unconfigured then
+        return UI.notify("Configure an SFTP profile first (`i`)", vim.log.levels.WARN)
+      end
+      status_text = "Syncing modified files…"
+      render_header()
+      M.sync(false)
+      vim.defer_fn(refresh_remote, 600)
+    end)
+    UI.map(buf, "S", function()
+      if profile._unconfigured then
+        return UI.notify("Configure an SFTP profile first (`i`)", vim.log.levels.WARN)
+      end
+      status_text = "Syncing all files…"
+      render_header()
+      M.sync(true)
+      vim.defer_fn(refresh_remote, 600)
+    end)
+    UI.map(buf, "u", function()
+      if profile._unconfigured then
+        return UI.notify("Configure an SFTP profile first (`i`)", vim.log.levels.WARN)
+      end
+      local entry = current_local()
+      if not entry then
+        return UI.notify("Select a local file to upload in the left pane", vim.log.levels.WARN)
+      end
+      local dst = (remote_cwd:gsub("/+$", "")) .. "/" .. entry.name
+      status_text = "Uploading " .. entry.name .. " → " .. dst
+      render_header()
+      local cmd = entry.type == "dir" and ("put -r %s %s"):format(q(entry.path), q(dst)) or ("put -p %s %s"):format(q(entry.path), q(dst))
+      M.batch(profile, { cmd }, function(ok, _, err)
+        status_text = ok and ("Uploaded " .. entry.name) or ("Upload failed: " .. err)
+        UI.notify(status_text, ok and vim.log.levels.INFO or vim.log.levels.ERROR)
+        refresh_remote()
+      end)
+    end)
+    UI.map(buf, "d", function()
+      if profile._unconfigured then
+        return UI.notify("Configure an SFTP profile first (`i`)", vim.log.levels.WARN)
+      end
+      local entry = current_remote()
+      if not entry then
+        return UI.notify("Select a remote file to download in the right pane", vim.log.levels.WARN)
+      end
+      local src = (remote_cwd:gsub("/+$", "")) .. "/" .. entry.name
+      local dst = (local_cwd:gsub("/+$", "")) .. "/" .. entry.name
+      status_text = "Downloading " .. entry.name .. " → " .. dst
+      render_header()
+      local cmd = entry.type == "dir" and ("get -r %s %s"):format(q(src), q(dst)) or ("get -p %s %s"):format(q(src), q(dst))
+      M.batch(profile, { cmd }, function(ok, _, err)
+        status_text = ok and ("Downloaded " .. entry.name) or ("Download failed: " .. err)
+        UI.notify(status_text, ok and vim.log.levels.INFO or vim.log.levels.ERROR)
+        refresh_local()
+      end)
+    end)
+    UI.map(buf, "D", function()
+      if profile._unconfigured then
+        return UI.notify("Configure an SFTP profile first (`i`)", vim.log.levels.WARN)
+      end
+      local entry = current_local()
+      if not entry or entry.type == "dir" then
+        return UI.notify("Select a local file to diff against remote", vim.log.levels.WARN)
+      end
+      local rel = relative(profile.root, entry.path) or entry.name
+      local tmp = vim.fn.tempname() .. "_" .. entry.name
+      M.batch(profile, { ("get %s %s"):format(q(M.remote_path(profile, rel)), q(tmp)) }, function(ok, _, err)
+        if not ok then
+          return UI.notify("Could not fetch remote file: " .. err, vim.log.levels.ERROR)
+        end
+        close_all()
+        vim.cmd.edit(vim.fn.fnameescape(entry.path))
+        vim.cmd("diffthis")
+        vim.cmd("vertical diffsplit " .. vim.fn.fnameescape(tmp))
+        vim.bo.readonly = true
+        vim.bo.modifiable = false
+      end)
+    end)
+    UI.map(buf, "!", function()
+      if profile._unconfigured then
+        return UI.notify("Configure an SFTP profile first (`i`)", vim.log.levels.WARN)
+      end
+      vim.ui.input({ prompt = ("SSH (%s@%s): "):format(profile.username or "", profile.host or "") }, function(cmd)
+        if not cmd or vim.trim(cmd) == "" then
+          return
+        end
+        status_text = "Running SSH: " .. cmd
+        render_header()
+        M.ssh(profile, cmd, function(ok, out, err)
+          status_text = ok and "SSH command finished" or ("SSH error: " .. err)
+          render_header()
+          UI.notify((out ~= "" and out or err ~= "" and err or "(no output)"), ok and vim.log.levels.INFO or vim.log.levels.ERROR)
+          refresh_remote()
+        end)
+      end)
+    end)
+    UI.map(buf, "-", function()
+      if pane_kind == "local" then
+        local parent = vim.fn.fnamemodify(local_cwd, ":h")
+        if parent and parent ~= "" then
+          local_cwd = parent
+          refresh_local()
+        end
+      else
+        remote_cwd = remote_cwd:match("^(.*)/[^/]+/?$") or "/"
+        if remote_cwd == "" then
+          remote_cwd = "/"
+        end
+        refresh_remote()
+      end
+    end)
+    UI.map(buf, "<CR>", function()
+      if pane_kind == "local" then
+        local e = current_local()
+        if not e then
+          return
+        end
+        if e.type == "dir" then
+          local_cwd = e.path
+          refresh_local()
+        else
+          close_all()
+          vim.cmd.edit(vim.fn.fnameescape(e.path))
+        end
+      else
+        local e = current_remote()
+        if not e then
+          return
+        end
+        local full_remote = (remote_cwd:gsub("/+$", "")) .. "/" .. e.name
+        if e.type == "dir" then
+          remote_cwd = full_remote
+          refresh_remote()
+        else
+          local tmp = vim.fn.tempname() .. "_" .. e.name
+          M.batch(profile, { ("get %s %s"):format(q(full_remote), q(tmp)) }, function(ok, _, err)
+            if not ok then
+              return UI.notify("Download failed: " .. err, vim.log.levels.ERROR)
+            end
+            close_all()
+            vim.cmd.edit(vim.fn.fnameescape(tmp))
+            vim.b.installer_sftp_remote = { profile = profile.name, path = full_remote }
+            UI.notify("Opened remote copy of " .. e.name)
+          end)
+        end
+      end
+    end)
+    UI.map(buf, "m", function()
+      vim.ui.input({ prompt = ("New %s directory: "):format(pane_kind) }, function(name)
+        if not name or vim.trim(name) == "" then
+          return
+        end
+        if pane_kind == "local" then
+          vim.fn.mkdir(local_cwd .. "/" .. name, "p")
+          refresh_local()
+        else
+          local dst = (remote_cwd:gsub("/+$", "")) .. "/" .. name
+          M.batch(profile, { "mkdir " .. q(dst) }, function(ok, _, err)
+            if not ok then
+              UI.notify("mkdir failed: " .. err, vim.log.levels.ERROR)
+            end
+            refresh_remote()
+          end)
+        end
+      end)
+    end)
+    UI.map(buf, "R", function()
+      local e = pane_kind == "local" and current_local() or current_remote()
+      if not e then
+        return
+      end
+      vim.ui.input({ prompt = "Rename to: ", default = e.name }, function(new_name)
+        if not new_name or new_name == "" or new_name == e.name then
+          return
+        end
+        if pane_kind == "local" then
+          uv.fs_rename(e.path, local_cwd .. "/" .. new_name)
+          refresh_local()
+        else
+          local src = (remote_cwd:gsub("/+$", "")) .. "/" .. e.name
+          local dst = (remote_cwd:gsub("/+$", "")) .. "/" .. new_name
+          M.batch(profile, { ("rename %s %s"):format(q(src), q(dst)) }, function(ok, _, err)
+            if not ok then
+              UI.notify("rename failed: " .. err, vim.log.levels.ERROR)
+            end
+            refresh_remote()
+          end)
+        end
+      end)
+    end)
+    UI.map(buf, "x", function()
+      local e = pane_kind == "local" and current_local() or current_remote()
+      if not e then
+        return
+      end
+      if vim.fn.confirm(("Delete %s (%s)?"):format(e.name, pane_kind), "&Yes\n&No", 2) ~= 1 then
+        return
+      end
+      if pane_kind == "local" then
+        vim.fn.delete(e.path, e.type == "dir" and "rf" or "")
+        refresh_local()
+      else
+        local target_path = (remote_cwd:gsub("/+$", "")) .. "/" .. e.name
+        local cmd = e.type == "dir" and "rmdir" or "rm"
+        M.batch(profile, { cmd .. " " .. q(target_path) }, function(ok, _, err)
+          if not ok then
+            UI.notify(cmd .. " failed: " .. err, vim.log.levels.ERROR)
+          end
+          refresh_remote()
+        end)
+      end
+    end)
+    UI.map(buf, "y", function()
+      local e = pane_kind == "local" and current_local() or current_remote()
+      local path = pane_kind == "local" and (e and e.path or local_cwd)
+        or (e and ((remote_cwd:gsub("/+$", "")) .. "/" .. e.name) or remote_cwd)
+      vim.fn.setreg("+", path)
+      vim.fn.setreg('"', path)
+      UI.notify("Yanked " .. path)
+    end)
+  end
+
+  bind_common(left_buf, "local")
+  bind_common(right_buf, "remote")
+
+  refresh_local()
+  refresh_remote()
+end
+
 M._glob_to_pattern = glob_to_pattern
 M._ignored = ignored
 M._relative = relative

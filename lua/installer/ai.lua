@@ -20,6 +20,28 @@ local M = {}
 M.presets = {
   -- completion --------------------------------------------------------------
   {
+    repo = "monkoose/neocodeium",
+    title = "neocodeium (:Clina default)",
+    category = "completion",
+    needs = "free Windsurf/Codeium account (:NeoCodeium auth)",
+    desc = "Flicker-free pure-Lua AI completion & chat for Neovim with dot-repeat and word/line accept (used by :Clina).",
+    form = {
+      repo = "monkoose/neocodeium",
+      event = "VeryLazy",
+      cmd = "NeoCodeium",
+      config = [[function()
+  local neocodeium = require("neocodeium")
+  neocodeium.setup({ manual = false })
+  vim.keymap.set("i", "<A-f>", function() neocodeium.accept() end, { desc = "NeoCodeium Accept" })
+  vim.keymap.set("i", "<A-w>", function() neocodeium.accept_word() end, { desc = "NeoCodeium Accept Word" })
+  vim.keymap.set("i", "<A-a>", function() neocodeium.accept_line() end, { desc = "NeoCodeium Accept Line" })
+  vim.keymap.set("i", "<A-e>", function() neocodeium.cycle_or_complete() end, { desc = "NeoCodeium Next/Complete" })
+  vim.keymap.set("i", "<A-r>", function() neocodeium.cycle_or_complete(-1) end, { desc = "NeoCodeium Prev" })
+  vim.keymap.set("i", "<A-c>", function() neocodeium.clear() end, { desc = "NeoCodeium Clear" })
+end]],
+    },
+  },
+  {
     repo = "zbirenbaum/copilot.lua",
     title = "copilot.lua",
     category = "completion",
@@ -360,7 +382,7 @@ function M.pick()
     end
   end
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "  <CR> review in modal   i install now   K details   o open on GitHub   q close"
+  lines[#lines + 1] = "  <CR> review in modal   i install now   C :Clina IDE   K details   o open on GitHub   q close"
   UI.set_lines(buf, lines)
   vim.bo[buf].modifiable = false
 
@@ -387,6 +409,10 @@ function M.pick()
   end
   UI.map(buf, "q", close)
   UI.map(buf, "<Esc>", close)
+  UI.map(buf, "C", function()
+    close()
+    require("installer.clina").ide()
+  end)
   UI.map(buf, "<CR>", function()
     local p = current()
     if p then
@@ -438,6 +464,10 @@ function M.pick()
     end,
   })
   pcall(vim.api.nvim_win_set_cursor, win, { 2, 0 })
+end
+
+function M.ide(prompt)
+  return require("installer.clina").ide(prompt)
 end
 
 return M

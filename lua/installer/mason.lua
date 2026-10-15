@@ -15,6 +15,31 @@ local uv = vim.uv or vim.loop
 
 M.categories = { "LSP", "DAP", "Linter", "Formatter", "Compiler", "Runtime" }
 
+M.REGISTRY_WEB_URL = "https://mason-registry.dev"
+M.REGISTRY_LIST_URL = "https://mason-registry.dev/registry/list"
+
+--- Return the official https://mason-registry.dev URL for a Mason package (or the registry list).
+---@param name? string
+---@return string
+function M.package_url(name)
+  if name and name ~= "" then
+    return M.REGISTRY_LIST_URL .. "#/" .. name
+  end
+  return M.REGISTRY_LIST_URL
+end
+
+--- Open https://mason-registry.dev in the system browser (or for a specific package).
+---@param name? string
+---@return string url
+function M.open_registry(name)
+  local url = M.package_url(name)
+  if vim and vim.ui and vim.ui.open then
+    vim.ui.open(url)
+  end
+  UI.notify("Opened " .. url)
+  return url
+end
+
 ---@class InstallerMasonPackage
 ---@field name string
 ---@field description string
@@ -66,20 +91,38 @@ function M.ensure_registry(cb)
 end
 
 ---@param spec table
+---@param has_reg boolean
+---@param registry? table
 ---@return InstallerMasonPackage
-local function to_pkg(spec)
-  local registry = require("mason-registry")
+local function to_pkg(spec, has_reg, registry)
   return {
     name = spec.name,
     description = (spec.description or ""):gsub("%s+", " "),
     categories = spec.categories or {},
     languages = spec.languages or {},
     homepage = spec.homepage or "",
-    installed = registry.is_installed(spec.name),
-    deprecated = spec.deprecation and (spec.deprecation.message or spec.deprecation.since) or nil,
-    lspconfig = vim.tbl_get(spec, "neovim", "lspconfig"),
-    aliases = registry.get_package_aliases and registry.get_package_aliases(spec.name) or {},
+    installed = has_reg and registry.is_installed(spec.name) or false,
+    deprecated = spec.deprecated or (spec.deprecation and (spec.deprecation.message or spec.deprecation.since)) or nil,
+    lspconfig = spec.lspconfig or vim.tbl_get(spec, "neovim", "lspconfig"),
+    aliases = (has_reg and registry.get_package_aliases and registry.get_package_aliases(spec.name)) or {},
   }
+end
+
+--- Return raw package specs from `mason-registry` when loaded, or from `installer.mason_data`.
+---@return table[] specs, boolean has_reg, table? registry
+local function raw_specs()
+  local ok, registry = pcall(require, "mason-registry")
+  if ok and registry and registry.get_all_package_specs then
+    local ok_s, specs = pcall(registry.get_all_package_specs)
+    if ok_s and type(specs) == "table" and #specs > 0 then
+      return specs, true, registry
+    end
+  end
+  local ok_d, data = pcall(require, "installer.mason_data")
+  if ok_d and data and data.packages then
+    return data.packages, false, nil
+  end
+  return {}, false, nil
 end
 
 --- All packages (optionally filtered).
@@ -87,12 +130,12 @@ end
 ---@return InstallerMasonPackage[]
 function M.packages(opts)
   opts = opts or {}
-  local registry = require("mason-registry")
+  local specs, has_reg, registry = raw_specs()
   local out = {}
   local q = opts.query and opts.query:lower() or ""
   local lang = opts.language and opts.language:lower() or nil
-  for _, spec in ipairs(registry.get_all_package_specs()) do
-    local p = to_pkg(spec)
+  for _, spec in ipairs(specs) do
+    local p = to_pkg(spec, has_reg, registry)
     local keep = true
     if opts.category and not vim.tbl_contains(p.categories, opts.category) then
       keep = false
@@ -212,7 +255,7 @@ M.ft_languages = {
 ---@param ft? string
 ---@return string|nil
 function M.language_for(ft)
-  ft = ft or vim.bo.filetype
+  ft = ft or (vim.bo and vim.bo.filetype)
   if not ft or ft == "" then
     return nil
   end
@@ -220,9 +263,9 @@ function M.language_for(ft)
     return M.ft_languages[ft]
   end
   -- Title-case the filetype and look for a registry language with that name
-  local registry = require("mason-registry")
+  local specs = raw_specs()
   local wanted = ft:lower()
-  for _, spec in ipairs(registry.get_all_package_specs()) do
+  for _, spec in ipairs(specs) do
     for _, l in ipairs(spec.languages or {}) do
       if l:lower() == wanted then
         return l
@@ -335,18 +378,19 @@ end
 ---@param name string
 ---@return string|nil
 function M.resolve(name)
-  if not M.available() then
-    return nil
-  end
-  local registry = require("mason-registry")
-  if registry.has_package(name) then
+  local specs, has_reg, registry = raw_specs()
+  if has_reg and registry.has_package(name) then
     return name
   end
-  for _, spec in ipairs(registry.get_all_package_specs()) do
-    if vim.tbl_get(spec, "neovim", "lspconfig") == name then
+  for _, spec in ipairs(specs) do
+    if spec.name == name then
       return spec.name
     end
-    local aliases = registry.get_package_aliases and registry.get_package_aliases(spec.name) or {}
+    local lspc = spec.lspconfig or vim.tbl_get(spec, "neovim", "lspconfig")
+    if lspc == name then
+      return spec.name
+    end
+    local aliases = (has_reg and registry.get_package_aliases and registry.get_package_aliases(spec.name)) or {}
     if vim.tbl_contains(aliases, name) then
       return spec.name
     end

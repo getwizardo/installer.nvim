@@ -2,16 +2,18 @@
 
 Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **from inside Neovim**.
 
-- `:Installer` opens a modal — fill in the repository and any lazy.nvim spec fields (`event`, `cmd`, `ft`, `keys`, `opts`, …).
+- `:Installer` opens a modal — fill in the repository and any lazy.nvim spec fields (`event`, `cmd`, `ft`, `keys`, `opts`, …) with **context-aware autocomplete** (`omnifunc` / live popup).
+- **Universal `README.md` & snippet parser** (`:Installer parse [owner/repo|README.md]`, `<C-r>` in modal, `p` in browser): parses installation snippets from **lazy.nvim, packer.nvim, vim-plug, pckr.nvim, mini.deps, vim.pack, paq-nvim, dein.vim, Vundle, rocks.nvim, `git clone`, `:MasonInstall`, and `require(...).setup(...)`** into a ready-to-install `lazy.nvim` spec.
 - A `lua/plugins/<name>.lua` spec file is written for you.
 - lazy.nvim reloads its specs and installs the plugin immediately, no restart needed.
-- `:Installer browse` searches **all Neovim plugins on GitHub** (`topic:neovim-plugin`), with README preview and one-key install.
+- `:Installer browse` searches **all Neovim plugins on GitHub** (`topic:neovim-plugin`), with README preview, `p` to parse the README spec, and one-key install.
 - **GitHub account**: sign in (gh CLI / token / device flow) for higher rate limits, starring and your starred list.
-- **AI coding presets** (opt-in): curated specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub and more.
-- **SFTP**: upload / download / sync projects with parallel `sftp` workers, upload-on-save, every sftp command, a remote file browser, multiple SSH keys / ssh-config / ProxyJump.
+- **AI coding presets & `:Clina` TypeScript AI Coding IDE**: curated specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub, plus **`:Clina`** — a full TypeScript AI Coding IDE (`lua/installer/clina.lua` + `starsky/src/lib/clina.ts`) with multi-provider support, MCP tool servers, workspace file context, unified diffs, and one-key patch application.
+- **SFTP & SFTP Studio UI** (`:Installer sftp` / `:Installer sftp ui`): dual-pane floating Local Project ↔ Remote Server SFTP Studio UI inside Neovim and in the Next.js Webclient, plus parallel `sftp` workers, upload-on-save, every sftp command, remote file browser, and multiple SSH keys / ssh-config / ProxyJump.
 - **`installer.yaml`**: all configuration in a global or per-project YAML file (built-in parser, no dependencies).
-- **Mason**: install LSP servers, DAP adapters, linters, formatters, compilers and runtimes from the [mason.nvim](https://github.com/mason-org/mason.nvim) registry with a filterable picker, `ensure_installed` in `installer.yaml`, and one-command scaffolds for lspconfig / nvim-dap / conform + nvim-lint.
+- **Mason (all 601 servers built-in)**: install LSP servers, DAP adapters, linters, formatters, compilers and runtimes from the [mason.nvim](https://github.com/mason-org/mason.nvim) registry (with built-in catalog of all 601 Mason packages & 296 `lspconfig` server mappings for offline/instant autocomplete), `ensure_installed` in `installer.yaml`, and one-command scaffolds for lspconfig / nvim-dap / conform + nvim-lint.
 - **Plugin cache**: installed plugins archived as `cache/<name>.nvimpack` (zip, `.git` included) or `.pack` (git bundle for large repos) and restored before install — offline re-installs.
+- **Starsky for Neovim Webclient** (`:Installer starsky` / `starsky/`): **Next.js 16 (TypeScript App Router)** webclient scaffolded via `yarn create next-app`, featuring the `:Installer` Spec Saver, `:Clina` TypeScript AI Coding IDE, SFTP Studio UI, all 601 Mason servers, 296 LSPconfig servers, and the universal 11-manager README parser.
 
 ```
 ╭──────────────────── installer.nvim · add a plugin to lazy.nvim ────────────────────╮
@@ -75,29 +77,37 @@ return {
 | `:Installer browse [query]`     | Browse Neovim plugins on GitHub                                        |
 | `:Installer search [query]`     | Search GitHub and pick with `vim.ui.select` (telescope/fzf-lua/…)      |
 | `:Installer add owner/repo`     | Write a bare `{ "owner/repo" }` spec and install right away            |
+| `:Installer save owner/repo`    | Write a plugin spec file to `lua/plugins/<file>.lua` without installing |
+| `:Installer parse [repo\|file]` | Parse any installer snippet from GitHub `README.md`, local file, or buffer |
 | `:Installer dir`                | Show where spec files are written                                      |
-| `:Installer ai [preset]`        | Curated AI coding plugins (opt-in, see below)                          |
+| `:Installer ai [preset\|ide]`   | Curated AI coding plugins & `:Clina` AI Coding IDE                     |
+| `:Clina [action]`               | `ide`, `agent`, `chat`, `edit`, `spec`, `apply`, `diff`, `provider`, `mcp`, `web` — TypeScript AI Coding IDE |
 | `:Installer login\|logout\|whoami` | GitHub account                                                     |
-| `:Installer sftp <action>`      | transfers, every sftp command, remote browser, shell — see below        |
+| `:Installer sftp [action]`      | `ui` (dual-pane SFTP Studio), transfers, every sftp command, remote browser, shell |
 | `:Installer config [...]`       | `edit`, `project`, `reload`, `show` — manage `installer.yaml`           |
 | `:Installer cache [...]`        | `list`, `pack [name\|all]`, `restore <name>`, `remove`, `clean`, `dir`   |
 | `:Installer mason [...]`        | Mason picker, `lsp\|dap\|linter\|formatter`, `install`, `ensure`, `export`, `scaffold` — see below |
+| `:Installer starsky [...]`      | `start`, `stop`, `open`, `status`, `build` — Next.js TypeScript Starsky Webclient |
 
 ### Modal keys
 
-| Key               | Action                                       |
-| ----------------- | -------------------------------------------- |
-| `<CR>` / `<C-s>`  | Write the spec file and install              |
-| `<Tab>`/`<S-Tab>` | Next / previous field                        |
-| `<C-b>`           | Browse GitHub and fill the repository field  |
-| `dd`              | Clear the current field                      |
-| `q` / `<Esc>`     | Close                                        |
+| Key               | Action                                                       |
+| ----------------- | ------------------------------------------------------------ |
+| `<CR>` / `<C-s>`  | Write the spec file and install                              |
+| `gs` / `<C-w>` / `:w` | Save the spec file (`lua/plugins/<file>.lua`) without installing |
+| `<Tab>`/`<S-Tab>` | Next / previous completion item (when popup open) or field   |
+| `<C-Space>`       | Trigger context-aware field autocomplete (`omnifunc`)        |
+| `<C-r>` / `gp`    | Fetch & parse `README.md` for `Repository` and fill fields   |
+| `<C-b>`           | Browse GitHub and fill the repository field                  |
+| `dd`              | Clear the current field                                      |
+| `q` / `<Esc>`     | Close                                                        |
 
 ### Browser keys
 
 | Key           | Action                                                     |
 | ------------- | ---------------------------------------------------------- |
 | `<CR>`        | Open the modal prefilled with the selected plugin          |
+| `p`           | Fetch & parse `README.md` and open modal with full spec    |
 | `i`           | Quick install with a bare spec                             |
 | `K`           | Preview the README                                         |
 | `o`           | Open on GitHub                                             |
@@ -338,6 +348,86 @@ lazy.nvim merges every `lua/<module>/*.lua` file for each `{ import = "<module>"
 3. calls `require("lazy.core.plugin").load()` so lazy.nvim re-reads its specs, then `require("lazy").install({ plugins = { name } })`, which opens the lazy.nvim UI and clones the plugin.
 
 Generated files are plain lazy.nvim specs — edit them freely afterwards.
+
+## Universal `README.md` Installer Parser
+
+`:Installer parse` (or `:Installer readme`) parses installation blocks from any plugin's `README.md` (on GitHub, in a local file, or in the current buffer/visual selection) and converts them into a `lazy.nvim` spec:
+
+- **lazy.nvim**: `{ "owner/repo", event = ..., opts = ..., dependencies = ... }`, `return { ... }`, `require("lazy").setup(...)`
+- **packer.nvim**: `use 'owner/repo'`, `use { 'owner/repo', requires = ..., run = ..., opt = true, as = ... }`
+- **vim-plug**: `Plug 'owner/repo', { 'do': '...', 'branch': '...', 'tag': '...', 'on': '...', 'for': [...] }` (including multi-`Plug` dependency blocks)
+- **pckr.nvim**: `require('pckr').add{ { 'owner/repo', run = '...', cond = cmd('...') } }`
+- **mini.deps**: `MiniDeps.add({ source = 'owner/repo', depends = {...}, checkout = '...', hooks = {...} })`
+- **vim.pack** (Neovim 0.12): `vim.pack.add({ { src = 'https://github.com/owner/repo', version = '...' } })`
+- **paq-nvim**: `require("paq")({ ... })`
+- **dein.vim / Vundle**: `call dein#add('owner/repo', { ... })`, `Plugin 'owner/repo'`, `Bundle 'owner/repo'`
+- **rocks.nvim / `git clone` / `:MasonInstall` / `require("...").setup({...})`**
+
+```vim
+:Installer parse folke/noice.nvim      " fetch GitHub README, parse spec, open modal
+:Installer! parse folke/noice.nvim     " fetch GitHub README, parse spec, install immediately
+:Installer parse ./README.md           " parse all plugin specs from a local README.md
+:'<,'>Installer parse                  " parse selected snippet in current buffer
+```
+
+## `:Clina` — NeoCodeium (`monkoose/neocodeium`) AI Coding Integration
+
+`:Clina` integrates directly with **[NeoCodeium (`monkoose/neocodeium`)](https://github.com/monkoose/neocodeium)** for flicker-free Windsurf/Codeium inline ghost-text completions and chat:
+
+```vim
+:Clina                                 " open the :Clina NeoCodeium dashboard
+:Clina install                         " write lua/plugins/neocodeium.lua & install via lazy.nvim
+:Clina setup                           " bind NeoCodeium keymaps (<A-f>, <A-w>, <A-a>, <A-e>, <A-r>, <A-c>)
+:Clina auth                            " run :NeoCodeium auth
+:Clina toggle                          " toggle NeoCodeium completion globally
+:Clina chat                            " open NeoCodeium Windsurf Chat in browser
+```
+
+## `:MusicPlayer` — Built-in Player with 10-Band EQ, Visualizer, Radio & 2-Neovim Device Controller
+
+`:MusicPlayer` provides a floating music & radio studio inside Neovim and in the Starsky Web IDE, including a **2-Neovim Device Controller (`Server <-> Client`)** over TCP (`vim.uv.new_tcp()`):
+
+```vim
+:MusicPlayer                           " open the floating :MusicPlayer studio (EQ, Visualizer, Radio)
+:MusicPlayer server 41999              " start the 2-Neovim TCP Server on Neovim Instance #1
+:MusicPlayer connect 127.0.0.1:41999   " connect Neovim Instance #2 as a synced Client
+:MusicPlayer eq synthwave              " apply a 10-band EQ preset (lofi-coding, synthwave, bass-boost, flat, ...)
+:MusicPlayer visualizer spectrum       " switch real-time ASCII visualizer (spectrum, wave, vu, matrix, starfield)
+```
+
+## `:Installer boot` — ASCII Boot Animation
+
+```vim
+:Installer boot                        " play the interactive STARSKY / INSTALLER.NVIM ASCII boot sequence
+```
+
+## Starsky Code IDE for Neovim (`starsky/`)
+
+Starsky is the **Next.js 16 (TypeScript App Router)** Code IDE for `installer.nvim` built with **W3C Custom Elements / Web Components (`customElements.define`)** and **shadcn/ui + `vaul` Drawer**:
+
+- **Real Web Components (`starsky/src/components/webComponents.ts`)**:
+  - `<starsky-code-editor>` — Shadow DOM code editor with line numbers, status bar, and **NeoCodeium (`monkoose/neocodeium`)** inline ghost-text completions (`<A-f>` accept, `<A-w>` word, `<A-a>` line, `<A-e>` cycle).
+  - `<starsky-ascii-boot>` — Shadow DOM animated ASCII boot terminal.
+  - `<starsky-eq-visualizer>` — Shadow DOM 60fps canvas spectrum & waveform visualizer for `:MusicPlayer`.
+  - `<starsky-terminal>` — Shadow DOM interactive Neovim Ex-command terminal.
+- **shadcn/ui + `vaul` Drawers (`starsky/src/components/ui/drawer.tsx`)**: slide-up `:MusicPlayer` Studio Drawer and Quick `:Installer` Spec Builder Drawer.
+- **Live GitHub API Plugin Autocomplete (`/api/complete`)**: queries `https://api.github.com/search/repositories` live as you type in `repo` or `dependencies`.
+- **Official [`https://mason-registry.dev/`](https://mason-registry.dev/) Explorer**: all **601 official Mason packages** and **296 `lspconfig` mappings** synced with `https://mason-registry.dev/registry/list`.
+- **Dual-Pane SFTP Studio UI** (`:Installer sftp ui` in Neovim and in the Web IDE).
+
+```vim
+:Installer starsky start               " start the Next.js TypeScript Code IDE and open browser
+:Installer starsky status              " check server status
+:Installer starsky stop                " stop the webclient
+```
+
+Or from the shell:
+
+```sh
+cd starsky
+yarn
+yarn start
+```
 
 ## Development
 

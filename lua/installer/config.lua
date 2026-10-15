@@ -40,6 +40,15 @@ M.defaults = {
     width = 0.6, -- number of columns, or a fraction of the editor width
     height = 0.7, -- number of rows, or a fraction of the editor height (browser only)
     winblend = 0,
+    autocomplete = true, -- auto-trigger completion popup inside the :Installer modal
+  },
+
+  -- Starsky for Neovim Webclient settings (`:Installer starsky`).
+  starsky = {
+    host = "localhost",
+    port = 5173,
+    api_port = 4174,
+    dir = nil, -- nil = <repo_root>/starsky
   },
 
   -- GitHub search settings (used by `:Installer browse`).
@@ -173,7 +182,12 @@ end
 ---@param trusted boolean
 ---@return table|nil data, string|nil err
 function M.read_yaml(path, trusted)
-  if not uv.fs_stat(path) then
+  local u = uv or vim.uv or vim.loop
+  if u and u.fs_stat then
+    if not u.fs_stat(path) then
+      return nil, nil
+    end
+  elseif vim.fn and vim.fn.filereadable and vim.fn.filereadable(path) == 0 then
     return nil, nil
   end
   local text

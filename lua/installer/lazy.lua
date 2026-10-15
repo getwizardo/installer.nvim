@@ -19,6 +19,9 @@ end
 ---@param path string
 ---@return boolean
 local function is_dir(path)
+  if not uv or not uv.fs_stat then
+    return vim.fn.isdirectory(path) == 1
+  end
   local st = uv.fs_stat(path)
   return st ~= nil and st.type == "directory"
 end
@@ -40,10 +43,33 @@ function M.spec_modules()
   return mods
 end
 
+--- Clear cached Lua modules for a plugin spec file so lazy.nvim reloads updated files from disk.
+---@param file? string
+function M.invalidate_spec_cache(file)
+  local mods = M.spec_modules()
+  local seen = {}
+  for _, m in ipairs(mods) do
+    seen[m] = true
+  end
+  if not seen["plugins"] then
+    mods[#mods + 1] = "plugins"
+  end
+
+  for _, mod in ipairs(mods) do
+    package.loaded[mod] = nil
+    if file and file ~= "" then
+      local clean = file:gsub("%.lua$", "")
+      package.loaded[mod .. "." .. clean] = nil
+      package.loaded[mod .. "/" .. clean] = nil
+    end
+  end
+end
+
 --- Resolve the directory where new spec files should be written.
+---@param explicit? string
 ---@return string dir, string source  -- source: "config" | "lazy" | "default"
-function M.plugins_dir()
-  local opt = Config.options.plugins_dir
+function M.plugins_dir(explicit)
+  local opt = explicit or Config.options.plugins_dir
   if type(opt) == "function" then
     opt = opt()
   end
@@ -61,7 +87,7 @@ function M.plugins_dir()
     end
     -- `lua/plugins.lua` exists but `lua/plugins/` does not: lazy.nvim merges
     -- both, so creating the directory next to it works too.
-    if uv.fs_stat(candidate .. ".lua") then
+    if uv and uv.fs_stat and uv.fs_stat(candidate .. ".lua") then
       return candidate, "lazy"
     end
     -- otherwise ask lazy where the module actually lives (other rtp paths)
@@ -100,11 +126,13 @@ end
 --- Reload lazy.nvim specs so a freshly written file is known, then install.
 ---@param name string plugin name (as lazy.nvim derives it)
 ---@param on_done? fun(plugin: table|nil) called when the install runner finishes
+---@param file? string optional spec filename to invalidate in package.loaded
 ---@return boolean ok, string? err
-function M.install(name, on_done)
+function M.install(name, on_done, file)
   if not M.available() then
     return false, "lazy.nvim is not loaded; restart Neovim to install the plugin"
   end
+  M.invalidate_spec_cache(file)
   local ok, err = pcall(function()
     require("lazy.core.plugin").load()
   end)
@@ -113,11 +141,12 @@ function M.install(name, on_done)
   end
 
   local LazyConfig = require("lazy.core.config")
-  local plugin = LazyConfig.plugins[name]
+  local plugin = LazyConfig.plugins[name] or M.find_plugin(name)
+  local target_name = (plugin and plugin.name) or name
   ok, err = pcall(function()
     local runner
     if plugin then
-      runner = require("lazy").install({ plugins = { name }, show = true })
+      runner = require("lazy").install({ plugins = { target_name }, show = true })
     else
       -- name derivation differs (e.g. custom url) - install everything missing
       runner = require("lazy").install({ show = true })
@@ -128,8 +157,8 @@ function M.install(name, on_done)
     if type(runner) == "table" and runner.wait then
       runner:wait(function()
         vim.schedule(function()
-          local p = LazyConfig.plugins[name]
-          if p and p._.installed and not p._.loaded and p.lazy == false then
+          local p = LazyConfig.plugins[target_name] or M.find_plugin(name)
+          if p and p._ and p._.installed and not p._.loaded and p.lazy == false then
             pcall(require("lazy.core.loader").load, p, { cmd = "Installer" })
           end
           if on_done then
@@ -139,7 +168,7 @@ function M.install(name, on_done)
       end)
     elseif on_done then
       vim.schedule(function()
-        on_done(LazyConfig.plugins[name])
+        on_done(LazyConfig.plugins[target_name] or M.find_plugin(name))
       end)
     end
   end)
