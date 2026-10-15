@@ -693,8 +693,14 @@ Cast to a real device (sender):                                       ~
   :Karu volume 70|+10|-10|mute|unmute [dev]
   :Karu status [dev]                " what the device plays right now
   :Karu probe <host[:port]>         " reachability + status
+  :Karu queue <url|query>...        " play several, in order
   :Karu info | help
 <
+`:Karu queue` plays the items one after another. An item ends when the receiver
+goes idle after playing. A failed item is reported and the queue goes on. A
+CANCELLED stop ends the queue. The CLI reads a list with `karu queue --file FILE`
+(one item per line, `#` comments allowed) and `--watch` on `karu discover`
+reports devices as they appear.
 `:Karu cast` resolves searches and YouTube links with `yt-dlp -g`, launches the
 Default Media Receiver (CC1AD845) on the device and sends `LOAD`. A device name,
 an id or `host[:port]` can be used; only the second positional (or `--device`)

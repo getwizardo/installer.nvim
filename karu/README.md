@@ -124,10 +124,12 @@ and the mDNS service definition used by Chrome
 ```
 karu info                                     protocol + environment report
 karu version                                  version
-karu discover [--timeout MS] [--address HOST[:PORT]]
+karu discover [--timeout MS] [--address HOST[:PORT]] [--watch [--interval MS]]
 karu probe HOST[:PORT]                        reachability + status of one device
 karu cast <url|query> [DEVICE] [--device NAME|ID|ADDRESS|INDEX]
           [--autoplay false] [--title T] [--content-type AUDIO|VIDEO] [--json]
+karu queue <url|query|path>... [--file FILE] [--device ...] [--poll MS]
+          plays each item after the previous one ends (failures are skipped)
 karu control play|pause|toggle|stop|quit [DEVICE]
 karu seek <seconds> [DEVICE]
 karu volume <0-100|+N|-N|mute|unmute|toggle> [DEVICE]
@@ -206,6 +208,7 @@ plus `translationByLine` back into `lua/kaeru/kikru/lyrics.lua`.
 ```vim
 :Karu                      " status of the first device
 :Karu discover             " who is on the network
+:Karu queue <url|query>...  " play several, one after another
 :Karu cast <url|query> [dev]
 :Karu play | pause | toggle | quit | next | prev [dev]
 :Karu seek <seconds> [dev]

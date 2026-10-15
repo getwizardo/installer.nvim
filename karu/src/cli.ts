@@ -13,6 +13,8 @@ import { CAST_PORT, CastReceiverServer, defaultCertDir } from "./receiver/server
 import { deviceIdFrom, hostName, primaryAddress } from "./net/mdns.ts";
 import { PlayerBridgeImpl } from "./receiver/bridge.ts";
 import { CastClient } from "./sender/client.ts";
+import { runQueue, type QueueItem } from "./sender/queue.ts";
+import { watchDevices } from "./sender/watch.ts";
 import { discover, looksLikeAddress, parseAddress, probeAddress, selectDevice, type DiscoveredDevice } from "./sender/discovery.ts";
 import { APP_ID } from "./protocol/messages.ts";
 import { convert, detect } from "./lyrics/index.ts";
@@ -118,6 +120,13 @@ const HELP = `karu ${VERSION}. Google Cast for Neovim (Kikru)
 
   karu discover [--timeout MS] [--address HOST[:PORT]] [--json]
       Find Cast devices over mDNS (plus the addresses you pass).
+  karu discover --watch [--interval MS] [--address HOST[:PORT]] [--json]
+      Keep scanning and report devices as they appear (device_found) and go away (device_lost).
+
+  karu queue <url|query|path>... [--file FILE] [--device ...] [--poll MS] [--json]
+      Play the items one after another. An item ends when the receiver goes idle
+      after playing. A failed item is reported and the queue goes on. A cancelled
+      item stops the queue. --file reads one item per line (blank lines and # comments are skipped).
 
   karu probe HOST[:PORT] [--json]
       Reachability test: TLS + GET_STATUS.
@@ -139,6 +148,14 @@ const HELP = `karu ${VERSION}. Google Cast for Neovim (Kikru)
       understands, so \`karu lyrics song.ttml > song.lrc\` is a whole pipeline.
 
 Flags: --json machine-readable output (one object per line).`;
+
+/** One item per line; blank lines and `#` comments are skipped. */
+function readQueueFile(path: string): string[] {
+  return readFileSync(path, "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+}
 
 /** Read all of stdin (a pipe may be non-blocking, so `readFileSync(0)` is not enough). */
 async function readStdin(): Promise<string> {
@@ -384,9 +401,51 @@ async function main(): Promise<void> {
       return;
     }
 
+    case "queue": {
+      const sources = [...args.positionals];
+      const file = flagString(args, "file");
+      if (file) sources.push(...readQueueFile(file));
+      if (sources.length === 0) return out.error("queue needs URLs, paths or search queries, or --file FILE");
+      const items: QueueItem[] = sources.map((source) => ({ source }));
+      const log = (message: string) => out.line(`# ${message}`);
+      const { device, result } = await withDevice(args, undefined, async (client) => {
+        await client.launch();
+        return runQueue(
+          items,
+          {
+            async load(item) {
+              const resolved = await resolveMediaTarget(item.source, log);
+              return client.loadMedia({ url: resolved.url, ...(resolved.title ? { title: resolved.title } : {}), autoplay: true });
+            },
+            status: () => client.refreshMediaStatus(),
+            sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
+            now: () => Date.now(),
+            onEvent: (event) => out.out({ ok: !("error" in event), ...event }),
+          },
+          { pollMs: flagNumber(args, "poll") ?? 2000, startTimeoutMs: 20_000 }
+        );
+      });
+      out.out({ ok: result.failed === 0, device: deviceSummary(device), ...result });
+      return;
+    }
+
     case "discover":
     case "devices":
     case "ls": {
+      if (flagBool(args, "watch")) {
+        await watchDevices<DiscoveredDevice>(
+          {
+            scan: () => discover({ timeoutMs: flagNumber(args, "timeout") ?? 3000, addresses: collectAddresses(args), log: () => {} }),
+            key: (device) => `${device.address}:${device.port}`,
+            onAppear: (device) => out.out({ ok: true, event: "device_found", device: deviceSummary(device) }),
+            onDisappear: (device) => out.out({ ok: true, event: "device_lost", device: deviceSummary(device) }),
+            onError: (message) => out.out({ ok: false, event: "scan_failed", error: message }),
+            sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
+          },
+          { intervalMs: flagNumber(args, "interval") ?? 5000 }
+        );
+        return;
+      }
       const devices = await discover({
         timeoutMs: flagNumber(args, "timeout") ?? 3000,
         addresses: collectAddresses(args),

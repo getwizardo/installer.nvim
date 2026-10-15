@@ -417,6 +417,7 @@ M.karu_actions = {
   { word = "discover", menu = "list Cast devices on the network", info = ":Karu discover [host:port]" },
   { word = "devices", menu = "alias of discover" },
   { word = "cast", menu = "cast a URL or search to a device", info = ":Karu cast <url|query> [device]" },
+  { word = "queue", menu = "play several URLs or searches in order", info = ":Karu queue <url|query>... (waits for each to finish)" },
   { word = "play", menu = "resume on the device" },
   { word = "pause", menu = "pause on the device" },
   { word = "toggle", menu = "play/pause" },

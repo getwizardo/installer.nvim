@@ -725,6 +725,35 @@ end
 
 ---@param args string[]
 ---@param opts? { bang?: boolean }
+--- Play several items in order (`karu queue`). Each item is reported as it ends.
+---@param items string[]
+function M.queue(items)
+  local argv = { "queue" }
+  vim.list_extend(argv, items)
+  local started, reason = M.run(argv, {}, function(payload)
+    if type(payload) ~= "table" then
+      return
+    end
+    if payload.event == "item_failed" then
+      report(("Karu: item %d failed (%s): %s"):format(payload.index, payload.source, payload.error), vim.log.levels.WARN)
+    elseif payload.event == "item_done" then
+      report(("Karu: finished item %d: %s"):format(payload.index, payload.source))
+    elseif payload.event == "queue_done" then
+      local note = payload.stopped and ", stopped by the receiver" or ""
+      report(("Karu: queue done, %d played, %d failed%s"):format(payload.played, payload.failed, note))
+    elseif payload.ok == false then
+      report("Karu: " .. (payload.error or "queue failed"), vim.log.levels.ERROR)
+    end
+  end, function(code)
+    if code ~= 0 then
+      report("Karu: queue exited with code " .. tostring(code), vim.log.levels.ERROR)
+    end
+  end)
+  if not started then
+    report("Karu: " .. (reason or "karu is unavailable"), vim.log.levels.ERROR)
+  end
+end
+
 function M.dispatch(args, opts)
   opts = opts or {}
   local sub = args[1]
@@ -765,6 +794,12 @@ function M.dispatch(args, opts)
       return report("Karu: cast needs a URL or a search query", vim.log.levels.ERROR)
     end
     M.cast(target, { device = args[3] })
+  elseif sub == "queue" then
+    local items = vim.list_slice(args, 2)
+    if #items == 0 then
+      return report("Karu: queue needs URLs, paths or search queries (or karu queue --file via the CLI)", vim.log.levels.ERROR)
+    end
+    M.queue(items)
   elseif sub == "play" or sub == "pause" or sub == "toggle" or sub == "quit" or sub == "next" or sub == "prev" then
     M.control(sub, args[2])
   elseif sub == "stop" then
@@ -881,7 +916,7 @@ end
 function M.subcommands()
   return {
     "discover", "devices", "cast", "play", "pause", "toggle", "stop", "quit",
-    "next", "prev", "control", "seek", "volume", "status", "receive", "start",
+    "next", "prev", "control", "seek", "volume", "status", "receive", "start", "queue",
     "stop-receiver", "probe", "info", "bridge", "json", "version", "help",
   }
 end
