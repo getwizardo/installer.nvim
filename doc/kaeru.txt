@@ -935,28 +935,39 @@ check fails is not updated. The output of every command goes to a log buffer.
 ==============================================================================
 26. WINSO (EBOOK READER)                                      *kaeru-winso*
 
-  :Winso                                 " library: books you read recently
+  :Winso                                 " shelf: books you read, folders, settings
   :Winso <path>                          " open a book
-  :Winso bookmarks | search <text> | info
+  :Winso open | shelf | bookmarks | search <text> | info
+  :Winso ascii [name]                    " a picture as colored ASCII
 
 Formats: epub, fb2 (and .fb2.zip), docx, html, md, txt. Python 3 (standard
 library only) reads them. pdf needs `pdftotext` (poppler). mobi, azw and azw3
 need Calibre's `ebook-convert`. Not supported: DRM-protected books, djvu, cbz.
 
+The shelf (:Winso) lists books with a progress bar. Keys there:
+  <CR> open   a open a file   f browse folders   b bookmarks
+  s settings (theme, text width)   x forget a book   r refresh   q close
+
 Keys in the reader tab:
   n / p      next / previous chapter       t   table of contents
   /          search the whole book         b   add a bookmark
   B          list bookmarks                + / -   wider / narrower text
-  i          book info                     q   close (progress is saved)
+  T          next theme (night, paper, sepia)
+  i          book info                     S   shelf
+  ?          list these keys               q   close (progress is saved)
 
-Pictures: embedded images (EPUB, FB2) are extracted to stdpath("cache")/winso
-and shown as a line such as `[image: 001-cover.png]`. Put the cursor on that
-line and press `o` to open the picture in the system viewer. Also:
-  :Winso images                          " pick a picture from the book
-  :Winso cover                           " open the cover (or the first picture)
-The reader is text only. Pictures are opened outside Neovim, not drawn inline.
+Pictures: embedded images (EPUB, FB2) are extracted to stdpath("cache")/winso.
+A picture shows as a line such as `[image: 001-cover.png]`. On that line:
+  o          open the picture in the system viewer
+  v          view it as colored ASCII in a new tab (q closes it)
+  :Winso images | cover | ascii [name]   pick, open or view a picture
+The text reader stays text only. The ASCII view uses the xterm 256 colors.
 
-Progress and bookmarks are saved in stdpath("data")/winso/library.json.
+ASCII pictures are decoded by the standard library for 8-bit PNG and BMP.
+Other formats (JPEG, GIF, 16-bit PNG) need Pillow (pip install pillow) or
+ImageMagick's `convert`. Without either, `v` says which one is missing.
+
+Progress, bookmarks and settings are saved in stdpath("data")/winso/library.json.
 
 Termux (Android): install the tools with pkg (pkg install python poppler).
 Winso detects Termux through $TERMUX_VERSION and uses a narrower column. The

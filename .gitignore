@@ -7,3 +7,4 @@ starsky/node_modules/
 starsky/dist/
 starsky/.next/
 tools/karu-c/kaeru-cast
+__pycache__/

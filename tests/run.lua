@@ -1293,6 +1293,82 @@ test("winso: pictures are single lines, openers and cache dirs", function()
   eq(a, W.image_cache_dir("/books/a.epub"), "cache dir is stable")
 end)
 
+test("winso: colored ascii grid snaps to the cube and leaves blanks uncolored", function()
+  local A = require("kaeru.winso.ascii")
+  eq(A.cube_index(0, 0, 0), 16, "black is the first cube color")
+  eq(A.cube_index(255, 255, 255), 231, "white is the last cube color")
+  eq(A.hex(231), "#ffffff")
+  eq(A.hex(16), "#000000")
+  local grid = { width = 2, height = 1, pixels = { 0, 0, 0, 255, 255, 255 } }
+  local art = assert(A.render(grid))
+  eq(art.lines[1], " @", "dark cell is a space, bright cell is the densest character")
+  eq(#art.runs, 1, "blank cells get no color run")
+  eq(art.runs[1].start, 1)
+  eq(art.runs[1].finish, 2)
+  eq(art.runs[1].cube, 231)
+  eq(A.render({ width = 2, height = 1, pixels = { 0, 0, 0 } }), nil, "an incomplete grid is an error")
+  eq(A.render({ width = 2, height = 1, pixels = { 0, 0, 0, 255, 255, 255 } }, { invert = true }).lines[1], "@ ",
+    "inverted ramp for light backgrounds")
+end)
+
+test("winso: library keeps progress, bookmarks, settings and the recent list", function()
+  local L = require("kaeru.winso.library")
+  local path = "/tmp/kaeru-winso-lib-" .. tostring(os.time()) .. ".json"
+  local real = L.library_path
+  L.library_path = function()
+    return path
+  end
+  local ok, err = pcall(function()
+    assert(L.record_progress("/x/a.epub", { title = "A", chapter = 2, line = 5, chapters = 4 }))
+    assert(L.record_progress("/x/b.epub", { title = "B", chapter = 1, line = 1, chapters = 1 }))
+    assert(L.add_bookmark("/x/a.epub", { chapter = 2, line = 9, label = "hello" }))
+    eq(#L.all_bookmarks(), 1, "one bookmark saved")
+    eq(L.all_bookmarks()[1].mark.label, "hello")
+    eq(L.fraction(L.read_library().books["/x/a.epub"]), 0.5, "progress is chapter / chapters")
+    eq(L.fraction(nil), nil, "a never-opened book has no progress")
+    assert(L.set_setting("theme", "paper"))
+    eq(L.setting("theme", "night"), "paper")
+    eq(L.setting("width", 72), 72, "an unset setting uses the default")
+    eq(#L.recent(), 2, "both books are on the recent list")
+    assert(L.forget("/x/b.epub"))
+    eq(#L.recent(), 1, "a forgotten book leaves the shelf")
+  end)
+  L.library_path = real
+  os.remove(path)
+  assert(ok, err)
+end)
+
+test("winso: shelf lists books with progress and maps lines to actions", function()
+  local Shelf = require("kaeru.winso.shelf")
+  eq(Shelf.bar(nil), "[----------]  new")
+  eq(Shelf.bar(0.5), "[#####-----]  50%")
+  local lines, actions = Shelf.render({
+    items = { { path = "/x/a.epub", title = "Alpha", chapter = 2, chapters = 4 } },
+    bookmarks = 1, folder = "/books", theme = "night", width = nil, cols = 30,
+  })
+  eq(lines[1], "WINSO")
+  eq(#lines[2], 30, "rule fits the window")
+  eq(lines[4], "  1. Alpha")
+  eq(actions[4].path, "/x/a.epub", "the title line opens the book")
+  eq(actions[5].path, "/x/a.epub", "the progress line opens the book too")
+  local empty = Shelf.render({ items = {}, bookmarks = 0, folder = "/books", theme = "sepia", width = 60, cols = 30 })
+  local hint = false
+  for _, l in ipairs(empty) do
+    if l:find("nothing yet", 1, true) then
+      hint = true
+    end
+  end
+  assert(hint, "an empty shelf says how to start")
+end)
+
+test("winso: reading themes fall back to night and invert pictures on light paper", function()
+  local T = require("kaeru.winso.theme")
+  eq(T.get("nope").label, "night", "unknown names fall back")
+  eq(T.get(nil).label, "night")
+  eq(T.get("paper").invert, true)
+  eq(#T.order, 3)
+end)
+
 -- SFTP UI, NeoCodeium AI preset, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
 test("sftp ui helpers and the NeoCodeium AI preset", function()
   local Sftp = require("kaeru.sftp")
