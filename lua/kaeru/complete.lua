@@ -303,6 +303,7 @@ M.subcommands = {
   { word = "starsky", menu = "SvelteKit Starsky web client", info = ":Kaeru starsky [start|stop|open|status|build|info]" },
   { word = "upgrade", menu = "update outdated packages in this project (npm, pip, cargo, go, lazy)", info = ":Kaeru upgrade [check|apply [latest]]" },
   { word = "cve", menu = "known CVEs for the packages in this project", info = ":Kaeru cve [scan [dir]|check <npm|pip|rust|go> <name> [version]]" },
+  { word = "winso", menu = "ebook reader: library, bookmarks, search, pictures", info = ":Kaeru winso [library|open <file>|bookmarks|search <query>|images <file>|cover <file>|info <file>]" },
   { word = "web", menu = "alias of starsky", info = ":Kaeru web [action]" },
   { word = "pick", menu = "open a picker in telescope / fzf-lua / snacks / mini.pick", info = ":Kaeru pick [plugins|mason|sftp|cache|radio|queue|cast]" },
   { word = "integrations", menu = "what is installed and wired up", info = ":Kaeru integrations" },

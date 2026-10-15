@@ -464,6 +464,25 @@ local function map(buf, lhs, fn, desc)
   vim.keymap.set("n", lhs, fn, { buffer = buf, nowait = true, silent = true, desc = "Winso: " .. desc })
 end
 
+--- Text of the nearest non-blank line to `row`, searching outward. Empty if the book has none.
+---@param buf integer
+---@param row integer  1-based
+---@return string
+local function nearest_text(buf, row)
+  local total = vim.api.nvim_buf_line_count(buf)
+  for offset = 0, total - 1 do
+    for _, r in ipairs({ row + offset, row - offset }) do
+      if r >= 1 and r <= total then
+        local text = vim.api.nvim_buf_get_lines(buf, r - 1, r, false)[1]
+        if text:match("%S") then
+          return text
+        end
+      end
+    end
+  end
+  return ""
+end
+
 local function attach_keys(buf)
   local function st()
     return state.buffers[buf]
@@ -488,7 +507,7 @@ local function attach_keys(buf)
   end, "table of contents")
   map(buf, "b", function()
     local s = st()
-    local line = vim.api.nvim_get_current_line()
+    local line = nearest_text(buf, vim.api.nvim_win_get_cursor(0)[1])
     local lib = M.read_library()
     lib.bookmarks[s.book.path] = lib.bookmarks[s.book.path] or {}
     table.insert(lib.bookmarks[s.book.path], {
