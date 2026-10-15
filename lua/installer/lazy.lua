@@ -99,8 +99,9 @@ end
 
 --- Reload lazy.nvim specs so a freshly written file is known, then install.
 ---@param name string plugin name (as lazy.nvim derives it)
+---@param on_done? fun(plugin: table|nil) called when the install runner finishes
 ---@return boolean ok, string? err
-function M.install(name)
+function M.install(name, on_done)
   if not M.available() then
     return false, "lazy.nvim is not loaded; restart Neovim to install the plugin"
   end
@@ -131,7 +132,14 @@ function M.install(name)
           if p and p._.installed and not p._.loaded and p.lazy == false then
             pcall(require("lazy.core.loader").load, p, { cmd = "Installer" })
           end
+          if on_done then
+            on_done(p)
+          end
         end)
+      end)
+    elseif on_done then
+      vim.schedule(function()
+        on_done(LazyConfig.plugins[name])
       end)
     end
   end)

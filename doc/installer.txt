@@ -15,6 +15,8 @@ CONTENTS                                                   *installer-contents*
  10. GitHub account ............................... |installer-account|
  11. AI coding plugins ............................ |installer-ai|
  12. SFTP ......................................... |installer-sftp|
+ 13. installer.yaml ............................... |installer-yaml|
+ 14. Plugin cache ................................. |installer-cache|
 
 ==============================================================================
 1. INTRODUCTION                                        *installer-introduction*
@@ -76,8 +78,14 @@ their READMEs and install them with a single key.
 :Installer whoami                                          *:Installer-whoami*
     GitHub account (see |installer-account|).
 
-:Installer sftp {action}                                     *:Installer-sftp*
-    SFTP upload / download / sync (see |installer-sftp|).
+:Installer sftp {action} [args]                              *:Installer-sftp*
+    SFTP upload / download / sync and every sftp command (see |installer-sftp|).
+
+:Installer config [edit|project|reload|show]               *:Installer-config*
+    Manage `installer.yaml` (see |installer-yaml|).
+
+:Installer cache [list|pack|restore|remove|clean|dir]       *:Installer-cache*
+    Local plugin cache (see |installer-cache|).
 
 ==============================================================================
 5. THE MODAL                                                  *installer-modal*
@@ -244,16 +252,49 @@ in `sftp.profiles`. `password` is supported when `sshpass` is installed, but
 keys / ssh-agent are recommended. The config file itself is never uploaded;
 add it to `.gitignore` when it contains secrets.
 
-Actions: >
-  :Installer sftp upload            upload the current file
+SSH keys and options ~
+
+  privateKeyPath    one key (string) or several (array)
+  privateKeyPaths   several keys, tried in the order given (`-i` for each)
+  identitiesOnly    only use those keys (`IdentitiesOnly=yes`)
+  sshConfigFile     alternative ssh config (`-F`); `host` may be an alias
+  proxyJump         bastion host (`-o ProxyJump=...`)
+  options           extra `-o` options, e.g. {"ServerAliveInterval": 30}
+  sftp.keys         (installer.yaml / setup) default keys for every profile
+  sftp.options      (installer.yaml / setup) default `-o` options
+
+Transfers: >
+  :Installer sftp upload [path]     upload the current file (or a file/dir)
   :Installer sftp upload-project    upload every project file (git-aware)
   :Installer sftp sync              upload files changed since the last sync
   :Installer sftp download          download the current file
   :Installer sftp download-project  download the whole remote tree (scp -r)
+  :Installer sftp diff              diff the buffer against the remote copy
+<
+sftp commands (paths are relative to remotePath unless absolute): >
+  :Installer sftp ls [path]                 :Installer sftp df [path]
+  :Installer sftp mkdir <path>              :Installer sftp rmdir <path>
+  :Installer sftp rm <path>                 :Installer sftp rename <old> <new>
+  :Installer sftp chmod <mode> <path>       :Installer sftp chown <uid> <path>
+  :Installer sftp chgrp <gid> <path>        :Installer sftp ln [-s] <old> <new>
+  :Installer sftp symlink <old> <new>       :Installer sftp pwd
+  :Installer sftp version
+  :Installer sftp exec <cmd>; <cmd>; ...    raw sftp batch commands
+  :Installer sftp run <shell command>       run over ssh, cwd = remotePath
+<
+Sessions and tools: >
+  :Installer sftp browse [path]     remote file browser (float)
+  :Installer sftp shell             interactive `sftp` in a terminal split
+  :Installer sftp ssh               interactive shell on the host (cd remotePath)
+  :Installer sftp test              connection test + resolved command line
   :Installer sftp status            list profiles and last sync times
   :Installer sftp select            choose the active profile
   :Installer sftp init              create .nvim-sftp.json
 <
+Remote browser keys: `<CR>` open directory / open file (temporary copy),
+`-` parent, `d` download into the project, `u` upload a local file, `m`
+mkdir, `R` rename, `D` delete, `r` refresh, `y` yank the remote path, `q`.
+
 With `uploadOnSave` (per profile) or `sftp.upload_on_save` (global) every
 `:write` uploads the file (requires `require("installer").setup()`).
 
@@ -262,4 +303,72 @@ the project is a git repository, otherwise from a recursive glob, then filtered
 by `sftp.ignore` + the profile's `ignore` (globs matched against the relative
 path and every path segment).
 
+==============================================================================
+13. INSTALLER.YAML                                             *installer-yaml*
+
+Every option of `setup()` can live in a YAML file instead:
+
+  global   `stdpath("config")/installer.yaml`   (`:Installer config`)
+  project  `./installer.yaml`, searched upwards from the cwd
+           (`:Installer config project`). Read with |vim.secure.read()|, so
+           you are asked to trust a project file once.
+
+Precedence: defaults < global file < project file < `setup()` opts.
+`:Installer config reload` re-reads the files, `:Installer config show`
+prints the effective configuration as YAML. The parser is built in (no
+dependencies) and supports mappings, sequences, flow `[a, b]` / `{k: v}`,
+quoted strings, `|` / `>` block scalars and comments; anchors and tags are
+not supported.
+
+Example: >yaml
+  after_write: install
+  ai:
+    enabled: true
+  github:
+    client_id: Iv1.xxxxxxxx
+  cache:
+    pack_threshold: 104857600
+  sftp:
+    concurrency: 8
+    keys: [~/.ssh/id_ed25519, ~/.ssh/id_rsa]
+    options: {ServerAliveInterval: 30}
+    profiles:
+      prod:
+        host: example.com
+        username: deploy
+        remotePath: /var/www/app
+        localPath: ~/projects/app
+        proxyJump: bastion.example.com
+        uploadOnSave: true
+<
+==============================================================================
+14. PLUGIN CACHE                                              *installer-cache*
+
+installer.nvim keeps archives of installed plugins in `cache.dir`
+(`stdpath("cache")/installer`):
+
+  <name>.nvimpack   zip archive of the whole plugin directory - every file and
+                    folder inside it, `.git` included (tar.gz when `zip` is
+                    not installed; detected by magic bytes on restore)
+  <name>.pack       git bundle, used instead when the plugin directory is
+                    larger than `cache.pack_threshold` (default 50 MiB).
+                    Bundles only hold git objects, so big repositories stay
+                    small. On restore, `origin` is pointed back at the real
+                    URL so `:Lazy update` keeps working.
+  index.json        format, size, commit, url and date per plugin
+
+With `cache.auto_pack` a plugin is archived right after installer.nvim
+installs it; with `cache.auto_restore` a cached plugin is unpacked into the
+lazy.nvim root before `:Lazy install` runs, so re-installing (or installing
+on a machine that shares the cache directory) needs no network. Archives
+whose commit matches the installed one are not rewritten.
+
+Commands: >
+  :Installer cache list              browse the cache (<CR> restore, p re-pack, D remove)
+  :Installer cache pack [name|all]   archive one plugin / every installed plugin
+  :Installer cache restore <name>    unpack into the lazy.nvim root (! overwrites)
+  :Installer cache remove <name>
+  :Installer cache clean             drop archives of plugins no longer in your spec
+  :Installer cache dir
+<
 vim:tw=78:ts=8:ft=help:norl:

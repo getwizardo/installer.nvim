@@ -8,7 +8,9 @@ Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **fro
 - `:Installer browse` searches **all Neovim plugins on GitHub** (`topic:neovim-plugin`), with README preview and one-key install.
 - **GitHub account**: sign in (gh CLI / token / device flow) for higher rate limits, starring and your starred list.
 - **AI coding presets** (opt-in): curated specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub and more.
-- **SFTP**: upload / download / sync projects to remote hosts with parallel `sftp` workers and upload-on-save.
+- **SFTP**: upload / download / sync projects with parallel `sftp` workers, upload-on-save, every sftp command, a remote file browser, multiple SSH keys / ssh-config / ProxyJump.
+- **`installer.yaml`**: all configuration in a global or per-project YAML file (built-in parser, no dependencies).
+- **Plugin cache**: installed plugins archived as `cache/<name>.nvimpack` (zip, `.git` included) or `.pack` (git bundle for large repos) and restored before install — offline re-installs.
 
 ```
 ╭──────────────────── installer.nvim · add a plugin to lazy.nvim ────────────────────╮
@@ -75,7 +77,9 @@ return {
 | `:Installer dir`                | Show where spec files are written                                      |
 | `:Installer ai [preset]`        | Curated AI coding plugins (opt-in, see below)                          |
 | `:Installer login\|logout\|whoami` | GitHub account                                                     |
-| `:Installer sftp <action>`      | `upload`, `upload-project`, `sync`, `download`, `download-project`, `status`, `select`, `init` |
+| `:Installer sftp <action>`      | transfers, every sftp command, remote browser, shell — see below        |
+| `:Installer config [...]`       | `edit`, `project`, `reload`, `show` — manage `installer.yaml`           |
+| `:Installer cache [...]`        | `list`, `pack [name\|all]`, `restore <name>`, `remove`, `clean`, `dir`   |
 
 ### Modal keys
 
@@ -137,12 +141,27 @@ require("installer").setup({ ai = { enabled = true } })
 ## SFTP
 
 ```vim
+" transfers
 :Installer sftp init             " creates .nvim-sftp.json in the cwd
-:Installer sftp upload           " current file
+:Installer sftp upload [path]    " current file, or a file / directory
 :Installer sftp upload-project   " all project files, N parallel sftp workers
 :Installer sftp sync             " only files changed since the last sync
 :Installer sftp download         " current file
 :Installer sftp download-project " whole remote tree (scp -r)
+:Installer sftp diff             " buffer vs remote copy (diffsplit)
+
+" every sftp command — paths are relative to remotePath unless absolute
+:Installer sftp ls [path]        :Installer sftp mkdir|rmdir|rm <path>
+:Installer sftp rename <a> <b>   :Installer sftp chmod|chown|chgrp <v> <path>
+:Installer sftp ln [-s] <a> <b>  :Installer sftp symlink <a> <b>
+:Installer sftp df [path]        :Installer sftp pwd | version
+:Installer sftp exec mkdir a; put x.txt a/x.txt     " raw sftp batch
+:Installer sftp run tail -n 50 logs/app.log         " any command over ssh
+
+" sessions & tools
+:Installer sftp browse [path]    " remote file browser (open, download, upload, mkdir, rename, delete)
+:Installer sftp shell | ssh      " interactive sftp / shell in a terminal split
+:Installer sftp test             " connection test + the resolved command line
 :Installer sftp status | select
 ```
 
@@ -153,18 +172,68 @@ require("installer").setup({ ai = { enabled = true } })
   "port": 22,
   "username": "deploy",
   "remotePath": "/var/www/app",
-  "privateKeyPath": "~/.ssh/id_ed25519",
+  "privateKeyPaths": ["~/.ssh/deploy_ed25519", "~/.ssh/id_rsa"],
+  "identitiesOnly": true,
+  "proxyJump": "bastion.example.com",
+  "sshConfigFile": "~/.ssh/config",
+  "options": { "ServerAliveInterval": 30 },
   "ignore": [".git", "node_modules", "dist"],
   "uploadOnSave": false
 }
 ```
 
-The file may be an array of profiles; profiles can also live in `sftp.profiles`. Uploads are git-aware (`git ls-files` + ignore globs), split round-robin across `sftp.concurrency` concurrent `sftp -b` processes, and create remote directories as needed. `password` works when `sshpass` is installed, but keys / ssh-agent are recommended. The config file is never uploaded — gitignore it if it holds secrets.
+Keys are tried in order (`-i` each); `sftp.keys` / `sftp.options` in `installer.yaml` provide defaults for every profile, and `host` may be an alias from your ssh config. The file may be an array of profiles; profiles can also live in `sftp.profiles` (JSON or YAML). Uploads are git-aware (`git ls-files` + ignore globs), split round-robin across `sftp.concurrency` concurrent `sftp -b` processes, and create remote directories as needed. `password` works when `sshpass` is installed, but keys / ssh-agent are recommended. The config file is never uploaded — gitignore it if it holds secrets.
 
-## Configuration
+## Configuration — `installer.yaml`
+
+Everything below can be written in YAML instead of Lua. `:Installer config` creates and opens the global file (`~/.config/nvim/installer.yaml`); `:Installer config project` creates `./installer.yaml` for the current project (read via `vim.secure.read`, so you trust it once). Precedence: defaults < global < project < `setup()` opts. `:Installer config reload` / `show` re-read and print the effective configuration.
+
+```yaml
+after_write: install
+ai:
+  enabled: true
+github:
+  client_id: Iv1.xxxxxxxx
+cache:
+  pack_threshold: 104857600   # 100 MiB
+sftp:
+  concurrency: 8
+  keys: [~/.ssh/id_ed25519, ~/.ssh/id_rsa]
+  options: {ServerAliveInterval: 30}
+  profiles:
+    prod:
+      host: example.com
+      username: deploy
+      remotePath: /var/www/app
+      localPath: ~/projects/app
+      proxyJump: bastion.example.com
+      uploadOnSave: true
+```
+
+## Plugin cache
+
+Installed plugins are archived under `~/.cache/nvim/installer/`:
+
+| File | Content | Used when |
+| --- | --- | --- |
+| `<name>.nvimpack` | zip of the whole plugin directory — every file and folder, `.git` included (tar.gz fallback) | default |
+| `<name>.pack` | `git bundle --all` — only git objects, much smaller | directory larger than `cache.pack_threshold` (50 MiB) |
+| `index.json` | format, size, commit, url, date | — |
+
+`auto_pack` archives a plugin right after it is installed; `auto_restore` unpacks a cached plugin into the lazy.nvim root *before* `:Lazy install` runs, so re-installs need no network. Bundles get their `origin` reset to the real URL so `:Lazy update` keeps working.
+
+```vim
+:Installer cache list              " <CR> restore · p re-pack · D remove
+:Installer cache pack all          " archive every installed plugin
+:Installer cache restore <name>    " ! to overwrite an existing directory
+:Installer cache clean             " drop archives of plugins no longer in the spec
+```
+
+## Configuration (Lua)
 
 ```lua
 require("installer").setup({
+  config = { global = vim.fn.stdpath("config") .. "/installer.yaml", project = "installer.yaml" },
   -- nil = auto-detect from lazy.nvim's `{ import = "plugins" }`,
   -- or a directory string / function returning one
   plugins_dir = nil,
@@ -183,12 +252,21 @@ require("installer").setup({
     auto_login = true, -- use any available token when the browser opens
   },
   ai = { enabled = false, exclude = {} },
+  cache = {
+    enabled = true,
+    dir = vim.fn.stdpath("cache") .. "/installer",
+    pack_threshold = 50 * 1024 * 1024,
+    auto_pack = true,
+    auto_restore = true,
+  },
   sftp = {
     concurrency = 4,
     config_file = ".nvim-sftp.json",
     profiles = {}, -- global profiles keyed by name
     ignore = { ".git", "node_modules", ".DS_Store", "*.swp" },
     upload_on_save = false,
+    keys = {}, -- default private keys, tried in order
+    options = {}, -- default `ssh -o` options
     extra_args = {},
   },
 })
@@ -206,6 +284,9 @@ print(installer.preview({ repo = "folke/flash.nvim", keys = "s, S" }))
 installer.account.login("gh")                        -- or "token" / "device"
 installer.ai.pick()                                  -- AI presets picker
 installer.sftp.upload_project()                      -- parallel upload
+installer.sftp.run("git pull")                       -- command over ssh
+installer.cache.pack("noice.nvim")                   -- archive a plugin
+installer.config.dump()                              -- effective config as YAML
 ```
 
 ## How it works

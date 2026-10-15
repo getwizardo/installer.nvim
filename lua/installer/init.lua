@@ -15,10 +15,31 @@ local M = {}
 
 local uv = vim.uv or vim.loop
 
+M._setup_done = false
+
 ---@param opts? InstallerOptions
 function M.setup(opts)
   Config.setup(opts)
+  M._setup_done = true
   require("installer.sftp").setup_autocmd()
+end
+
+--- Make sure configuration files were loaded even when setup() was never called.
+function M.ensure_setup()
+  if not M._setup_done then
+    M.setup()
+  end
+end
+
+--- Re-read installer.yaml files.
+function M.reload()
+  Config.reload()
+  require("installer.sftp").setup_autocmd()
+  local files = {}
+  for _, f in ipairs(Config.loaded_files) do
+    files[#files + 1] = ("%s: %s%s"):format(f.kind, vim.fn.fnamemodify(f.path, ":~"), f.err and (" (" .. f.err .. ")") or "")
+  end
+  UI.notify("Configuration reloaded" .. (#files > 0 and ("\n" .. table.concat(files, "\n")) or "\n(no installer.yaml found)"))
 end
 
 --- Lazily loaded sub-modules.
@@ -37,6 +58,12 @@ M.sftp = setmetatable({}, {
     return require("installer.sftp")[k]
   end,
 })
+M.cache = setmetatable({}, {
+  __index = function(_, k)
+    return require("installer.cache")[k]
+  end,
+})
+M.config = Config
 
 --- Open the modal form. `values` prefill fields (e.g. `{ repo = "folke/noice.nvim" }`).
 ---@param values? InstallerForm
@@ -161,11 +188,33 @@ function M.add(form, opts)
   end
 
   if after == "install" then
-    local ok, ierr = Lazy.install(generated.name)
-    if ok then
-      UI.notify(("Wrote %s\nInstalling %s with lazy.nvim…"):format(rel, generated.short or generated.name))
+    local cache_opts = Config.options.cache
+    local function install(restored)
+      local ok, ierr = Lazy.install(generated.name, function(plugin)
+        if cache_opts.enabled and cache_opts.auto_pack and plugin and plugin._ and plugin._.installed then
+          require("installer.cache").pack(generated.name, function(pok, pmsg)
+            if not pok then
+              UI.notify(pmsg, vim.log.levels.WARN)
+            end
+          end)
+        end
+      end)
+      if ok then
+        UI.notify(("Wrote %s\n%s%s with lazy.nvim…"):format(rel, restored and "Restored from cache, finishing " or "Installing ", generated.short or generated.name))
+      else
+        UI.notify(("Wrote %s\n%s"):format(rel, ierr), vim.log.levels.WARN)
+      end
+    end
+    local Cache = require("installer.cache")
+    if cache_opts.enabled and cache_opts.auto_restore and Cache.get(generated.name) and not Cache.plugin_dir(generated.name) then
+      Cache.restore(generated.name, function(rok, rmsg)
+        if not rok then
+          UI.notify(rmsg, vim.log.levels.WARN)
+        end
+        install(rok)
+      end)
     else
-      UI.notify(("Wrote %s\n%s"):format(rel, ierr), vim.log.levels.WARN)
+      install(false)
     end
   elseif after == "edit" then
     vim.cmd.edit(path)

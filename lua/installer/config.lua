@@ -3,6 +3,16 @@ local M = {}
 
 ---@class InstallerOptions
 M.defaults = {
+  -- YAML configuration files. Everything in this table can also be written in
+  -- YAML (same keys). Precedence: defaults < global file < project file < setup() opts.
+  config = {
+    -- Global file (created by `:Installer config`).
+    global = vim.fn.stdpath("config") .. "/installer.yaml",
+    -- Project file name, searched upwards from the current working directory.
+    -- Read through `vim.secure.read` (you are asked to trust it once).
+    project = "installer.yaml",
+  },
+
   -- Where generated spec files are written.
   -- * nil      -> auto-detect from lazy.nvim (`{ import = "plugins" }`), falling back
   --               to `stdpath("config") .. "/lua/plugins"`.
@@ -68,6 +78,21 @@ M.defaults = {
     exclude = {},
   },
 
+  -- Local plugin cache (`:Installer cache`). Installed plugins are archived to
+  -- `<dir>/<name>.nvimpack` (a zip of the whole plugin directory, .git included)
+  -- and restored from there before lazy.nvim clones, so re-installs work offline.
+  cache = {
+    enabled = true,
+    dir = vim.fn.stdpath("cache") .. "/installer",
+    -- Plugins whose directory is larger than this (bytes) are stored as a git
+    -- bundle (`<name>.pack`) instead of a zip archive: much smaller for big repos.
+    pack_threshold = 50 * 1024 * 1024,
+    -- Archive a plugin automatically after installer.nvim installs it.
+    auto_pack = true,
+    -- Restore from the cache automatically when adding a plugin that is cached.
+    auto_restore = true,
+  },
+
   -- SFTP upload / download / sync (`:Installer sftp`).
   sftp = {
     -- Number of concurrent sftp processes used for project uploads/syncs.
@@ -81,18 +106,206 @@ M.defaults = {
     ignore = { ".git", "node_modules", ".DS_Store", "*.swp" },
     -- Upload the buffer after every :write (can also be set per profile).
     upload_on_save = false,
-    -- Extra arguments for every sftp/ssh invocation.
+    -- Extra arguments for every sftp/ssh/scp invocation.
     ---@type string[]
     extra_args = {},
+    -- Default SSH keys tried (in order) when a profile does not define any.
+    ---@type string[]
+    keys = {},
+    -- Default `ssh -o` options for every profile, e.g. { ServerAliveInterval = 30 }.
+    ---@type table<string, string|number|boolean>
+    options = {},
   },
 }
 
----@type InstallerOptions
-M.options = vim.deepcopy(M.defaults)
+---@type InstallerOptions user-supplied setup() opts (kept to re-apply on reload)
+M.user = {}
+---@type {path: string, kind: string, err?: string}[] files that were loaded last time
+M.loaded_files = {}
 
+local uv = vim.uv or vim.loop
+
+---@param path string
+---@return string|nil
+local function read_file(path)
+  local fd = io.open(path, "r")
+  if not fd then
+    return nil
+  end
+  local text = fd:read("*a")
+  fd:close()
+  return text
+end
+
+--- Find the project YAML file by walking up from cwd.
+---@return string|nil
+function M.project_file()
+  local name = M.user.config and M.user.config.project or M.defaults.config.project
+  if not name or name == "" then
+    return nil
+  end
+  if vim.fs and vim.fs.find then
+    return vim.fs.find(name, { upward = true, path = vim.fn.getcwd(), type = "file" })[1]
+  end
+  local f = vim.fn.findfile(name, vim.fn.getcwd() .. ";")
+  return f ~= "" and vim.fn.fnamemodify(f, ":p") or nil
+end
+
+--- Read and decode one YAML file. Project files go through vim.secure.read.
+---@param path string
+---@param trusted boolean
+---@return table|nil data, string|nil err
+function M.read_yaml(path, trusted)
+  if not uv.fs_stat(path) then
+    return nil, nil
+  end
+  local text
+  if trusted or not (vim.secure and vim.secure.read) then
+    text = read_file(path)
+  else
+    text = vim.secure.read(path)
+    if text == nil then
+      return nil, "not trusted (see :trust)"
+    end
+  end
+  if not text then
+    return nil, "cannot read"
+  end
+  local data, err = require("installer.yaml").safe_decode(text)
+  if err then
+    return nil, err
+  end
+  if type(data) ~= "table" then
+    return nil, "top level must be a mapping"
+  end
+  return data, nil
+end
+
+--- Load YAML files and merge everything into `M.options`.
 ---@param opts? InstallerOptions
 function M.setup(opts)
-  M.options = vim.tbl_deep_extend("force", vim.deepcopy(M.defaults), opts or {})
+  M.user = vim.deepcopy(opts or {})
+  local merged = vim.deepcopy(M.defaults)
+  M.loaded_files = {}
+
+  local global = (M.user.config and M.user.config.global) or M.defaults.config.global
+  local sources = { { path = vim.fn.expand(global), kind = "global", trusted = true } }
+  local project = M.project_file()
+  if project and vim.fn.fnamemodify(project, ":p") ~= vim.fn.fnamemodify(global, ":p") then
+    sources[#sources + 1] = { path = project, kind = "project", trusted = false }
+  end
+
+  for _, src in ipairs(sources) do
+    local data, err = M.read_yaml(src.path, src.trusted)
+    if data then
+      merged = vim.tbl_deep_extend("force", merged, data)
+      M.loaded_files[#M.loaded_files + 1] = { path = src.path, kind = src.kind }
+    elseif err then
+      M.loaded_files[#M.loaded_files + 1] = { path = src.path, kind = src.kind, err = err }
+      vim.schedule(function()
+        vim.notify(("installer.yaml (%s): %s"):format(src.path, err), vim.log.levels.WARN, { title = "installer.nvim" })
+      end)
+    end
+  end
+
+  M.options = vim.tbl_deep_extend("force", merged, M.user)
+  -- lists in YAML replace lists from lower precedence (tbl_deep_extend already does this)
 end
+
+--- Re-read the YAML files with the last setup() opts.
+function M.reload()
+  M.setup(M.user)
+end
+
+--- The effective configuration as YAML text (functions are omitted).
+---@return string
+function M.dump()
+  local function strip(t)
+    local out = {}
+    for k, v in pairs(t) do
+      if type(v) == "table" then
+        out[k] = strip(v)
+      elseif type(v) ~= "function" then
+        out[k] = v
+      end
+    end
+    return out
+  end
+  return require("installer.yaml").encode(strip(M.options))
+end
+
+--- Create the global YAML file from the defaults (commented template) and open it.
+---@param path? string
+function M.edit(path)
+  path = path and vim.fn.expand(path) or M.options.config.global
+  if not uv.fs_stat(path) then
+    vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+    local fd = assert(io.open(path, "w"))
+    fd:write(M.template())
+    fd:close()
+  end
+  vim.cmd.edit(path)
+end
+
+--- A commented starter `installer.yaml`.
+---@return string
+function M.template()
+  return table.concat({
+    "# installer.nvim configuration (https://github.com/getwizardo/installer.nvim)",
+    "# Every key of require('installer').setup({...}) can be set here.",
+    "# Precedence: defaults < this file < ./installer.yaml (project) < setup() opts",
+    "",
+    "after_write: install        # install | edit | none",
+    "confirm_overwrite: true",
+    "",
+    "ui:",
+    "  border: rounded",
+    "  width: 0.6",
+    "  height: 0.7",
+    "",
+    "github:",
+    "  # token: ghp_xxx           # or use :Installer login / $GITHUB_TOKEN / gh",
+    "  # client_id: Iv1.xxx       # OAuth app for browser sign-in",
+    "  topic_query: topic:neovim-plugin",
+    "  per_page: 30",
+    "  sort: stars               # stars | updated | best-match",
+    "",
+    "ai:",
+    "  enabled: false",
+    "  exclude: []",
+    "",
+    "cache:",
+    "  enabled: true",
+    "  pack_threshold: 52428800  # bytes; bigger plugins are stored as git bundles (.pack)",
+    "  auto_pack: true",
+    "  auto_restore: true",
+    "",
+    "sftp:",
+    "  concurrency: 4",
+    "  config_file: .nvim-sftp.json",
+    "  ignore: [.git, node_modules, .DS_Store, '*.swp']",
+    "  upload_on_save: false",
+    "  keys: []                  # default private keys tried in order",
+    "  options: {}               # default ssh -o options, e.g. {ServerAliveInterval: 30}",
+    "  profiles: {}",
+    "  # profiles:",
+    "  #   prod:",
+    "  #     host: example.com",
+    "  #     port: 22",
+    "  #     username: deploy",
+    "  #     remotePath: /var/www/app",
+    "  #     privateKeyPaths: [~/.ssh/id_ed25519, ~/.ssh/id_rsa]",
+    "  #     proxyJump: bastion.example.com",
+    "  #     sshConfigFile: ~/.ssh/config",
+    "  #     options: {ServerAliveInterval: 30}",
+    "  #     localPath: ~/projects/app",
+    "  #     ignore: [dist]",
+    "  #     uploadOnSave: false",
+    "",
+  }, "\n")
+end
+
+---@type InstallerOptions
+M.options = vim.deepcopy(M.defaults)
 
 return M

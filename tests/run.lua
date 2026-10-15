@@ -16,7 +16,26 @@ if not vim then
       expand = function(p)
         return p
       end,
+      stdpath = function()
+        return "/tmp/installer-test"
+      end,
     },
+    tbl_keys = function(t)
+      local out = {}
+      for k in pairs(t) do
+        out[#out + 1] = k
+      end
+      return out
+    end,
+    tbl_extend = function(_, ...)
+      local out = {}
+      for _, t in ipairs({ ... }) do
+        for k, v in pairs(t) do
+          out[k] = v
+        end
+      end
+      return out
+    end,
     api = {
       nvim_create_namespace = function()
         return 1
@@ -363,10 +382,159 @@ test("sftp base command", function()
   local args = assert(S.base_cmd({ host = "h", port = 2222, privateKeyPath = "/k", username = "u" }, "sftp"))
   eq(args[1], "sftp")
   eq(table.concat(args, " "), "sftp -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -P 2222 -i /k")
+  -- several keys, ssh config, proxy jump, options
+  local a2 = assert(S.base_cmd({
+    host = "alias",
+    privateKeyPaths = { "/k1", "/k2" },
+    identitiesOnly = true,
+    sshConfigFile = "/cfg",
+    proxyJump = "bastion",
+    options = { ServerAliveInterval = 30, Compression = true },
+  }, "ssh"))
+  eq(
+    table.concat(a2, " "),
+    "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -F /cfg -o ProxyJump=bastion -o Compression=yes -o ServerAliveInterval=30 -i /k1 -i /k2 -o IdentitiesOnly=yes"
+  )
+  eq(table.concat(S.keys({ privateKeyPath = { "/a", "/b" } }), ","), "/a,/b")
+  eq(#S.keys({}), 0)
+  local inter = assert(S.interactive_cmd({ host = "h", remotePath = "/srv" }, "sftp"))
+  assert(not table.concat(inter, " "):find("BatchMode"), "interactive must not use BatchMode")
+  eq(inter[#inter], "h")
   eq(S.target({ host = "h", username = "u" }), "u@h")
   eq(S.target({ host = "h" }), "h")
   local _, err = S.base_cmd({ host = "h", password = "pw" }, "sftp")
   assert(err and err:find("sshpass"), tostring(err))
+end)
+
+test("sftp resolve + parse_ls", function()
+  local S = require("installer.sftp")
+  local p = { remotePath = "/var/www/app/", root = "/x" }
+  eq(S.resolve(p, nil), "/var/www/app")
+  eq(S.resolve(p, "src/a.lua"), "/var/www/app/src/a.lua")
+  eq(S.resolve(p, "./src"), "/var/www/app/src")
+  eq(S.resolve(p, "/etc/hosts"), "/etc/hosts")
+  local out = table.concat({
+    "drwxr-xr-x    2 user     group        4096 Oct 14 12:05 .",
+    "drwxr-xr-x    5 user     group        4096 Oct 14 12:05 ..",
+    "-rw-r--r--    1 user     group           6 Oct 14 12:05 a.lua",
+    "drwxr-xr-x    2 user     group        4096 Oct 14 12:05 src",
+    "lrwxrwxrwx    1 user     group           3 Oct 14 12:05 link -> src",
+    "-rw-r--r--    1 user     group          42 Jan  3  2025 with space.txt",
+  }, "\n")
+  local entries = S.parse_ls(out)
+  eq(#entries, 4)
+  eq(entries[1].name, "src")
+  eq(entries[1].type, "dir")
+  eq(entries[2].name, "a.lua")
+  eq(entries[2].size, 6)
+  eq(entries[3].name, "link")
+  eq(entries[3].target, "src")
+  eq(entries[4].name, "with space.txt")
+  eq(entries[4].mtime, "Jan  3  2025")
+end)
+
+-- yaml ---------------------------------------------------------------------------
+test("yaml decode", function()
+  local Y = require("installer.yaml")
+  local doc = table.concat({
+    "# comment",
+    "---",
+    "after_write: install   # trailing",
+    "confirm: no",
+    "ui: {border: rounded, width: 0.6}",
+    "github:",
+    "  token: ~",
+    "  topic_query: 'topic:neovim-plugin'",
+    "  scope: public_repo read:user",
+    "  url: http://x:8080/p",
+    "ai:",
+    "  exclude: [github/copilot.vim, \"a/b\"]",
+    "sftp:",
+    "  ignore:",
+    "    - .git",
+    "    - \"*.log\"",
+    "  profiles:",
+    "    prod:",
+    "      port: 2222",
+    "      privateKeyPaths: [~/.ssh/a, ~/.ssh/b]",
+    "      options: {ServerAliveInterval: 30, Compression: yes}",
+    "  servers:",
+    "    - name: staging",
+    "      host: s",
+    "    - name: other",
+    "note: |",
+    "  one",
+    "  two",
+    "folded: >-",
+    "  a",
+    "  b",
+    "escaped: \"tab\\there\"",
+  }, "\n")
+  local v = Y.decode(doc)
+  eq(v.after_write, "install")
+  eq(v.confirm, false)
+  eq(v.ui.border, "rounded")
+  eq(v.ui.width, 0.6)
+  eq(v.github.token, nil)
+  eq(v.github.topic_query, "topic:neovim-plugin")
+  eq(v.github.scope, "public_repo read:user")
+  eq(v.github.url, "http://x:8080/p")
+  eq(v.ai.exclude[2], "a/b")
+  eq(v.sftp.ignore[2], "*.log")
+  eq(v.sftp.profiles.prod.port, 2222)
+  eq(v.sftp.profiles.prod.privateKeyPaths[2], "~/.ssh/b")
+  eq(v.sftp.profiles.prod.options.Compression, true)
+  eq(v.sftp.profiles.prod.options.ServerAliveInterval, 30)
+  eq(v.sftp.servers[1].host, "s")
+  eq(v.sftp.servers[2].name, "other")
+  eq(v.note, "one\ntwo\n")
+  eq(v.folded, "a b")
+  eq(v.escaped, "tab\there")
+  eq(next(Y.decode("")), nil)
+  local _, err = Y.safe_decode("a: 1\n b: 2\n")
+  assert(err, "expected an error for bad indentation")
+  _, err = Y.safe_decode("\tkey: 1")
+  assert(err and err:find("tabs"), tostring(err))
+end)
+
+test("yaml encode round-trip", function()
+  local Y = require("installer.yaml")
+  local v = {
+    after_write = "install",
+    ui = { border = "rounded", width = 0.6 },
+    sftp = {
+      concurrency = 8,
+      ignore = { ".git", "*.log", "yes", "" },
+      profiles = { prod = { host = "example.com", port = 2222, keys = { "~/.ssh/a" }, uploadOnSave = true, note = "a: b", multi = "x\ny" } },
+      servers = { { name = "staging", host = "s", ignore = { "dist" } }, { name = "other" } },
+    },
+    empty = {},
+    big = { 1, 2, 3, 4, 5, 6, 7, 8 },
+  }
+  local text = Y.encode(v)
+  assert(text:find('ignore: %[%.git, "%*%.log", "yes", ""%]'), text)
+  assert(text:find("\n  servers:\n    %- host: s\n      ignore: %[dist%]\n      name: staging\n"), text)
+  local back = Y.decode(text)
+  local function deep_eq(a, b, path)
+    if type(a) ~= "table" or type(b) ~= "table" then
+      eq(a, b, path)
+      return
+    end
+    for k, x in pairs(a) do
+      deep_eq(x, b[k], path .. "." .. tostring(k))
+    end
+    for k in pairs(b) do
+      assert(a[k] ~= nil, path .. ": unexpected key " .. tostring(k))
+    end
+  end
+  deep_eq(v, back, "root")
+end)
+
+test("cache helpers", function()
+  local C = require("installer.cache")
+  eq(C.human(512), "512 B")
+  eq(C.human(2048), "2.0 KiB")
+  eq(C.human(5 * 1024 * 1024), "5.0 MiB")
 end)
 
 -- process pool -----------------------------------------------------------------
