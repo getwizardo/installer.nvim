@@ -391,7 +391,7 @@ end
 
 --- Cast a URL (or a search query that yt-dlp resolves) to a device.
 ---@param target string
----@param opts? { device?: string, autoplay?: boolean, title?: string, cb?: fun(err, payload) }
+---@param opts? { device?: string, autoplay?: boolean, title?: string, content_type?: string, cb?: fun(err, payload) }
 function M.cast(target, opts, cb)
   opts = opts or {}
   cb = cb or opts.cb
@@ -404,6 +404,10 @@ function M.cast(target, opts, cb)
   if opts.title then
     args[#args + 1] = "--title"
     args[#args + 1] = tostring(opts.title)
+  end
+  if opts.content_type then
+    args[#args + 1] = "--content-type"
+    args[#args + 1] = tostring(opts.content_type)
   end
   local payload_cb = cb or function(err, payload)
     notify(err and ("Karu: " .. err) or ("Karu cast started: " .. ((payload and payload.device and payload.device.name) or "device")), err and vim.log.levels.ERROR or vim.log.levels.INFO)

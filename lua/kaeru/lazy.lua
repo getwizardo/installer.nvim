@@ -65,6 +65,25 @@ function M.invalidate_spec_cache(file)
   end
 end
 
+--- Name normalization used by lazy.nvim (`Util.normname`): `nvim-foo.nvim` and
+--- `foo` compare equal, `todo-comments.nvim` and `comments` do not.
+---@param name string
+---@return string
+local function normname(name)
+  local ret = (name or ""):lower():gsub("^n?vim%-", ""):gsub("%.n?vim$", ""):gsub("[%.%-]lua", ""):gsub("[^a-z]+", "")
+  return ret
+end
+
+--- Does the plugin URL end in exactly `owner/repo` (not merely contain it)?
+---@param url string
+---@param short string  `owner/repo`
+---@return boolean
+local function url_is_repo(url, short)
+  local clean = url:lower():gsub("%.git$", ""):gsub("/+$", "")
+  local want = short:lower():gsub("%.git$", "")
+  return clean == want or clean:sub(-(#want + 1)) == "/" .. want
+end
+
 --- Resolve the directory where new spec files should be written.
 ---@param explicit? string
 ---@return string dir, string source  -- source: "config" | "lazy" | "default"
@@ -78,6 +97,12 @@ function M.plugins_dir(explicit)
   end
 
   local config_lua = vim.fn.stdpath("config") .. "/lua"
+  -- Plugin checkouts live under the data dir and are replaced on update, so a
+  -- spec written there would vanish. Never pick a directory inside it.
+  local data_dir = vim.fn.stdpath("data")
+  local function writable_here(dir)
+    return dir:sub(1, #data_dir) ~= data_dir
+  end
   for _, mod in ipairs(M.spec_modules()) do
     local rel = mod:gsub("%.", "/")
     -- prefer the user's own config dir
@@ -94,7 +119,7 @@ function M.plugins_dir(explicit)
     local ok, Util = pcall(require, "lazy.core.util")
     if ok and Util.find_root then
       local root = Util.find_root(mod)
-      if root and is_dir(root) then
+      if root and is_dir(root) and writable_here(root) then
         return root, "lazy"
       end
     end
@@ -103,7 +128,9 @@ function M.plugins_dir(explicit)
   return config_lua .. "/plugins", "default"
 end
 
---- Whether a plugin with this name is already part of the lazy spec.
+--- Find a plugin already registered with lazy.nvim. `name` is either a plugin
+--- name or an `owner/repo` short form. Matches are exact (after lazy's name
+--- normalization), never substrings: `comments` must not match `todo-comments.nvim`.
 ---@param name string
 ---@return table|nil plugin
 function M.find_plugin(name)
@@ -114,16 +141,23 @@ function M.find_plugin(name)
   if LazyConfig.plugins[name] then
     return LazyConfig.plugins[name]
   end
-  -- match by short url as well (`owner/repo`)
-  for _, plugin in pairs(LazyConfig.plugins) do
-    if plugin[1] == name or (plugin.url and plugin.url:find(name, 1, true)) then
+  local want = normname(name)
+  local is_repo = name:find("/", 1, true) ~= nil
+  for key, plugin in pairs(LazyConfig.plugins) do
+    if is_repo then
+      if plugin[1] == name or (plugin.url and url_is_repo(plugin.url, name)) then
+        return plugin
+      end
+    elseif want ~= "" and (normname(key) == want or (plugin.name and normname(plugin.name) == want)) then
       return plugin
     end
   end
   return nil
 end
 
---- Reload lazy.nvim specs so a freshly written file is known, then install.
+--- Reload lazy.nvim specs so a freshly written file is known, then install
+--- exactly that plugin. Never installs unrelated plugins: if lazy.nvim does not
+--- register the spec after the reload, that is reported as an error.
 ---@param name string plugin name (as lazy.nvim derives it)
 ---@param on_done? fun(plugin: table|nil) called when the install runner finishes
 ---@param file? string optional spec filename to invalidate in package.loaded
@@ -142,15 +176,12 @@ function M.install(name, on_done, file)
 
   local LazyConfig = require("lazy.core.config")
   local plugin = LazyConfig.plugins[name] or M.find_plugin(name)
-  local target_name = (plugin and plugin.name) or name
+  if not plugin then
+    return false, ("lazy.nvim did not register %s after reloading the specs (check the spec file for errors, then :Lazy reload)"):format(name)
+  end
+  local target_name = plugin.name or name
   ok, err = pcall(function()
-    local runner
-    if plugin then
-      runner = require("lazy").install({ plugins = { target_name }, show = true })
-    else
-      -- name derivation differs (e.g. custom url) - install everything missing
-      runner = require("lazy").install({ show = true })
-    end
+    local runner = require("lazy").install({ plugins = { target_name }, show = true })
     -- Plugins that are not lazy-loaded would normally be loaded at startup;
     -- load them now so the user can use them right away (like lazy does for
     -- missing plugins installed during startup).

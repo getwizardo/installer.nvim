@@ -610,6 +610,22 @@ State is persisted to `stdpath("data")/kaeru/kikru.json`.
   :Kikru cast status | log
 <
 
+Sending playback to a Google Cast device (through the Karu CLI):    *:Kikru-send*
+
+>vim
+  :Kikru send                           " pick a Cast device; casts the current track
+  :Kikru send Living Room               " send to a device by name or address
+  :Kikru send devices | status
+  :Kikru send stop                      " stop the device and return to local playback
+  :Kikru send off keep                  " stop sending, leave the device playing
+<
+
+While sending, tracks are cast instead of played locally. Pause, toggle, stop,
+seek, volume and mute are forwarded to the device; next and prev cast the next
+track. YouTube and other page URLs are resolved with yt-dlp first, because the
+Cast device cannot play page URLs. Local files are not sent yet. The send
+target is not saved, so a restart plays locally again.
+
 The cast server serves a small page (open http://127.0.0.1:8722) with a cast box
 and transport buttons, and these JSON endpoints:
 

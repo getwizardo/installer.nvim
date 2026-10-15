@@ -608,6 +608,9 @@ function M.play(track, opts)
   if not track then
     return
   end
+  if M._send.device then
+    return M.send_track(track, opts)
+  end
   Backend.remember_track(track)
   M.state.paused = false
   M.state.playing = true
@@ -653,6 +656,199 @@ function M.play(track, opts)
   end
 end
 
+-- Send to a Cast device (Karu) -----------------------------------------------------------
+-- While a device is set, tracks are cast through the Karu CLI instead of the local
+-- engine, and transport keys (pause, volume, seek, stop) are forwarded to the device.
+-- Nothing here is persisted: a restart starts local playback again.
+
+M._send = { device = nil }
+
+--- The Cast device name Kikru is sending to, or nil.
+---@return string|nil
+function M.send_device()
+  return M._send.device
+end
+
+--- The Karu bridge, or nil with the reason it cannot be used.
+---@return table|nil karu, string? reason
+local function karu_bridge()
+  local ok, Karu = pcall(require, "kaeru.karu")
+  if not ok or type(Karu) ~= "table" then
+    return nil, "the Karu bridge is not available"
+  end
+  local available, reason = Karu.available()
+  if not available then
+    return nil, "Karu CLI is not available: " .. tostring(reason or "install Node 22.6+ or a compiled karu")
+  end
+  return Karu
+end
+
+--- Turn a track into a URL the Cast device can fetch. Page URLs (YouTube, etc.)
+--- are resolved to a direct stream with yt-dlp first; Karu does not resolve them.
+---@param track table
+---@param cb fun(err: string|nil, target: string|nil)
+local function cast_target(track, cb)
+  local url = track.stream_url or track.url or track.path or ""
+  if url == "" then
+    return cb("the track has no URL to send")
+  end
+  local direct_stream = track.stream_url and track.stream_url ~= "" and track.stream_url ~= track.url
+  local is_page = Sources.is_url(url) and not direct_stream and track.source ~= nil
+    and track.source ~= "radio" and track.source ~= "local_file" and track.source ~= "http" and track.source ~= "subsonic"
+  if is_page and Sources.ytdlp_available() then
+    return Sources.ytdlp_stream_url(url, function(err, direct)
+      if err or not direct then
+        return cb(err or "yt-dlp returned no stream for " .. url)
+      end
+      cb(nil, direct)
+    end)
+  end
+  if url:match("^https?://") then
+    return cb(nil, url)
+  end
+  cb("cannot send " .. url .. " to a Cast device (local files are not served yet; use an http(s) URL)")
+end
+
+--- Cast a track to the current send device instead of the local engine.
+---@param track table
+---@param opts? table
+function M.send_track(track, opts)
+  opts = opts or {}
+  local Karu, reason = karu_bridge()
+  if not Karu then
+    return M.playback_error(reason)
+  end
+  local device = M._send.device
+  M.state.playing = true
+  M.state.paused = false
+  M._lyrics = nil
+  M._lyrics_key = nil
+  Backend.remember_track(track)
+  cast_target(track, function(err, target)
+    if err then
+      return M.playback_error(err)
+    end
+    Karu.cast(target, {
+      device = device,
+      title = track.title,
+      content_type = "AUDIO",
+      autoplay = opts.autoplay ~= false,
+      cb = function(cast_err)
+        if cast_err then
+          M.playback_error("Karu: " .. tostring(cast_err))
+        end
+      end,
+    })
+  end)
+  M.bump()
+end
+
+--- Start sending to `device`. If a track is loaded it is cast right away.
+---@param device string
+function M.send_start(device)
+  local Karu, reason = karu_bridge()
+  if not Karu then
+    return UI.notify(":Kikru · " .. reason, vim.log.levels.ERROR)
+  end
+  M._send.device = device
+  -- the local engine must not keep playing under the cast
+  if Backend.running() then
+    Backend.pause()
+  end
+  UI.notify(":Kikru · sending to " .. device .. " (local playback paused)")
+  local track = M.current_track()
+  if track then
+    M.send_track(track, { autoplay = true })
+  else
+    M.bump()
+  end
+end
+
+--- Stop sending. `stop_device` also stops playback on the Cast device.
+---@param stop_device? boolean
+function M.send_stop(stop_device)
+  local device = M._send.device
+  M._send.device = nil
+  if device and stop_device then
+    local Karu = karu_bridge()
+    if Karu then
+      Karu.control("stop", device, function(err)
+        if err then
+          UI.notify("Karu: " .. err, vim.log.levels.WARN)
+        end
+      end)
+    end
+  end
+  M.state.playing = false
+  M.state.paused = true
+  M.bump()
+  UI.notify(":Kikru · stopped sending" .. (device and (" to " .. device) or ""))
+end
+
+-- Transport keys forwarded to the Cast device while sending.
+local SEND_CONTROL = { play = true, pause = true, toggle = true, stop = true, seek = true, volume = true, mute = true }
+
+--- Forward a transport action to the Cast device. Returns true when handled.
+---@param name string
+---@param args table
+---@return boolean
+function M.send_control(name, args)
+  if not SEND_CONTROL[name] then
+    return false
+  end
+  -- `play <query|url|station>` loads new media: let the normal path cast it.
+  if name == "play" and (args.station or args.query or args.path or args.url) then
+    return false
+  end
+  local Karu, reason = karu_bridge()
+  if not Karu then
+    UI.notify(":Kikru · " .. reason, vim.log.levels.ERROR)
+    return true
+  end
+  local device = M._send.device
+  local function done(err)
+    if err then
+      UI.notify("Karu: " .. err, vim.log.levels.WARN)
+    end
+  end
+  if name == "play" then
+    M.state.playing, M.state.paused = true, false
+    Karu.control("play", device, done)
+  elseif name == "pause" then
+    M.state.paused = true
+    Karu.control("pause", device, done)
+  elseif name == "toggle" then
+    if M.state.paused or not M.state.playing then
+      M.state.playing, M.state.paused = true, false
+      Karu.control("play", device, done)
+    else
+      M.state.paused = true
+      Karu.control("pause", device, done)
+    end
+  elseif name == "stop" then
+    M.state.playing, M.state.paused = false, true
+    Karu.control("stop", device, done)
+  elseif name == "seek" then
+    Karu.seek(tonumber(args.seconds) or tonumber(args.value) or 0, device, done)
+  elseif name == "volume" then
+    local volume = tonumber(args.volume)
+    if volume then
+      M.state.volume = math.max(0, math.min(100, volume))
+      Karu.volume(math.floor(M.state.volume), device, done)
+    else
+      local delta = tonumber(args.delta) or 0
+      M.state.volume = math.max(0, math.min(100, M.state.volume + delta))
+      Karu.volume(("%+d"):format(delta), device, done)
+    end
+  elseif name == "mute" then
+    local muted = args.value ~= nil and args.value == true or not M.state.muted
+    M.state.muted = muted
+    Karu.volume(muted and "mute" or "unmute", device, done)
+  end
+  M.bump()
+  return true
+end
+
 -- Actions ---------------------------------------------------------------------------------
 
 local eq_band_count = #Filters.frequencies
@@ -673,6 +869,10 @@ function M.action(name, args, origin)
       M.bump()
       return true
     end
+  end
+
+  if M._send.device and M.send_control(name, args) then
+    return true
   end
 
   if name == "play" then
@@ -1432,6 +1632,47 @@ end
 --- `:Kikru [subcommand] [args…]`
 ---@param args string[]
 ---@return boolean
+--- `:Kikru send [device|off|stop|status|devices]`
+---@param words string[] arguments after `send`
+function M.send_command(words)
+  local word = (words[1] or ""):lower()
+  local Karu, reason = karu_bridge()
+  if word == "off" or word == "stop" then
+    return M.send_stop(words[2] ~= "keep")
+  elseif word == "devices" or word == "discover" then
+    if not Karu then
+      return UI.notify(":Kikru · " .. reason, vim.log.levels.ERROR)
+    end
+    Karu.discover({ force = true }, function(err, devices)
+      if err or not devices or #devices == 0 then
+        return UI.notify(":Kikru · " .. (err or "no Cast devices found"), vim.log.levels.WARN)
+      end
+      local lines = { ":Kikru · Cast devices" }
+      for index, device in ipairs(devices) do
+        lines[#lines + 1] = ("  %d. %s"):format(index, Karu.device_label(device))
+      end
+      UI.notify(table.concat(lines, "\n"))
+    end)
+    return true
+  elseif word == "status" then
+    local device = M._send.device
+    if not device then
+      return UI.notify(":Kikru · not sending (use :Kikru send <device>)")
+    end
+    return UI.notify(":Kikru · sending to " .. device .. (M.state.paused and " (paused)" or ""))
+  elseif word == "" then
+    if not Karu then
+      return UI.notify(":Kikru · " .. reason, vim.log.levels.ERROR)
+    end
+    return Karu.pick_device(function(picked)
+      M.send_start(picked.name or picked.address)
+    end)
+  end
+  -- anything else is a device name or address
+  local name = table.concat(words, " ")
+  return M.send_start(name)
+end
+
 function M.dispatch(args)
   M.ensure()
   args = args or {}
@@ -1767,6 +2008,8 @@ function M.dispatch(args)
     M.connect_client(rest[1])
   elseif sub == "disconnect" then
     M.disconnect()
+  elseif sub == "send" then
+    M.send_command(rest)
   elseif sub == "devices" then
     local devices = Daemon.device_list()
     if #devices == 0 then

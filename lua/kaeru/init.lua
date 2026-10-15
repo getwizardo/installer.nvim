@@ -206,9 +206,10 @@ function M.add(form, opts)
         existing.name or generated.name
       ),
       "&Yes\n&No",
-      2
+      1
     )
     if ok_c and choice ~= 1 then
+      UI.notify(("Not saved: %s is already in your config."):format(generated.short or generated.name), vim.log.levels.WARN)
       return false, "cancelled"
     end
   end
@@ -228,6 +229,7 @@ function M.add(form, opts)
     local ok_c, choice = pcall(vim.fn.confirm, path .. " already exists.", "&Overwrite\n&Rename\n&Cancel", 3)
     if ok_c then
       if choice == 3 or choice == 0 then
+        UI.notify("Not saved: " .. path .. " was left unchanged.", vim.log.levels.WARN)
         return false, "cancelled"
       elseif choice == 2 then
         local new = vim.fn.input("File name: ", generated.file)
@@ -256,6 +258,11 @@ function M.add(form, opts)
   end
   fd:flush()
   fd:close()
+  if not exists(path) then
+    local msg = "Write reported success but " .. path .. " is missing"
+    UI.notify(msg, vim.log.levels.ERROR)
+    return false, msg
+  end
 
   -- Invalidate Lua require cache for this spec file so subsequent reloads see the latest content
   Lazy.invalidate_spec_cache(generated.file)

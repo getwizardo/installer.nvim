@@ -953,6 +953,109 @@ test("spec validation with uninstalled require/vim.cmd and saving spec to disk",
   os.remove(saved_path)
 end)
 
+test("lazy find_plugin matches exact names and repos, never substrings", function()
+  local Lazy = require("kaeru.lazy")
+  local saved = package.loaded["lazy.core.config"]
+  package.loaded["lazy.core.config"] = {
+    plugins = {
+      ["todo-comments.nvim"] = {
+        [1] = "folke/todo-comments.nvim",
+        name = "todo-comments.nvim",
+        url = "https://github.com/folke/todo-comments.nvim.git",
+      },
+    },
+  }
+  local ok, err = pcall(function()
+    assert(Lazy.find_plugin("folke/todo-comments.nvim"), "owner/repo must match")
+    assert(Lazy.find_plugin("todo-comments"), "normalized name must match")
+    assert(Lazy.find_plugin("todo-comments.nvim"), "exact name must match")
+    eq(Lazy.find_plugin("comments"), nil, "substring of the name must not match")
+    eq(Lazy.find_plugin("someone/comments"), nil, "other owner must not match")
+    eq(Lazy.find_plugin("folke/todo"), nil, "partial repo must not match")
+  end)
+  package.loaded["lazy.core.config"] = saved
+  assert(ok, err)
+end)
+
+test("install mode writes the spec file even when a similarly named plugin exists", function()
+  local Kaeru = require("kaeru")
+  local Lazy = require("kaeru.lazy")
+  local saved = package.loaded["lazy.core.config"]
+  package.loaded["lazy.core.config"] = {
+    plugins = { ["todo-comments.nvim"] = { [1] = "folke/todo-comments.nvim", name = "todo-comments.nvim" } },
+  }
+  local tmp_plugins = "/tmp/kaeru-test-install-" .. tostring(os.time())
+  Kaeru.setup({ plugins_dir = tmp_plugins, confirm_overwrite = false })
+  local ok, path = Kaeru.add({ repo = "someone/comments" }, { after_write = "install" })
+  package.loaded["lazy.core.config"] = saved
+  eq(ok, true, "add must succeed")
+  eq(path, tmp_plugins .. "/comments.lua", "written path")
+  local fd = assert(io.open(path, "r"), "spec file was not written")
+  local content = fd:read("*a")
+  fd:close()
+  assert(content:find('"someone/comments"', 1, true), "spec must contain the new repo")
+  Lazy.invalidate_spec_cache("comments")
+  os.remove(path)
+end)
+
+test("kikru send: casts tracks, forwards transport, and resolves page URLs with yt-dlp", function()
+  local Kikru = require("kaeru.kikru")
+  local Sources = require("kaeru.kikru.sources")
+  local calls = {}
+  local fake = {
+    available = function() return true end,
+    cast = function(target, opts)
+      calls[#calls + 1] = { "cast", target, opts.device, opts.content_type }
+      if opts.cb then opts.cb(nil, {}) end
+    end,
+    control = function(action, device) calls[#calls + 1] = { "control", action, device } end,
+    seek = function(seconds, device) calls[#calls + 1] = { "seek", seconds, device } end,
+    volume = function(value, device) calls[#calls + 1] = { "volume", tostring(value), device } end,
+  }
+  local saved_karu = package.loaded["kaeru.karu"]
+  local saved_have, saved_resolve = Sources.ytdlp_available, Sources.ytdlp_stream_url
+  package.loaded["kaeru.karu"] = fake
+  Sources.ytdlp_available = function() return true end
+  Sources.ytdlp_stream_url = function(url, cb) cb(nil, "https://stream.example/direct.m4a") end
+  local ok, err = pcall(function()
+    Kikru._send.device = "Living Room"
+    -- a page URL goes through yt-dlp, never to Karu as-is
+    Kikru.play({ title = "clip", url = "https://www.youtube.com/watch?v=abc", source = "youtube_music" }, { autoplay = true })
+    eq(calls[1][1], "cast")
+    eq(calls[1][2], "https://stream.example/direct.m4a", "page URL must be resolved first")
+    eq(calls[1][3], "Living Room")
+    eq(calls[1][4], "AUDIO")
+
+    -- a direct http URL is cast unchanged
+    calls = {}
+    Kikru.play({ title = "song", url = "https://example.com/song.mp3", source = "http" }, { autoplay = true })
+    eq(calls[1][2], "https://example.com/song.mp3")
+
+    -- transport is forwarded to the device
+    calls = {}
+    Kikru.action("pause")
+    eq(calls[1][1], "control"); eq(calls[1][2], "pause"); eq(calls[1][3], "Living Room")
+    Kikru.action("toggle")
+    eq(calls[2][2], "play", "toggle while paused resumes on the device")
+    Kikru.action("volume", { volume = 40 })
+    eq(calls[3][1], "volume"); eq(calls[3][2], "40")
+    Kikru.action("seek", { seconds = 12 })
+    eq(calls[4][1], "seek"); eq(calls[4][2], 12)
+    Kikru.action("mute")
+    eq(calls[5][2], "mute")
+
+    -- stopping returns control to the local engine
+    calls = {}
+    Kikru.send_stop(true)
+    eq(calls[1][2], "stop")
+    eq(Kikru.send_device(), nil, "send target cleared")
+  end)
+  package.loaded["kaeru.karu"] = saved_karu
+  Sources.ytdlp_available, Sources.ytdlp_stream_url = saved_have, saved_resolve
+  Kikru._send.device = nil
+  assert(ok, err)
+end)
+
 -- SFTP UI, NeoCodeium AI preset, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
 test("sftp ui helpers and the NeoCodeium AI preset", function()
   local Sftp = require("kaeru.sftp")
