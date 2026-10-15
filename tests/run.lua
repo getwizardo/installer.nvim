@@ -2754,6 +2754,58 @@ test("starsky: the repository ships a SvelteKit project detected by the status r
   eq(Starsky.is_sveltekit(dir), true)
 end)
 
+test("keruos: menu keys are unique single digits and every entry has a command", function()
+  local KeruOS = require("kaeru.keruos")
+  local seen = {}
+  for _, item in ipairs(KeruOS.items()) do
+    assert(item.key:match("^%d$"), "key must be one digit: " .. item.key)
+    assert(not seen[item.key], "duplicate key " .. item.key)
+    seen[item.key] = true
+    assert(item.cmd ~= "" and item.label ~= "", "empty entry")
+  end
+  eq(#KeruOS.items(), 7, "entry count")
+end)
+
+test("keruos: phones get the compact layout and a width that fits", function()
+  local KeruOS = require("kaeru.keruos")
+  eq(KeruOS.layout(40), "compact", "40 columns")
+  eq(KeruOS.layout(59), "compact", "59 columns")
+  eq(KeruOS.layout(120), "wide", "120 columns")
+  eq(KeruOS.width(40), 38, "compact width leaves a margin")
+  eq(KeruOS.width(20), 24, "compact width has a floor")
+  eq(KeruOS.width(200), 56, "wide width is capped")
+end)
+
+test("keruos: compact render puts each entry on two lines and maps them back", function()
+  local KeruOS = require("kaeru.keruos")
+  local items = KeruOS.items()
+  local lines, by_line = KeruOS.render(items, { layout = "compact", width = 38, receiver = "off" })
+  assert(lines[1] == "KeruOS", "title line")
+  assert(lines[3] == "[1] Kikru", "first entry: " .. lines[3])
+  assert(lines[4] == "    music player and cast queue", "first hint: " .. lines[4])
+  eq(by_line[3].key, "1", "row maps to item 1")
+  eq(by_line[5].key, "2", "row maps to item 2")
+  local hint_mapped = by_line[4]
+  eq(hint_mapped, nil, "hint lines are not clickable rows")
+  local found = false
+  for _, l in ipairs(lines) do
+    if l == "[7] Receiver (off)" then found = true end
+  end
+  eq(found, true, "receiver state is shown")
+  for _, l in ipairs(lines) do
+    assert(#l <= 38, "line wider than 38 columns: " .. l)
+  end
+end)
+
+test("keruos: wide render keeps one line per entry", function()
+  local KeruOS = require("kaeru.keruos")
+  local lines, by_line = KeruOS.render(KeruOS.items(), { layout = "wide", width = 56 })
+  eq(by_line[3].key, "1", "first entry row")
+  eq(by_line[9].key, "7", "last entry row")
+  assert(lines[3]:find("Kikru", 1, true), "label on the row")
+  eq(lines[#lines], "press a key to open, q to close", "footer")
+end)
+
 print(("\n%d passed, %d failed"):format(pass, fail))
 if fail > 0 then
   os.exit(1)
