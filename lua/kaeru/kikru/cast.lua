@@ -651,6 +651,40 @@ setInterval(() => get('/status'), 4000);
 ]]
 end
 
+local STATUS_TEXT = {
+  [200] = "OK",
+  [204] = "No Content",
+  [400] = "Bad Request",
+  [401] = "Unauthorized",
+  [404] = "Not Found",
+  [415] = "Unsupported Media Type",
+  [500] = "Internal Server Error",
+}
+
+--- Write one HTTP/1.1 response and close the socket soon after.
+---@param client table  uv_tcp_t
+---@param cleanup fun()
+---@param status integer
+---@param content_type string
+---@param payload string
+local function respond(client, cleanup, status, content_type, payload)
+  local response = table.concat({
+    ("HTTP/1.1 %d %s"):format(status, STATUS_TEXT[status] or "OK"),
+    "Content-Type: " .. content_type,
+    "Content-Length: " .. tostring(#payload),
+    "Access-Control-Allow-Origin: *",
+    "Access-Control-Allow-Headers: content-type",
+    "Access-Control-Allow-Methods: GET, POST, OPTIONS",
+    "Connection: close",
+    "",
+    payload,
+  }, "\r\n")
+  pcall(function()
+    client:write(response)
+  end)
+  Compat.defer_fn(cleanup, 30)
+end
+
 --- Serve one connected socket: read the request head, dispatch, answer.
 ---@param client table  uv_tcp_t
 local function serve_client(client)
@@ -681,23 +715,15 @@ local function serve_client(client)
     if #body < content_length then
       return -- wait for the rest of the body
     end
-    local status, content_type, payload = M.handle_request(method or "GET", path or "/", body)
-    payload = payload or ""
-    local response = table.concat({
-      ("HTTP/1.1 %d %s"):format(status, status == 200 and "OK" or (status == 204 and "No Content" or (status == 400 and "Bad Request" or (status == 401 and "Unauthorized" or (status == 404 and "Not Found" or (status == 415 and "Unsupported Media Type" or "OK")))))),
-      "Content-Type: " .. content_type,
-      "Content-Length: " .. tostring(#payload),
-      "Access-Control-Allow-Origin: *",
-      "Access-Control-Allow-Headers: content-type",
-      "Access-Control-Allow-Methods: GET, POST, OPTIONS",
-      "Connection: close",
-      "",
-      payload,
-    }, "\r\n")
-    pcall(function()
-      client:write(response)
+    -- Routes touch the editor (notifications, playback), which is not allowed inside a
+    -- libuv callback. Run them on the main loop and always answer, even on error.
+    vim.schedule(function()
+      local ok, status, content_type, payload = pcall(M.handle_request, method or "GET", path or "/", body)
+      if not ok then
+        status, content_type, payload = 500, "application/json", vim.json.encode({ ok = false, error = tostring(status) })
+      end
+      respond(client, cleanup, status, content_type, payload or "")
     end)
-    Compat.defer_fn(cleanup, 30)
   end)
 end
 
