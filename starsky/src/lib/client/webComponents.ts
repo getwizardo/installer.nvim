@@ -25,14 +25,16 @@ const ASCII_LOGO_LINES = [
   " |_____/   |_/_/    \\_\\_|  \\_\\_____/|_|\\_\\   |_|    |_| \\_|   \\/   |_____|_|  |_|",
 ];
 
+// Same steps as the Neovim boot screen (lua/kaeru/boot.lua). User-facing names
+// only: no paths, module names, hosts or library versions.
 const BOOT_STEPS = [
-  "Mounting lazy.nvim Spec Engine & Safe Validator ............... [  OK  ]",
-  "Connecting GitHub Live Repository Autocomplete API ............ [  OK  ]",
-  "Indexing https://mason-registry.dev (601 pkgs / 296 LSPs) ..... [  OK  ]",
-  "Linking Neovim AI plugins (NeoCodeium, CodeCompanion) ......... [  OK  ]",
-  "Starting :Kikru 10-Band EQ & 2-Neovim TCP RPC ........... [  OK  ]",
-  "Initializing Dual-Pane SFTP Studio & Custom Web Components .... [  OK  ]",
-  "Mounting remote Neovim editor & minimal web IDE .............. [READY ]",
+  "Plugin specs",
+  "Repository search",
+  "Language servers",
+  "AI presets",
+  "Music player",
+  "Remote files",
+  "Web IDE",
 ];
 
 export function registerStarskyWebComponents(): void {
@@ -359,18 +361,18 @@ export function registerStarskyWebComponents(): void {
 
       private renderFrame() {
         const pct = Math.min(100, Math.round((this.step / BOOT_STEPS.length) * 100));
-        const barWidth = 42;
+        const barWidth = 40;
         const filled = Math.round((pct / 100) * barWidth);
-        const bar = "█".repeat(filled) + "░".repeat(Math.max(0, barWidth - filled));
+        const bar = "#".repeat(filled) + ".".repeat(Math.max(0, barWidth - filled));
 
         const stepRows = BOOT_STEPS.map((line, i) => {
           if (i < this.step) {
-            return `<div class="step done">  [✓] ${line}</div>`;
+            return `<div class="step done">  ok   ${line}</div>`;
           }
           if (i === this.step) {
-            return `<div class="step active">  [⟳] ${line}</div>`;
+            return `<div class="step active">  ...  ${line}</div>`;
           }
-          return `<div class="step pending">  [·] ${line}</div>`;
+          return `<div class="step pending">       ${line}</div>`;
         }).join("");
 
         this.root.innerHTML = `
@@ -413,8 +415,8 @@ export function registerStarskyWebComponents(): void {
             .step.pending { color: #48546e; }
           </style>
           <pre class="logo">${ASCII_LOGO_LINES.join("\n")}</pre>
-          <div class="subtitle">★ STARSKY OS · INSTALLER.NVIM · NEOCODEIUM · MASON-REGISTRY.DEV · :MUSICPLAYER ★</div>
-          <div class="progress">BOOTING SUBSYSTEMS [${bar}] ${pct}%</div>
+          <div class="subtitle">kaeru.nvim</div>
+          <div class="progress">[${bar}] ${pct}%</div>
           <div>${stepRows}</div>
         `;
       }

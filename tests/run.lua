@@ -2355,13 +2355,29 @@ test("welcome: the logo is centered and the screen is a plain text list", functi
   for _, l in ipairs(lines) do
     assert(type(l) == "string", "every line is a string")
   end
-  assert(table.concat(lines, "\n"):find("STARSKY", 1, true), "logo/tagline present")
+  assert(table.concat(lines, "\n"):find("kaeru.nvim", 1, true), "product name present")
   -- the first non-empty logo line is indented to center it
   local first = nil
   for _, l in ipairs(lines) do
     if l ~= "" then first = l break end
   end
   assert(first and first:match("^%s+"), "logo is indented")
+end)
+
+test("boot: the screens expose no codebase internals (paths, modules, hosts, stack names)", function()
+  local Boot = require("kaeru.boot")
+  local Welcome = require("kaeru.welcome")
+  local forbidden = { "lua/", ".lua", "http", "lazy.nvim", "SvelteKit", "Svelte", "TCP", "[OK]", "STARSKY", "Clina", "mason-registry", "npm" }
+  local texts = {}
+  for _, l in ipairs(Boot.render_frame(1, 88)) do texts[#texts + 1] = l end
+  for _, l in ipairs(Boot.render_frame(#Boot.boot_steps + 1, 88)) do texts[#texts + 1] = l end
+  for _, l in ipairs(Welcome.lines(100)) do texts[#texts + 1] = l end
+  local all = table.concat(texts, "\n")
+  for _, word in ipairs(forbidden) do
+    assert(not all:find(word, 1, true), "boot screen must not show: " .. word)
+  end
+  local last = Boot.render_frame(#Boot.boot_steps + 1, 88)
+  assert(table.concat(last, "\n"):find("Ready.", 1, true), "finished frame says ready")
 end)
 
 test("welcome: enabled by default and can be turned off with welcome.enabled = false", function()

@@ -5,7 +5,8 @@ local Boot = require("kaeru.boot")
 
 local M = {}
 
---- Lines of the welcome screen, centered for `width` columns.
+--- Lines of the welcome screen. The whole block is centered with one shared
+--- offset, so the logo and the hint columns keep their alignment.
 ---@param width? integer
 ---@return string[]
 function M.lines(width)
@@ -15,16 +16,22 @@ function M.lines(width)
     raw[#raw + 1] = l
   end
   raw[#raw + 1] = ""
-  raw[#raw + 1] = "★  KAERU.NVIM · STARSKY · NEOCODEIUM · MASON · KIKRU  ★"
+  raw[#raw + 1] = "kaeru.nvim"
   raw[#raw + 1] = ""
-  raw[#raw + 1] = "e / q  new buffer      :Kaeru               plugin manager"
-  raw[#raw + 1] = "               :Kaeru starsky info  pixel splash"
+  raw[#raw + 1] = "e              new buffer"
+  raw[#raw + 1] = ":Kaeru         plugin manager"
+  raw[#raw + 1] = ":Kaeru boot    intro"
   raw[#raw + 1] = ""
+
+  local block_w = 0
+  for _, l in ipairs(raw) do
+    block_w = math.max(block_w, vim.fn.strdisplaywidth(l))
+  end
+  local pad = string.rep(" ", math.max(0, math.floor((width - block_w) / 2)))
 
   local out = {}
   for _, l in ipairs(raw) do
-    local w = vim.fn.strdisplaywidth(l)
-    out[#out + 1] = string.rep(" ", math.max(0, math.floor((width - w) / 2))) .. l
+    out[#out + 1] = l == "" and "" or (pad .. l)
   end
   return out
 end

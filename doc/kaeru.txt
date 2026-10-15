@@ -836,6 +836,10 @@ PATH). To use a Neovim you already run, start it with `nvim --listen <socket>`
 and export `STARSKY_NVIM_SOCKET=<socket>` before starting Starsky. Starsky
 then attaches to that session and never starts or stops it.
 
+The web IDE never serves `.git/`, `.env*`, `.npmrc`, `.netrc`, `.pypirc`, `id_*`
+keys or `*.pem`, `*.key`, `*.p12`, `*.pfx` files. They are hidden from the file
+list and refused on open, save, `:e` and read.
+
 The web terminal accepts only a fixed set of Ex commands (`help`, `w`, `e`,
 `ls`, `Kaeru save <repo>`, `Kaeru dir`, `Kikru play|pause|next|prev`). Anything
 else, such as shell escapes (`!id`), is refused.

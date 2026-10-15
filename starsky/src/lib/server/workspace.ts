@@ -47,15 +47,31 @@ const IGNORED_DIRS = new Set([
   ".cache",
 ]);
 
+// Git internals and credential-style files are never served, even though they
+// sit inside the repository. The web API is reachable from the preview host.
+const BLOCKED_SEGMENTS = new Set([".git"]);
+const BLOCKED_FILE_NAME =
+  /^(\.env(\..*)?|\.npmrc|\.netrc|\.pypirc|\.git-credentials|id_[a-z0-9_]+|.*\.(pem|key|p12|pfx))$/i;
+
+/** True for paths inside the repository that the web IDE must not read or write. */
+export function isBlockedRelativePath(rel: string): boolean {
+  const parts = rel.split(path.sep).filter(Boolean);
+  if (parts.some((part) => BLOCKED_SEGMENTS.has(part))) return true;
+  return parts.length > 0 && BLOCKED_FILE_NAME.test(parts[parts.length - 1]);
+}
+
 /**
- * Resolve a workspace-relative (or absolute) path and reject anything outside
- * the repository root.
+ * Resolve a workspace-relative (or absolute) path. Rejects anything outside the
+ * repository root and anything that isBlockedRelativePath.
  */
 export function resolveWorkspacePath(target: string, root = getRepoRoot()): string {
   const resolved = path.resolve(root, target);
   const rel = path.relative(root, resolved);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new Error(`Path is outside the workspace: ${target}`);
+  }
+  if (isBlockedRelativePath(rel)) {
+    throw new Error(`Path is not available in the web IDE: ${target}`);
   }
   return resolved;
 }
@@ -81,6 +97,7 @@ export function listWorkspaceFiles(maxFiles = 400, root = getRepoRoot()): Worksp
       if (IGNORED_DIRS.has(entry.name)) continue;
       const full = path.join(dir, entry.name);
       const relativePath = path.relative(root, full);
+      if (isBlockedRelativePath(relativePath)) continue;
       if (entry.isDirectory()) {
         results.push({ name: entry.name, relativePath, type: "dir", size: 0, language: "directory" });
         walk(full, depth + 1);

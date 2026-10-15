@@ -247,8 +247,7 @@ function M.info_lines(frame)
     lines[i + 1] = lines[i + 1] .. row
   end
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "  STARSKY · KIT · NEOCODEIUM"
-  lines[#lines + 1] = "  q / <Esc> to close"
+  lines[#lines + 1] = "  q or <Esc> closes"
   return lines
 end
 

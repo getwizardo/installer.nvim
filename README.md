@@ -867,6 +867,7 @@ require("kaeru").setup({ welcome = { enabled = false } }) -- on by default
 
 Starsky is the **SvelteKit 3 (Svelte 5 + TypeScript)** webclient for `kaeru.nvim`. It is mobile-first: a bottom tab bar on phones, a top bar with a two-column split from 768px, and the full IDE layout (file explorer | editor + terminal | NeoCodeium card) from 1100px.
 
+- **Files the IDE never serves**: `.git/`, `.env*`, `.npmrc`, `.netrc`, `.pypirc`, `id_*` keys and `*.pem|key|p12|pfx`. They are hidden from the file list and refused on open, save, `:e` and read.
 - **Remote Neovim**: the IDE edits through a Neovim session using the official **Node Neovim client (`neovim` npm package)**. By default Starsky starts its own headless Neovim (`nvim --embed --headless -n -i NONE -u NONE`). Set `STARSKY_NVIM_SOCKET=/path/to/nvim.sock` to attach to a Neovim you already run with `nvim --listen`; Starsky never starts or stops that instance.
 - **Server routes (`starsky/src/routes/api/*/+server.ts`)**: `files` (repo file list), `nvim` (open, save and `:` commands), `spec`, `spec/save` (writes into the plugins dir, never overwrites without `overwrite`), `complete`, `github`, `mason`, `parse`, `sftp`, `music`, `status`.
 - **Web terminal**: only a fixed set of Ex commands runs (`help`, `w`, `e`, `ls`, `Kaeru save <repo>`, `Kaeru dir`, `Kikru play|pause|next|prev`). Anything else (shell escapes such as `!id`) is refused.
