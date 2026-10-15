@@ -26,6 +26,9 @@ CONTENTS                                                   *kaeru-contents*
  21. Integrations .................................. |kaeru-integrations|
  22. Starsky webclient (SvelteKit) .................. |kaeru-starsky|
  23. Welcome screen and starsky info ............. |kaeru-welcome|
+ 24. CVE lookup ................................... |kaeru-cve|
+ 25. Upgrator (update packages) ................... |kaeru-upgrade|
+ 26. Winso (eBook reader) ......................... |kaeru-winso|
 
 ==============================================================================
 1. INTRODUCTION                                        *kaeru-introduction*
@@ -897,5 +900,57 @@ STARSKY INFO                                                *:Kaeru-starsky-info
                            in pixels, in a random color, and an animated pixel
                            3 beside them. The animation runs on a uv timer that
                            stops when the window closes. `q` or `<Esc>` closes it.
+
+==============================================================================
+24. CVE LOOKUP                                                *kaeru-cve*
+
+  :Kaeru cve scan [dir]                  " every pinned package in dir (default: cwd)
+  :Kaeru cve check npm lodash 4.17.20    " one package version
+  :Kaeru cve check pip django
+
+Reads package-lock.json (npm), requirements.txt (pip, pinned == lines only),
+Cargo.lock (rust) and go.sum (go). Each package version is looked up in the
+GitHub Advisory Database, which links advisories to their CVE IDs. Withdrawn
+advisories are dropped.
+
+The GitHub API allows 60 unauthenticated requests per hour. A scan stops after
+`cve.max_queries` lookups (default 60) and says how many it skipped. Set
+$GITHUB_TOKEN (or `github.token`) to raise the limit.
+
+==============================================================================
+25. UPGRATOR (UPDATE PACKAGES)                           *kaeru-upgrade*
+
+  :Kaeru upgrade check                   " list outdated packages, changes nothing
+  :Kaeru upgrade apply                   " update within the version ranges (asks first)
+  :Kaeru upgrade apply latest            " npm only: move to the newest version
+
+Managers are found from the project's files: package.json (npm), requirements.txt
+or pyproject.toml (pip), Cargo.toml (cargo, needs cargo-outdated to check), go.mod
+(go), and lazy-lock.json (lazy.nvim, updated with :Lazy! update). A manager whose
+check fails is not updated. The output of every command goes to a log buffer.
+
+==============================================================================
+26. WINSO (EBOOK READER)                                      *kaeru-winso*
+
+  :Winso                                 " library: books you read recently
+  :Winso <path>                          " open a book
+  :Winso bookmarks | search <text> | info
+
+Formats: epub, fb2 (and .fb2.zip), docx, html, md, txt. Python 3 (standard
+library only) reads them. pdf needs `pdftotext` (poppler). mobi, azw and azw3
+need Calibre's `ebook-convert`. Not supported: DRM-protected books, djvu, cbz.
+
+Keys in the reader tab:
+  n / p      next / previous chapter       t   table of contents
+  /          search the whole book         b   add a bookmark
+  B          list bookmarks                + / -   wider / narrower text
+  i          book info                     q   close (progress is saved)
+
+Progress and bookmarks are saved in stdpath("data")/winso/library.json.
+
+Termux (Android): install the tools with pkg (pkg install python poppler).
+Winso detects Termux through $TERMUX_VERSION and uses a narrower column. The
+reader opens in its own tab so it fills the screen.
+
 
 vim:tw=78:ts=8:ft=help:norl:
