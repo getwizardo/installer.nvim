@@ -49,6 +49,11 @@ if not vim then
       stdpath = function()
         return "/tmp/kaeru-test"
       end,
+      strdisplaywidth = function(str)
+        -- count code points: every byte that is not a UTF-8 continuation byte
+        local _, continuation = str:gsub("[\128-\191]", "")
+        return #str - continuation
+      end,
     },
     tbl_keys = function(t)
       local out = {}
@@ -901,15 +906,14 @@ test("complete field & cmdline completion", function()
 
   -- Command-line completion
   local subs = Complete.cmdline("", "Kaeru ", 10)
-  assert(Compat.tbl_contains(subs, "parse") and Compat.tbl_contains(subs, "starsky") and Compat.tbl_contains(subs, "mason") and Compat.tbl_contains(subs, "save") and Compat.tbl_contains(subs, "clina"))
+  assert(Compat.tbl_contains(subs, "parse") and Compat.tbl_contains(subs, "starsky") and Compat.tbl_contains(subs, "mason") and Compat.tbl_contains(subs, "save") and not Compat.tbl_contains(subs, "clina"))
   local m_lsps = Complete.cmdline("lua_ls", "Kaeru mason install lua_ls", 30)
   eq(m_lsps[1], "lua_ls")
   local sftp_acts = Complete.cmdline("up", "Kaeru sftp up", 17)
   eq(sftp_acts[1], "upload")
   local sftp_ui = Complete.cmdline("ui", "Kaeru sftp ui", 17)
   eq(sftp_ui[1], "ui")
-  local clina_acts = Complete.clina_cmdline("", "Clina ", 6)
-  assert(Compat.tbl_contains(clina_acts, "ide") and Compat.tbl_contains(clina_acts, "agent") and Compat.tbl_contains(clina_acts, "mcp"))
+  eq(Complete.clina_cmdline, nil, ":Clina completion was removed")
 end)
 
 -- Spec saving & validation fixes -----------------------------------------------
@@ -949,25 +953,439 @@ test("spec validation with uninstalled require/vim.cmd and saving spec to disk",
   os.remove(saved_path)
 end)
 
--- SFTP UI, Clina NeoCodeium, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
-test("sftp ui helpers and clina neocodeium integration", function()
+test("lazy find_plugin matches exact names and repos, never substrings", function()
+  local Lazy = require("kaeru.lazy")
+  local saved = package.loaded["lazy.core.config"]
+  package.loaded["lazy.core.config"] = {
+    plugins = {
+      ["todo-comments.nvim"] = {
+        [1] = "folke/todo-comments.nvim",
+        name = "todo-comments.nvim",
+        url = "https://github.com/folke/todo-comments.nvim.git",
+      },
+    },
+  }
+  local ok, err = pcall(function()
+    assert(Lazy.find_plugin("folke/todo-comments.nvim"), "owner/repo must match")
+    assert(Lazy.find_plugin("todo-comments"), "normalized name must match")
+    assert(Lazy.find_plugin("todo-comments.nvim"), "exact name must match")
+    eq(Lazy.find_plugin("comments"), nil, "substring of the name must not match")
+    eq(Lazy.find_plugin("someone/comments"), nil, "other owner must not match")
+    eq(Lazy.find_plugin("folke/todo"), nil, "partial repo must not match")
+  end)
+  package.loaded["lazy.core.config"] = saved
+  assert(ok, err)
+end)
+
+test("install mode writes the spec file even when a similarly named plugin exists", function()
+  local Kaeru = require("kaeru")
+  local Lazy = require("kaeru.lazy")
+  local saved = package.loaded["lazy.core.config"]
+  package.loaded["lazy.core.config"] = {
+    plugins = { ["todo-comments.nvim"] = { [1] = "folke/todo-comments.nvim", name = "todo-comments.nvim" } },
+  }
+  local tmp_plugins = "/tmp/kaeru-test-install-" .. tostring(os.time())
+  Kaeru.setup({ plugins_dir = tmp_plugins, confirm_overwrite = false })
+  local ok, path = Kaeru.add({ repo = "someone/comments" }, { after_write = "install" })
+  package.loaded["lazy.core.config"] = saved
+  eq(ok, true, "add must succeed")
+  eq(path, tmp_plugins .. "/comments.lua", "written path")
+  local fd = assert(io.open(path, "r"), "spec file was not written")
+  local content = fd:read("*a")
+  fd:close()
+  assert(content:find('"someone/comments"', 1, true), "spec must contain the new repo")
+  Lazy.invalidate_spec_cache("comments")
+  os.remove(path)
+end)
+
+test("kikru send: casts tracks, forwards transport, and resolves page URLs with yt-dlp", function()
+  local Kikru = require("kaeru.kikru")
+  local Sources = require("kaeru.kikru.sources")
+  local calls = {}
+  local fake = {
+    available = function() return true end,
+    cast = function(target, opts)
+      calls[#calls + 1] = { "cast", target, opts.device, opts.content_type }
+      if opts.cb then opts.cb(nil, {}) end
+    end,
+    control = function(action, device) calls[#calls + 1] = { "control", action, device } end,
+    seek = function(seconds, device) calls[#calls + 1] = { "seek", seconds, device } end,
+    volume = function(value, device) calls[#calls + 1] = { "volume", tostring(value), device } end,
+  }
+  local saved_karu = package.loaded["kaeru.karu"]
+  local saved_have, saved_resolve = Sources.ytdlp_available, Sources.ytdlp_stream_url
+  package.loaded["kaeru.karu"] = fake
+  Sources.ytdlp_available = function() return true end
+  Sources.ytdlp_stream_url = function(url, cb) cb(nil, "https://stream.example/direct.m4a") end
+  local ok, err = pcall(function()
+    Kikru._send.device = "Living Room"
+    -- a page URL goes through yt-dlp, never to Karu as-is
+    Kikru.play({ title = "clip", url = "https://www.youtube.com/watch?v=abc", source = "youtube_music" }, { autoplay = true })
+    eq(calls[1][1], "cast")
+    eq(calls[1][2], "https://stream.example/direct.m4a", "page URL must be resolved first")
+    eq(calls[1][3], "Living Room")
+    eq(calls[1][4], "AUDIO")
+
+    -- a direct http URL is cast unchanged
+    calls = {}
+    Kikru.play({ title = "song", url = "https://example.com/song.mp3", source = "http" }, { autoplay = true })
+    eq(calls[1][2], "https://example.com/song.mp3")
+
+    -- transport is forwarded to the device
+    calls = {}
+    Kikru.action("pause")
+    eq(calls[1][1], "control"); eq(calls[1][2], "pause"); eq(calls[1][3], "Living Room")
+    Kikru.action("toggle")
+    eq(calls[2][2], "play", "toggle while paused resumes on the device")
+    Kikru.action("volume", { volume = 40 })
+    eq(calls[3][1], "volume"); eq(calls[3][2], "40")
+    Kikru.action("seek", { seconds = 12 })
+    eq(calls[4][1], "seek"); eq(calls[4][2], 12)
+    Kikru.action("mute")
+    eq(calls[5][2], "mute")
+
+    -- stopping returns control to the local engine
+    calls = {}
+    Kikru.send_stop(true)
+    eq(calls[1][2], "stop")
+    eq(Kikru.send_device(), nil, "send target cleared")
+  end)
+  package.loaded["kaeru.karu"] = saved_karu
+  Sources.ytdlp_available, Sources.ytdlp_stream_url = saved_have, saved_resolve
+  Kikru._send.device = nil
+  assert(ok, err)
+end)
+
+test("kikru send: device status sync updates position, play state and volume", function()
+  local Kikru = require("kaeru.kikru")
+  Kikru._send.device = "Living Room"
+  Kikru.apply_device_status({ volume = { level = 0.4, muted = false }, media = { state = "PAUSED", currentTime = 42.5 } })
+  local snap = Kikru.get_snapshot()
+  eq(snap.position, 42.5, "position comes from the device")
+  eq(snap.paused, true)
+  eq(snap.volume, 40)
+  eq(snap.playing, false)
+  Kikru.apply_device_status({ media = { state = "PLAYING", currentTime = 50 } })
+  eq(Kikru.get_snapshot().playing, true)
+  -- a finished track is not auto-advanced on the device
+  Kikru.apply_device_status({ media = { state = "IDLE" } })
+  eq(Kikru.get_snapshot().paused, true)
+  Kikru._send.device = nil
+  Kikru._send.position = nil
+  Kikru._send.seen_playing = false
+end)
+
+test("kikru receive: toggling the Karu receiver bridges casts into the cast server", function()
+  local Kikru = require("kaeru.kikru")
+  local Cast = require("kaeru.kikru.cast")
+  local saved_karu = package.loaded["kaeru.karu"]
+  local seen = {}
+  local running = false
+  package.loaded["kaeru.karu"] = {
+    available = function() return true end,
+    receiver_running = function() return running end,
+    receive = function(opts)
+      seen.bridge = opts.bridge
+      running = true
+      return 7, nil
+    end,
+    stop_receiver = function()
+      local was = running
+      running = false
+      return was
+    end,
+  }
+  local saved_server = Cast.server_running
+  local saved_start = Cast.start_server
+  local saved_url = Cast.url
+  Cast.server_running = function() return true end
+  Cast.url = function() return "http://127.0.0.1:8722" end
+  local ok, err = pcall(function()
+    Kikru.receiver_toggle("start")
+    eq(seen.bridge, "http://127.0.0.1:8722", "receiver must bridge to the Kikru cast server")
+    eq(running, true)
+    Kikru.receiver_toggle()
+    eq(running, false, "a bare toggle stops a running receiver")
+  end)
+  package.loaded["kaeru.karu"] = saved_karu
+  Cast.server_running, Cast.start_server, Cast.url = saved_server, saved_start, saved_url
+  assert(ok, err)
+end)
+
+test("cve: parses npm lock v3, requirements, Cargo.lock and go.sum", function()
+  local Cve = require("kaeru.cve")
+  local pkgs = assert(Cve.parse_npm_lock('{"lockfileVersion":3,"packages":{"":{"name":"app"},"node_modules/lodash":{"version":"4.17.20"},"node_modules/a/node_modules/@s/b":{"version":"1.0.0"}}}'))
+  eq(#pkgs, 2)
+  eq(pkgs[1].name, "@s/b")
+  eq(pkgs[2].name, "lodash")
+  eq(pkgs[2].version, "4.17.20")
+  local _, bad = Cve.parse_npm_lock("not json")
+  assert(bad, "invalid lock must report an error")
+
+  local req, unpinned = Cve.parse_requirements("# comment\nDjango==3.0.1\nrequests[socks]==2.31.0 ; python_version>'3'\nflask>=2\n-r other.txt\n")
+  eq(#req, 2)
+  eq(req[1].name, "django")
+  eq(req[2].name, "requests")
+  eq(req[2].version, "2.31.0")
+  eq(unpinned, 1, "range pins are counted, not guessed")
+
+  local crates = Cve.parse_cargo_lock('[[package]]\nname = "serde"\nversion = "1.0.130"\n\n[[package]]\nname = "tokio"\nversion = "1.2.0"\n')
+  eq(#crates, 2)
+  eq(crates[2].name, "tokio")
+
+  local gomods = Cve.parse_gosum("github.com/a/b v1.2.3 h1:AAA=\ngithub.com/a/b v1.2.3/go.mod h1:BBB=\n")
+  eq(#gomods, 1)
+  eq(gomods[1].version, "v1.2.3")
+end)
+
+test("cve: query URL, findings order and report rendering", function()
+  local Cve = require("kaeru.cve")
+  local url = Cve.query_url("npm", "lodash", "4.17.20")
+  assert(url:find("ecosystem=npm", 1, true), "ecosystem")
+  assert(url:find("affects=lodash%404.17.20", 1, true), "affects must be name@version, encoded")
+  assert(Cve.query_url("pip", "django"):find("affects", 1, true) == nil, "no affects without a version")
+
+  local findings = Cve.findings({
+    { ghsa_id = "GHSA-1", cve_id = "CVE-2020-1", severity = "LOW", summary = "minor", html_url = "https://x/1" },
+    { ghsa_id = "GHSA-2", cve_id = "CVE-2020-2", severity = "critical", summary = "bad", html_url = "https://x/2" },
+  })
+  eq(findings[1].cve, "CVE-2020-2", "critical sorts first")
+  local live = Cve.findings({
+    { ghsa_id = "GHSA-W", severity = "high", withdrawn_at = "2024-01-01T00:00:00Z" },
+    { ghsa_id = "GHSA-K", severity = "high" },
+  })
+  eq(#live, 1, "withdrawn advisories are dropped")
+  eq(live[1].id, "GHSA-K")
+  eq(findings[2].severity, "low")
+
+  local lines = Cve.render({
+    packages = 3, checked = 2, skipped = 1, notes = {}, errors = {},
+    vulnerable = { { ecosystem = "npm", name = "lodash", version = "4.17.20", findings = findings } },
+  })
+  local text = table.concat(lines, "\n")
+  assert(text:find("lodash 4.17.20 (npm)", 1, true), "package heading")
+  assert(text:find("CVE-2020-2", 1, true), "finding id")
+  assert(text:find("skipped 1", 1, true), "skip notice")
+end)
+
+test("upgrator: parses npm, pip, go and cargo outdated output", function()
+  local U = require("kaeru.upgrator")
+  local npm = U.parse_npm_outdated('{"lodash":{"current":"4.17.0","wanted":"4.17.0","latest":"4.18.1"},"same":{"current":"1.0.0","wanted":"1.0.0","latest":"1.0.0"}}')
+  eq(#npm, 1, "packages already at latest are dropped")
+  eq(npm[1].name, "lodash")
+  eq(npm[1].latest, "4.18.1")
+  eq(#U.parse_npm_outdated(""), 0, "empty npm output means nothing outdated")
+
+  local pip = U.parse_pip_outdated('[{"name": "wheel", "version": "0.38.4", "latest_version": "0.48.0", "latest_filetype": "wheel"}]')
+  eq(#pip, 1)
+  eq(pip[1].latest, "0.48.0")
+
+  local go = U.parse_go_outdated("example.com/x v1.0.0 [v1.2.0]\nexample.com/y v2.0.0\n")
+  eq(#go, 1, "modules without an update are skipped")
+  eq(go[1].latest, "v1.2.0")
+
+  local cargo = U.parse_cargo_outdated("name    project  compat  latest  kind\nserde   1.0.130 1.0.130 1.0.200 Normal\ntokio   1.2.0   1.2.0   1.2.0  Normal\n")
+  eq(#cargo, 1)
+  eq(cargo[1].name, "serde")
+end)
+
+test("upgrator: detection follows manifest files and render reports the plan", function()
+  local U = require("kaeru.upgrator")
+  local repo = vim.fn.getcwd and vim.fn.getcwd() or "."
+  local root_found = U.detect(".")
+  -- the repo root has no package manifest of its own
+  eq(#root_found, 0)
+  local starsky = U.detect("starsky")
+  eq(starsky[1].id, "npm", "starsky/package.json is an npm project")
+  local text = table.concat(U.render({
+    { manager = { label = "npm" }, items = { { name = "lodash", current = "4.17.0", latest = "4.18.1" } } },
+    { manager = { label = "go" }, items = {}, error = "go is not installed" },
+  }), "\n")
+  assert(text:find("lodash", 1, true) and text:find("4.18.1", 1, true), "outdated row")
+  assert(text:find("error: go is not installed", 1, true), "errors are shown, not hidden")
+  assert(text:find("1 outdated package", 1, true), "summary count")
+end)
+
+test("winso: wrapping, chapter rendering, search, info and Termux detection", function()
+  local W = require("kaeru.winso")
+  local lines = W.wrap("The quick brown fox jumps over the lazy dog.\n\nSecond paragraph here.", 16)
+  eq(lines[1], "The quick brown", "word wrap at 16")
+  eq(lines[2], "fox jumps over")
+  eq(lines[3], "the lazy dog.")
+  eq(lines[4], "", "blank line between paragraphs")
+  eq(lines[5], "Second paragraph")
+  local long = W.wrap("abcdefghijklmnopqrstuvwxyz", 10)
+  eq(long[1], "abcdefghij", "a word longer than the column is split")
+  eq(long[3], "uvwxyz")
+  for _, l in ipairs(W.wrap(("word "):rep(200), 30)) do
+    assert(#l <= 30, "no line wider than the column: " .. #l)
+  end
+
+  local book = {
+    title = "Demo", author = "A. Writer", format = "txt", path = "/x/demo.txt",
+    chapters = {
+      { title = "One", text = "Alpha beta.\n\nGamma needle delta." },
+      { title = "Two", text = "Nothing here.\nAnother needle." },
+    },
+  }
+  local rendered = W.render_chapter(book, 2, 40)
+  eq(rendered[1], "== Two ==", "chapter heading")
+  local dup = { chapters = { { title = "Middle", text = "Middle\n\nChapter two text." } } }
+  local dl = W.render_chapter(dup, 1, 40)
+  eq(dl[1], "== Middle ==")
+  eq(dl[3], "Chapter two text.", "the repeated title is not shown twice")
+  local hits = W.search(book, "NEEDLE")
+  eq(#hits, 2, "case-insensitive search across chapters")
+  eq(hits[1].chapter, 1)
+  eq(hits[2].chapter, 2)
+  eq(hits[2].line, 2)
+  eq(#W.search(book, ""), 0)
+  local info = table.concat(W.info_lines(book), "\n")
+  assert(info:find("Chapters: 2", 1, true), "chapter count")
+  assert(info:find("Title:    Demo", 1, true), "title")
+
+  eq(W.is_termux({ TERMUX_VERSION = "0.118" }), true, "TERMUX_VERSION marks Termux")
+  eq(W.is_termux({ PREFIX = "/data/data/com.termux/files/usr" }), true, "PREFIX path marks Termux")
+  eq(W.is_termux({ HOME = "/home/user" }), false)
+  local hints = W.install_hints(true)
+  eq(hints.pdf, "pkg install poppler", "Termux installs tools with pkg")
+end)
+
+test("winso: extractor output parses and the library round-trips", function()
+  local W = require("kaeru.winso")
+  local book = assert(W.parse_extract('{"title":"T","author":"A","format":"epub","chapters":[{"title":"c","text":"hello\\nworld"}]}'))
+  eq(book.title, "T")
+  eq(book.chapters[1].text, "hello\nworld", "JSON escapes decode")
+  local bad, err = W.parse_extract("<html>not json")
+  eq(bad, nil)
+  assert(err, "bad extractor output reports an error")
+
+  local path = "/tmp/kaeru-winso-library-" .. tostring(os.time()) .. ".json"
+  local lib = { books = { ["/x/book.epub"] = { title = "Book", chapter = 3, line = 7, last = 1 } }, bookmarks = {} }
+  assert(W.write_library(lib, path))
+  local back = W.read_library(path)
+  eq(back.books["/x/book.epub"].chapter, 3, "chapter progress survives")
+  eq(back.books["/x/book.epub"].line, 7, "line survives")
+  eq(#W.read_library("/tmp/kaeru-winso-missing.json").books, 0, "missing library is empty, not an error")
+  os.remove(path)
+end)
+
+test("winso: pictures are single lines, openers and cache dirs", function()
+  local W = require("kaeru.winso")
+  local lines = W.wrap("Before the picture.\n\n[[image: 001-cover.png]]\n\nAfter the picture.", 12)
+  local found = false
+  for _, l in ipairs(lines) do
+    if l == "[image: 001-cover.png]" then
+      found = true
+    end
+  end
+  assert(found, "placeholder becomes [image: NAME] and is not wrapped")
+
+  local termux_argv = W.opener_command("/x/a.png", { TERMUX_VERSION = "1" }, function(n) return n == "termux-open" end)
+  eq(termux_argv[1], "termux-open", "Termux uses termux-open")
+  local xdg = W.opener_command("/x/a.png", { HOME = "/h" }, function(n) return n == "xdg-open" end)
+  eq(xdg[1], "xdg-open")
+  eq(W.opener_command("/x/a.png", {}, function() return false end), nil, "no viewer gives nil")
+
+  local a = W.image_cache_dir("/books/a.epub")
+  local b = W.image_cache_dir("/books/b.epub")
+  assert(a ~= b, "different books get different cache dirs")
+  eq(a, W.image_cache_dir("/books/a.epub"), "cache dir is stable")
+end)
+
+test("winso: colored ascii grid snaps to the cube and leaves blanks uncolored", function()
+  local A = require("kaeru.winso.ascii")
+  eq(A.cube_index(0, 0, 0), 16, "black is the first cube color")
+  eq(A.cube_index(255, 255, 255), 231, "white is the last cube color")
+  eq(A.hex(231), "#ffffff")
+  eq(A.hex(16), "#000000")
+  local grid = { width = 2, height = 1, pixels = { 0, 0, 0, 255, 255, 255 } }
+  local art = assert(A.render(grid))
+  eq(art.lines[1], " @", "dark cell is a space, bright cell is the densest character")
+  eq(#art.runs, 1, "blank cells get no color run")
+  eq(art.runs[1].start, 1)
+  eq(art.runs[1].finish, 2)
+  eq(art.runs[1].cube, 231)
+  eq(A.render({ width = 2, height = 1, pixels = { 0, 0, 0 } }), nil, "an incomplete grid is an error")
+  eq(A.render({ width = 2, height = 1, pixels = { 0, 0, 0, 255, 255, 255 } }, { invert = true }).lines[1], "@ ",
+    "inverted ramp for light backgrounds")
+end)
+
+test("winso: library keeps progress, bookmarks, settings and the recent list", function()
+  local L = require("kaeru.winso.library")
+  local path = "/tmp/kaeru-winso-lib-" .. tostring(os.time()) .. ".json"
+  local real = L.library_path
+  L.library_path = function()
+    return path
+  end
+  local ok, err = pcall(function()
+    assert(L.record_progress("/x/a.epub", { title = "A", chapter = 2, line = 5, chapters = 4 }))
+    assert(L.record_progress("/x/b.epub", { title = "B", chapter = 1, line = 1, chapters = 1 }))
+    assert(L.add_bookmark("/x/a.epub", { chapter = 2, line = 9, label = "hello" }))
+    eq(#L.all_bookmarks(), 1, "one bookmark saved")
+    eq(L.all_bookmarks()[1].mark.label, "hello")
+    eq(L.fraction(L.read_library().books["/x/a.epub"]), 0.5, "progress is chapter / chapters")
+    eq(L.fraction(nil), nil, "a never-opened book has no progress")
+    assert(L.set_setting("theme", "paper"))
+    eq(L.setting("theme", "night"), "paper")
+    eq(L.setting("width", 72), 72, "an unset setting uses the default")
+    eq(#L.recent(), 2, "both books are on the recent list")
+    assert(L.forget("/x/b.epub"))
+    eq(#L.recent(), 1, "a forgotten book leaves the shelf")
+  end)
+  L.library_path = real
+  os.remove(path)
+  assert(ok, err)
+end)
+
+test("winso: shelf lists books with progress and maps lines to actions", function()
+  local Shelf = require("kaeru.winso.shelf")
+  eq(Shelf.bar(nil), "[----------]  new")
+  eq(Shelf.bar(0.5), "[#####-----]  50%")
+  local lines, actions = Shelf.render({
+    items = { { path = "/x/a.epub", title = "Alpha", chapter = 2, chapters = 4 } },
+    bookmarks = 1, folder = "/books", theme = "night", width = nil, cols = 30,
+  })
+  eq(lines[1], "WINSO")
+  eq(#lines[2], 30, "rule fits the window")
+  eq(lines[4], "  1. Alpha")
+  eq(actions[4].path, "/x/a.epub", "the title line opens the book")
+  eq(actions[5].path, "/x/a.epub", "the progress line opens the book too")
+  local empty = Shelf.render({ items = {}, bookmarks = 0, folder = "/books", theme = "sepia", width = 60, cols = 30 })
+  local hint = false
+  for _, l in ipairs(empty) do
+    if l:find("nothing yet", 1, true) then
+      hint = true
+    end
+  end
+  assert(hint, "an empty shelf says how to start")
+end)
+
+test("winso: reading themes fall back to night and invert pictures on light paper", function()
+  local T = require("kaeru.winso.theme")
+  eq(T.get("nope").label, "night", "unknown names fall back")
+  eq(T.get(nil).label, "night")
+  eq(T.get("paper").invert, true)
+  eq(#T.order, 3)
+end)
+
+-- SFTP UI, NeoCodeium AI preset, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
+test("sftp ui helpers and the NeoCodeium AI preset", function()
   local Sftp = require("kaeru.sftp")
   assert(type(Sftp.ui) == "function", "Sftp.ui must be a function")
   assert(type(Sftp.list_local_dir) == "function", "Sftp.list_local_dir must be a function")
 
-  local Clina = require("kaeru.clina")
-  eq(Clina.NEOCODEIUM_REPO, "monkoose/neocodeium")
-  eq(Clina.providers[1].id, "neocodeium")
-  local nc_spec = Clina.neocodeium_spec()
-  eq(nc_spec.repo, "monkoose/neocodeium")
-  eq(nc_spec.cmd, "NeoCodeium")
-  local gen = assert(Spec.generate(nc_spec, { header = false }))
+  -- NeoCodeium is a plain Neovim plugin now (no :Clina wrapper): it lives in the AI presets
+  local Ai = require("kaeru.ai")
+  local nc
+  for _, preset in ipairs(Ai.presets) do
+    if preset.repo == "monkoose/neocodeium" then nc = preset end
+  end
+  assert(nc, "NeoCodeium preset missing")
+  eq(nc.form.cmd, "NeoCodeium")
+  local gen = assert(Spec.generate(nc.form, { header = false }))
   assert(gen.source:find('"monkoose/neocodeium"', 1, true))
   assert(loadstring(gen.source), "NeoCodeium spec must be valid Lua")
-
-  local syn = Clina._fallback_synthesize({ prompt = "Configure monkoose/neocodeium", mode = "agent" })
-  eq(syn.ok, true)
-  assert(syn.proposal and syn.proposal.code:find("monkoose/neocodeium", 1, true))
 end)
 
 test("github api dynamic plugin autocomplete, musicplayer 2-nvim & ascii boot", function()
@@ -1073,7 +1491,7 @@ test("parse_cmdline strips ranges, bangs and picks the last pipeline segment", f
   eq(C.parse_cmdline("echo 1 | Kikru play")[1], "Kikru")
   eq(C.detect_command("Kae"), "Kaeru")
   eq(C.detect_command("Kik"), "Kikru")
-  eq(C.detect_command("Cli"), "Clina")
+  eq(C.detect_command("Cli"), nil)
   eq(C.detect_command("zzz"), nil)
   local _, empty_command = C.parse_cmdline("")
   eq(empty_command, "")
@@ -1083,7 +1501,7 @@ test("complete_items covers subcommands, actions and arguments", function()
   local C = require("kaeru.complete")
   local subs = C.complete_items("Kaeru ", 7)
   local sub_words = C.words(subs)
-  for _, want in ipairs({ "add", "save", "parse", "mason", "sftp", "cache", "config", "ai", "clina", "music", "boot" }) do
+  for _, want in ipairs({ "add", "save", "parse", "mason", "sftp", "cache", "config", "ai", "music", "boot" }) do
     assert(Compat.tbl_contains(sub_words, want), "missing subcommand " .. want)
   end
   for _, item in ipairs(subs) do
@@ -1109,8 +1527,7 @@ test("complete_items covers subcommands, actions and arguments", function()
   assert(Compat.tbl_contains(C.words(C.complete_items("Kikru cast ", 12)), "youtube"), "cast targets")
   assert(Compat.tbl_contains(C.words(C.complete_items("Kikru cast server ", 19)), "8722"), "cast port")
 
-  local clina = C.words(C.complete_items("Clina ", 7))
-  assert(Compat.tbl_contains(clina, "ask") and Compat.tbl_contains(clina, "login"))
+  eq(C.detect_command("Clina "), nil, ":Clina is no longer one of our commands")
 
   -- partial arglead filters instead of erroring
   assert(Compat.tbl_contains(C.words(C.complete_items("Kaeru ma", 9)), "mason"))
@@ -1744,14 +2161,14 @@ test("complete.everything covers commands, files and every native category", fun
     elseif category == "color" then
       return { "tokyonight", "catppuccin" }
     elseif category == "command" then
-      return { "Kaeru", "Kikru", "Clina", "Lazy" }
+      return { "Kaeru", "Kikru", "Lazy" }
     end
     return {}
   end
   local items = C.everything("")
   local words = C.words(items)
   assert(#words > 60, "expected a big candidate list, got " .. #words)
-  for _, want in ipairs({ "Kaeru", "Kikru", "Clina", "Kaeru add", "Kikru cast", "lua/kaeru/init.lua", "tokyonight" }) do
+  for _, want in ipairs({ "Kaeru", "Kikru", "Kaeru add", "Kikru cast", "lua/kaeru/init.lua", "tokyonight" }) do
     assert(Compat.tbl_contains(words, want), "everything() missing " .. want)
   end
   local file_matches = C.words(C.everything("complete.lua"))
@@ -1764,10 +2181,11 @@ test("complete.everything covers commands, files and every native category", fun
   vim.fn.getcompletion = nil
 end)
 
-test("plugin/kaeru.lua registers :Kaeru, :Kikru, :Clina and the legacy alias", function()
+test("plugin/kaeru.lua registers :Kaeru, :Kikru, :Karu and the legacy alias (no :Clina)", function()
   dofile("plugin/kaeru.lua")
   local commands = vim.api._commands
-  for _, name in ipairs({ "Kaeru", "Kikru", "Clina", "Karu", "MusicPlayer" }) do
+  eq(commands["Clina"], nil, ":Clina must not be registered")
+  for _, name in ipairs({ "Kaeru", "Kikru", "Karu", "MusicPlayer" }) do
     assert(commands[name], "missing command " .. name)
     eq(type(commands[name].fn), "function")
     eq(type(commands[name].opts.complete), "function", name .. " needs completion")
@@ -2289,6 +2707,229 @@ test("native completion covers the vanilla Neovim command line", function()
   local any = Native.items("definitely-not-a-command ", { any = true })
   assert(#any > 0, "opts.any should offer every native category")
   vim.fn.getcompletion = nil
+end)
+
+-- Spec generation regressions -------------------------------------------------
+test("spec: GitHub URLs with tree/blob/query paths normalise to owner/repo", function()
+  eq(Spec.parse_repo("https://github.com/owner/repo/tree/main").short, "owner/repo")
+  eq(Spec.parse_repo("https://github.com/owner/repo.git/").short, "owner/repo")
+  eq(Spec.parse_repo("https://github.com/owner/repo/blob/dev/README.md?plain=1#x").short, "owner/repo")
+  -- a non-GitHub url keeps the full url
+  eq(Spec.parse_repo("https://gitlab.com/owner/repo/tree/main").url, "https://gitlab.com/owner/repo/tree/main")
+  -- dots and dashes are part of the repo name, not a path separator
+  eq(Spec.parse_repo("https://github.com/owner/repo-evil.example").short, "owner/repo-evil.example")
+end)
+
+test("spec: empty list fields are omitted instead of rendered as {}", function()
+  local gen = assert(Spec.generate({ repo = "owner/repo", keys = ",", event = " , ", cmd = ",", ft = "", dependencies = "," }, { header = false }))
+  eq(gen.source, 'return {\n  "owner/repo",\n}\n')
+end)
+
+test("spec: enabled/cond reject values that are neither boolean nor function", function()
+  local built, err = Spec.build({ repo = "owner/repo", enabled = "maybe" })
+  eq(built, nil)
+  assert(err and err:find("enabled", 1, true), tostring(err))
+  local _, cerr = Spec.build({ repo = "owner/repo", cond = "sometimes" })
+  assert(cerr and cerr:find("cond", 1, true), tostring(cerr))
+  local ok = assert(Spec.generate({ repo = "owner/repo", enabled = "false", cond = "function() return true end" }, { header = false }))
+  assert(ok.source:find("enabled = false", 1, true), ok.source)
+  assert(loadstring(ok.source), "generated spec must be valid Lua")
+end)
+
+-- Starsky (SvelteKit webclient) ------------------------------------------------
+test("starsky: the CLI commands run Vite and the npm build, not yarn/next", function()
+  local Starsky = require("kaeru.starsky")
+  local dev = Starsky.dev_command(5173)
+  eq(dev[1], "npm")
+  eq(table.concat(dev, " "), "npm run dev -- --host 0.0.0.0 --port 5173 --strictPort")
+  eq(table.concat(Starsky.build_command(), " "), "npm run build")
+  assert(not table.concat(dev, " "):find("yarn", 1, true), "no yarn")
+  assert(not table.concat(dev, " "):find("next", 1, true), "no next")
+end)
+
+test("starsky info: KIT and the animated pixel 3 render as a fixed-width splash", function()
+  local Starsky = require("kaeru.starsky")
+  local f0 = Starsky.info_lines(0)
+  local f1 = Starsky.info_lines(1)
+  assert(#f0 >= 12, "splash has the 10 pixel rows plus a caption")
+  local joined = table.concat(f0, "\n")
+  assert(joined:find("████", 1, true), "KIT is drawn with lit pixels")
+  -- the 3 is drawn at the right of KIT, so every pixel row of KIT carries it
+  eq(f0[2]:find("█", 1, true) ~= nil, true, "KIT row 1 is lit")
+  -- the animation moves the highlighted scan row between frames
+  assert(table.concat(f0, "\n") ~= table.concat(f1, "\n"), "frames differ")
+  assert(table.concat(f1, "\n"):find("▓▓", 1, true), "frame 1 highlights a pixel row of the 3")
+  -- the palette offers several colors and the picker stays inside it
+  assert(#Starsky.info_palette >= 3, "palette has colors")
+  eq(Starsky.pixel_glyph("3", 1)[1]:find("██", 1, true) ~= nil or Starsky.pixel_glyph("3", 1)[1]:find("▓▓", 1, true) ~= nil, true, "3 glyph has pixels")
+end)
+
+test("welcome: the logo is centered and the screen is a plain text list", function()
+  local Welcome = require("kaeru.welcome")
+  local lines = Welcome.lines(100)
+  assert(#lines > 8, "logo plus hints")
+  for _, l in ipairs(lines) do
+    assert(type(l) == "string", "every line is a string")
+  end
+  assert(table.concat(lines, "\n"):find("kaeru.nvim", 1, true), "product name present")
+  -- the first non-empty logo line is indented to center it
+  local first = nil
+  for _, l in ipairs(lines) do
+    if l ~= "" then first = l break end
+  end
+  assert(first and first:match("^%s+"), "logo is indented")
+end)
+
+test("boot: the screens expose no codebase internals (paths, modules, hosts, stack names)", function()
+  local Boot = require("kaeru.boot")
+  local Welcome = require("kaeru.welcome")
+  local forbidden = { "lua/", ".lua", "http", "lazy.nvim", "SvelteKit", "Svelte", "TCP", "[OK]", "STARSKY", "Clina", "mason-registry", "npm" }
+  local texts = {}
+  for _, l in ipairs(Boot.render_frame(1, 88)) do texts[#texts + 1] = l end
+  for _, l in ipairs(Boot.render_frame(#Boot.boot_steps + 1, 88)) do texts[#texts + 1] = l end
+  for _, l in ipairs(Welcome.lines(100)) do texts[#texts + 1] = l end
+  local all = table.concat(texts, "\n")
+  for _, word in ipairs(forbidden) do
+    assert(not all:find(word, 1, true), "boot screen must not show: " .. word)
+  end
+  local last = Boot.render_frame(#Boot.boot_steps + 1, 88)
+  assert(table.concat(last, "\n"):find("Ready.", 1, true), "finished frame says ready")
+end)
+
+test("welcome: enabled by default and can be turned off with welcome.enabled = false", function()
+  local Config = require("kaeru.config")
+  eq(Config.defaults.welcome.enabled, true, "default on")
+end)
+
+test("starsky: `info` is a completable :Kaeru starsky action", function()
+  local Complete = require("kaeru.complete")
+  local found = false
+  for _, a in ipairs(Complete.starsky_actions) do
+    if a.word == "info" then found = true end
+  end
+  eq(found, true, "info completion")
+end)
+
+test("starsky: the repository ships a SvelteKit project detected by the status report", function()
+  local Starsky = require("kaeru.starsky")
+  -- the test stub has no real fnamemodify, so point the dir at the repo's starsky/ explicitly
+  local Config = require("kaeru.config")
+  local saved = Config.options and Config.options.starsky
+  Config.options = Config.options or {}
+  Config.options.starsky = { dir = "starsky" }
+  local dir = Starsky.dir()
+  Config.options.starsky = saved
+  -- the Vite config must enable the SvelteKit plugin and the Node adapter
+  local f = assert(io.open(dir .. "/vite.config.ts"), "vite.config.ts missing")
+  local src = f:read("*a")
+  f:close()
+  assert(src:find("@sveltejs/kit/vite", 1, true), "sveltekit plugin missing")
+  assert(src:find("@sveltejs/adapter-node", 1, true), "adapter-node missing")
+  assert(src:find("0.0.0.0", 1, true), "dev server must bind 0.0.0.0")
+  assert(src:find(".e2b.app", 1, true), "preview host must be allowed")
+  eq(Starsky.is_sveltekit(dir), true)
+end)
+
+test("keruos: menu keys are unique single digits and every entry has a command", function()
+  local KeruOS = require("kaeru.keruos")
+  local seen = {}
+  for _, item in ipairs(KeruOS.items()) do
+    assert(item.key:match("^%d$"), "key must be one digit: " .. item.key)
+    assert(not seen[item.key], "duplicate key " .. item.key)
+    seen[item.key] = true
+    assert(item.cmd ~= "" and item.label ~= "", "empty entry")
+  end
+  eq(#KeruOS.items(), 7, "entry count")
+end)
+
+test("keruos: phones get the compact layout and a width that fits", function()
+  local KeruOS = require("kaeru.keruos")
+  eq(KeruOS.layout(40), "compact", "40 columns")
+  eq(KeruOS.layout(59), "compact", "59 columns")
+  eq(KeruOS.layout(120), "wide", "120 columns")
+  eq(KeruOS.width(40), 38, "compact width leaves a margin")
+  eq(KeruOS.width(20), 24, "compact width has a floor")
+  eq(KeruOS.width(200), 56, "wide width is capped")
+end)
+
+test("keruos: compact render puts each entry on two lines and maps them back", function()
+  local KeruOS = require("kaeru.keruos")
+  local items = KeruOS.items()
+  local lines, by_line = KeruOS.render(items, { layout = "compact", width = 38, receiver = "off" })
+  assert(lines[1] == "KeruOS", "title line")
+  assert(lines[3] == "[1] Kikru", "first entry: " .. lines[3])
+  assert(lines[4] == "    music player and cast queue", "first hint: " .. lines[4])
+  eq(by_line[3].key, "1", "row maps to item 1")
+  eq(by_line[5].key, "2", "row maps to item 2")
+  local hint_mapped = by_line[4]
+  eq(hint_mapped, nil, "hint lines are not clickable rows")
+  local found = false
+  for _, l in ipairs(lines) do
+    if l == "[7] Receiver (off)" then found = true end
+  end
+  eq(found, true, "receiver state is shown")
+  for _, l in ipairs(lines) do
+    assert(#l <= 38, "line wider than 38 columns: " .. l)
+  end
+end)
+
+test("keruos: wide render keeps one line per entry", function()
+  local KeruOS = require("kaeru.keruos")
+  local lines, by_line = KeruOS.render(KeruOS.items(), { layout = "wide", width = 56 })
+  eq(by_line[3].key, "1", "first entry row")
+  eq(by_line[9].key, "7", "last entry row")
+  assert(lines[3]:find("Kikru", 1, true), "label on the row")
+  eq(lines[#lines], "press a key to open, q to close", "footer")
+end)
+
+test("cve: scan keeps at most `concurrency` lookups in flight and reports in job order", function()
+  local Cve = require("kaeru.cve")
+  local saved_check, saved_read, saved_conc, saved_max = Cve.check, Cve.read_project, Cve.concurrency, Cve.max_queries
+  local pending, in_flight, peak = {}, 0, 0
+  Cve.concurrency, Cve.max_queries = 3, 10
+  Cve.read_project = function()
+    local packages = {}
+    for i = 1, 7 do
+      packages[#packages + 1] = { name = "pkg" .. i, version = "1.0." .. i }
+    end
+    return { { ecosystem = "npm", file = "package-lock.json", packages = packages } }, {}
+  end
+  Cve.check = function(ecosystem, name, version, cb)
+    in_flight = in_flight + 1
+    peak = math.max(peak, in_flight)
+    pending[#pending + 1] = function(err, findings)
+      in_flight = in_flight - 1
+      cb(err, findings)
+    end
+  end
+  local report
+  Cve.scan("/unused", function(err, r)
+    eq(err, nil, "scan error")
+    report = r
+  end)
+  eq(#pending, 3, "first wave size")
+  -- Answer out of order: job 2 first, then 3 and 1, then the rest.
+  local order = { 2, 3, 1, 5, 4, 7, 6 }
+  for _, idx in ipairs(order) do
+    local answer = pending[idx]
+    assert(answer, "no pending lookup " .. idx)
+    if idx == 2 then
+      answer(nil, { { id = "GHSA-x", severity = "high", summary = "bad", url = "u" } })
+    elseif idx == 5 then
+      answer("curl failed (6)", nil)
+    else
+      answer(nil, {})
+    end
+    -- keep the queue moving: callbacks queue the next lookup synchronously
+  end
+  eq(peak, 3, "peak in flight")
+  assert(report, "scan did not finish")
+  eq(report.checked, 7, "checked count")
+  eq(#report.vulnerable, 1, "vulnerable count")
+  eq(report.vulnerable[1].name, "pkg2", "the vulnerable package")
+  eq(#report.errors, 1, "error count")
+  assert(report.errors[1]:find("pkg5", 1, true), "error names the failed package")
+  Cve.check, Cve.read_project, Cve.concurrency, Cve.max_queries = saved_check, saved_read, saved_conc, saved_max
 end)
 
 print(("\n%d passed, %d failed"):format(pass, fail))

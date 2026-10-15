@@ -1,5 +1,5 @@
 /**
- * Lyrics formats — detection and conversion.
+ * Lyrics formats, detection and conversion.
  *
  * `karu lyrics` is the CLI edge of this module; everything here is pure so it
  * can be tested and reused by the receiver (e.g. to show a line in the bridge).

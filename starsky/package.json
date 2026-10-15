@@ -1,33 +1,36 @@
 {
-  "name": "starsky",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "@radix-ui/react-dialog": "^1.3.1",
-    "@radix-ui/react-slider": "^1.6.1",
-    "@radix-ui/react-slot": "^1.5.0",
-    "@radix-ui/react-switch": "^1.4.1",
-    "@radix-ui/react-tabs": "^1.2.1",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^1.57.0",
-    "next": "16.4.1",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "tailwind-merge": "^3.7.0",
-    "vaul": "^1.1.2"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "tsx": "^4.23.15",
-    "typescript": "^5"
-  },
-  "packageManager": "yarn@1.22.22"
+	"name": "starsky",
+	"version": "0.2.0",
+	"private": true,
+	"description": "Starsky for Neovim · SvelteKit mobile-first webclient for kaeru.nvim",
+	"type": "module",
+	"imports": {
+		"#lib/*": "./src/lib/*"
+	},
+	"engines": {
+		"node": ">=20.19"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"start": "node build",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"icons": "node scripts/solar-icons.mjs"
+	},
+	"devDependencies": {
+		"@iconify-json/solar": "^1.2.13",
+		"@sveltejs/adapter-node": "^6.0.0",
+		"@sveltejs/kit": "^3.1.0",
+		"@sveltejs/vite-plugin-svelte": "^7.3.1",
+		"@types/node": "^22.20.5",
+		"svelte": "^5.57.2",
+		"svelte-check": "^4.7.6",
+		"typescript": "^6.0.3",
+		"vite": "^8.3.4"
+	},
+	"dependencies": {
+		"neovim": "^5.5.0"
+	}
 }

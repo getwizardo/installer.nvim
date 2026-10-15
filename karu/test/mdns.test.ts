@@ -28,7 +28,7 @@ test("mdns: TXT record carries the keys senders need", () => {
   assert.notEqual(deviceIdFrom("a"), deviceIdFrom("b"));
 });
 
-test("mdns: service records — PTR shared, SRV/TXT/A cache-flushed with port 8009", () => {
+test("mdns: service records: PTR shared, SRV/TXT/A cache-flushed with port 8009", () => {
   const records = serviceRecords(config);
   assert.equal(records.length, 4);
   const [ptr, srv, txt, a] = records;

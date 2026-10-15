@@ -1,4 +1,4 @@
--- kaeru.nvim — telescope.nvim integration.
+-- kaeru.nvim: telescope.nvim integration.
 --
 -- Two ways to use it:
 --
@@ -167,7 +167,7 @@ function M.sources()
               karu.status(device.name, function(err, payload)
                 vim.notify(
                   err and ("Karu: " .. err)
-                    or ("%s — %s"):format(device.name, payload and payload.media and payload.media.title or "idle"),
+                    or ("%s, %s"):format(device.name, payload and payload.media and payload.media.title or "idle"),
                   err and vim.log.levels.ERROR or vim.log.levels.INFO
                 )
               end)

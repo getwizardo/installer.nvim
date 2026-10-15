@@ -1,4 +1,4 @@
--- kaeru.nvim · :Kikru — internet radio.
+-- kaeru.nvim · :Kikru: internet radio.
 --
 -- Two layers, like cliamp (https://cliamp.stream/docs/radios):
 --   1. a curated, offline-curated station list with per-station fallback URLs

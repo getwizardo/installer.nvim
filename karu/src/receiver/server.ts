@@ -115,7 +115,7 @@ export class CastReceiverServer {
       });
     });
     server.on("error", (error) => this.log(`receiver: ${error.message}`));
-    // Port 0 means "pick a free port" (used by tests) — report the real one.
+    // Port 0 means "pick a free port" (used by tests): report the real one.
     const bound = server.address();
     const boundPort = typeof bound === "object" && bound ? bound.port : port;
 
@@ -131,7 +131,7 @@ export class CastReceiverServer {
       try {
         await this.responder.start();
       } catch (error) {
-        this.log(`mdns: unavailable (${(error as Error).message}) — senders must add the address manually`);
+        this.log(`mdns: unavailable (${(error as Error).message}), senders must add the address manually`);
         this.responder = null;
       }
     }

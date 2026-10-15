@@ -1,4 +1,4 @@
--- kaeru.nvim · :Kikru — source resolution.
+-- kaeru.nvim · :Kikru: source resolution.
 --
 -- The source model follows NodeLink / LavaLink (https://github.com/PerformanC/NodeLink):
 -- a query is first matched against the source registry (`ytsearch:`, `scsearch:`,
@@ -488,7 +488,7 @@ function M.resolve_ytdlp(query, opts, cb)
   end
   local args = { bin, "--no-warnings", "--ignore-config", "--dump-single-json" }
   -- A playlist URL (or an explicit `flat`/`playlist` request) must be expanded,
-  -- everything else stays a single video — that is what casting a link means.
+  -- everything else stays a single video, that is what casting a link means.
   local expand = opts.playlist == true or opts.flat == true or (opts.no_playlist ~= true and M.is_url(target) and target:lower():find("list=", 1, true) ~= nil)
   if expand then
     args[#args + 1] = "--yes-playlist"
@@ -575,7 +575,7 @@ function M.track_from_ytdlp(data, source)
   }
   if track.artist == "" then
     -- "Artist - Title" in the uploader field is common on YouTube
-    local artist, title = track.title:match("^(.-)%s+[-–—]%s+(.+)$")
+    local artist, title = Tags.split_artist_title(track.title)
     if artist and #artist <= 40 then
       track.artist = artist
       track.title = title
@@ -982,7 +982,7 @@ function M.resolve(query, opts, cb)
   }
   if M.is_url(rest) and not opts.search then
     -- A URL is a *request for that exact thing*: a playlist link expands, a
-    -- watch link does not — unless the caller asked for a queue.
+    -- watch link does not, unless the caller asked for a queue.
     ytdlp_opts.no_playlist = opts.playlist ~= true
     if opts.playlist then
       ytdlp_opts.limit = opts.limit or 50

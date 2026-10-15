@@ -1257,7 +1257,7 @@ function M.init()
   fd:write(table.concat(template, "\n"))
   fd:close()
   vim.cmd.edit(path)
-  UI.notify("Created " .. path .. " — add it to .gitignore if it contains secrets")
+  UI.notify("Created " .. path .. ", add it to .gitignore if it contains secrets")
 end
 
 function M.status()
@@ -1462,7 +1462,7 @@ function M.ui(profile_name)
   local local_entries = {}
   local remote_entries = {}
   local active_pane = "local"
-  local status_text = profile._unconfigured and "No sftp.json found — press `i` to initialize" or "Ready"
+  local status_text = profile._unconfigured and "No sftp.json found, press `i` to initialize" or "Ready"
   local remote_status = "idle"
   local closed = false
 
@@ -1665,7 +1665,7 @@ function M.ui(profile_name)
       vim.ui.select(all, {
         prompt = "Select SFTP Profile",
         format_item = function(item)
-          return string.format("%s — %s@%s:%s (%s)", item.name, item.username or "", item.host, item.remotePath, item.source)
+          return string.format("%s, %s@%s:%s (%s)", item.name, item.username or "", item.host, item.remotePath, item.source)
         end,
       }, function(chosen)
         if chosen then

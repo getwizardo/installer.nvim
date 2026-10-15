@@ -24,6 +24,14 @@ CONTENTS                                                   *kaeru-contents*
  19. Karu (Google Cast, TypeScript) ................ |kaeru-karu|
  20. Lyrics (lrc.red, TTML, karaoke) ............. |kaeru-lyrics|
  21. Integrations .................................. |kaeru-integrations|
+ 22. Starsky webclient (SvelteKit) .................. |kaeru-starsky|
+ 23. Welcome screen and starsky info ............. |kaeru-welcome|
+ 24. CVE lookup ................................... |kaeru-cve|
+ 25. Upgrator (update packages) ................... |kaeru-upgrade|
+ 26. Winso (eBook reader) ......................... |kaeru-winso|
+ 27. KeruOS (launcher) .......................... |kaeru-keruos|
+ 28. C cast client (kaeru-cast) ................. |kaeru-cast-c|
+ 29. Performance ................................ |kaeru-performance|
 
 ==============================================================================
 1. INTRODUCTION                                        *kaeru-introduction*
@@ -60,10 +68,10 @@ their READMEs and install them with a single key.
 ==============================================================================
 4. COMMANDS                                                *kaeru-commands*
 
-                                                          *:Kaeru* *:Kaeru-pick*
+                                                          *:Kaeru-pick*
 :Kaeru pick [source]     Open a picker over plugins, mason, sftp, cache, radio,
                          queue or cast. Uses telescope.nvim, fzf-lua, snacks.nvim,
-                         mini.pick or |vim.ui.select| — whichever is installed.
+                         mini.pick or |vim.ui.select|, whichever is installed.
 :Kaeru complete [text]   Fuzzy-complete *anything* (our subcommands, commands,
                          files, options, events, colorschemes, help tags, …) in
                          a picker and run the selected line.
@@ -109,7 +117,8 @@ their READMEs and install them with a single key.
 Each line of the modal is a field of the lazy.nvim spec. Only `Repository`
 is required. Fields map 1:1 to https://lazy.folke.io/spec:
 
-  Repository     `owner/repo`, `https://github.com/owner/repo` or any git URL
+  Repository     `owner/repo`, `https://github.com/owner/repo` (also with a
+                 trailing `.git`, `/tree/<branch>` or `/blob/...`) or any git URL
   File           name of the generated file (default derived from the repo)
   Name           spec `name`
   Lazy           spec `lazy` (true/false)
@@ -124,10 +133,32 @@ is required. Fields map 1:1 to https://lazy.folke.io/spec:
   Config         `true`, or `function` to generate a `config()` skeleton
   Pin            `true` -> `pin = true`
 
+Notes on the values:
+
+  - Empty fields are left out of the generated spec. A list field containing
+    only commas (e.g. `Keys: ,`) produces no `keys = {}` entry.
+  - `Keys`, `Dependencies` and `Build` also accept a raw Lua table, e.g.
+    `{ { "<leader>e", "<cmd>Neotree<cr>", desc = "Explorer" } }`. `Opts`
+    accepts a table literal, `Init` / `Config` accept a raw `function ... end`.
+    Each raw value is checked to be a valid Lua expression of the right type
+    before the file is written; `opts` and `keys` are only evaluated in a
+    sandbox, so references to plugins that are not installed yet
+    (`require("cmp")`, `vim.cmd.Neotree`) do not fail validation.
+  - `Lazy` and `Pin` take `true` / `false` (`yes`/`no`, `on`/`off` and `1`/`0`
+    also work). Any other value is an error. The `enabled` and `cond` spec
+    fields are not in the modal; when generating specs from Lua with
+    `require("kaeru.spec").generate()` they take `true` / `false` or a raw
+    `function() ... end`, and anything else is an error.
+  - Values that are not a valid number for `Priority`, or a repository that
+    is neither `owner/repo` nor a git URL, are rejected before writing.
+
 Keys inside the modal:
 
   <CR> / <C-s>      write the file and install
+  gs / <C-w>        write the file only, do not install
   <Tab> / <S-Tab>   next / previous field (also <CR>, <Up>, <Down> in insert)
+  <C-Space>         context-aware autocomplete for the current field
+  <C-r> / gp        fetch README.md of the repository and fill the fields
   <C-b>             browse GitHub and fill the repository field
   dd                clear the current field
   q / <Esc>         close
@@ -445,7 +476,7 @@ Lua API: `require("kaeru").mason.pick{category="LSP"}`, `.install(name)`,
 kaeru.nvim has its own completion engine (no plugin needed) and plugs into the
 ones you may already use.
 
-On the `:` command line — for `:Kaeru`, `:Kikru` and `:Clina`:           *:Kaeru-Tab*
+On the `:` command line, for `:Kaeru` and `:Kikru`:                    *:Kaeru-Tab*
 
   - fuzzy matching that ignores case and separators                                 ~
       `fole/laz`   -> folke/lazy.nvim
@@ -585,6 +616,33 @@ State is persisted to `stdpath("data")/kaeru/kikru.json`.
   :Kikru cast status | log
 <
 
+Sending playback to a Google Cast device (through the Karu CLI):    *:Kikru-send*
+
+>vim
+  :Kikru send                           " pick a Cast device; casts the current track
+  :Kikru send Living Room               " send to a device by name or address
+  :Kikru send devices | status
+  :Kikru send stop                      " stop the device and return to local playback
+  :Kikru send off keep                  " stop sending, leave the device playing
+<
+
+While sending, tracks are cast instead of played locally. Pause, toggle, stop,
+seek, volume and mute are forwarded to the device; next and prev cast the next
+track. YouTube and other page URLs are resolved with yt-dlp first, because the
+Cast device cannot play page URLs. Local files are not sent yet. The send
+target is not saved, so a restart plays locally again.
+
+While sending, Kikru polls the device every few seconds and shows its real
+position, play or pause state and volume. When the device finishes a track,
+Kikru shows it as paused and does not advance the queue.
+
+Turning this machine into a Cast device (casts from phones and apps land in
+Kikru through the cast server on 127.0.0.1:8722):
+
+>vim
+  :Kikru receive [start|stop|status]    " or press W in the Kikru window
+<
+
 The cast server serves a small page (open http://127.0.0.1:8722) with a cast box
 and transport buttons, and these JSON endpoints:
 
@@ -599,8 +657,8 @@ Recognised links: `youtube.com/watch`, `youtu.be`, `/shorts/`, `/live/`,
 Vimeo, archive.org, Spotify/Deezer/Apple/Yandex pages and any direct audio
 stream or Icecast URL. Timestamps (`&t=1m30s`) are kept.
 
-`:Kikru appcast` reads the currently playing item over MPRIS — the YouTube
-Music desktop app, a Chromium/Brave/Firefox tab, Spotify, VLC, mpv — and plays
+`:Kikru appcast` reads the currently playing item over MPRIS, the YouTube
+Music desktop app, a Chromium/Brave/Firefox tab, Spotify, VLC, mpv, and plays
 it here with the EQ and analyzer.
 
 Options: `kikru.cast = { port = 8722, token = nil, auto_start = false, ui = true }`.
@@ -626,6 +684,14 @@ is handed to Kikru (yt-dlp -> queue -> mpv), and play/pause/stop/seek and the
 progress bar are mirrored both ways. `--fallback mpv|ffplay|none` decides what
 happens when Kikru is not running.
 
+The receiver keeps a queue for the sender. `QUEUE_LOAD`, `QUEUE_INSERT`,
+`QUEUE_REMOVE`, `QUEUE_REORDER`, `QUEUE_UPDATE` (repeat mode, jump),
+`QUEUE_NEXT` and `QUEUE_PREV` edit it, and an item that finishes starts the
+next one. `REPEAT_ALL_AND_SHUFFLE` repeats in queue order (no shuffle).
+Commands for a session that is not loaded, or that name another session, get
+`INVALID_REQUEST`. Verified with mock tests only; a real phone run is still
+needed.
+
 Cast to a real device (sender):                                       ~
 >vim
   :Karu discover                    " mDNS browse
@@ -635,8 +701,14 @@ Cast to a real device (sender):                                       ~
   :Karu volume 70|+10|-10|mute|unmute [dev]
   :Karu status [dev]                " what the device plays right now
   :Karu probe <host[:port]>         " reachability + status
+  :Karu queue <url|query>...        " play several, in order
   :Karu info | help
 <
+`:Karu queue` plays the items one after another. An item ends when the receiver
+goes idle after playing. A failed item is reported and the queue goes on. A
+CANCELLED stop ends the queue. The CLI reads a list with `karu queue --file FILE`
+(one item per line, `#` comments allowed) and `--watch` on `karu discover`
+reports devices as they appear.
 `:Karu cast` resolves searches and YouTube links with `yt-dlp -g`, launches the
 Default Media Receiver (CC1AD845) on the device and sends `LOAD`. A device name,
 an id or `host[:port]` can be used; only the second positional (or `--device`)
@@ -732,7 +804,7 @@ skipped rather than half-parsed. The converter is also a standalone command:
     },
   })
 <
-Lua API: `require("kaeru.kikru.lyrics")` — `resolve(track, opts, cb)`,
+Lua API: `require("kaeru.kikru.lyrics")`, `resolve(track, opts, cb)`,
 `fetch_remote`, `search`, `providers()`, `parse_lrc`, `window`,
 `karaoke_state`, `save`, `cache_read`/`cache_write`.
 
@@ -748,7 +820,7 @@ Lua API: `require("kaeru.kikru.lyrics")` — `resolve(track, opts, cb)`,
   jobs         plenary.nvim (falls back to luv / vim.fn.system)
   themes       the active colorscheme selects the Kikru theme
   binaries     yt-dlp, mpv, ffplay, ffmpeg, vlc, mpc, playerctl, curl, gh, fzf,
-               node/deno/bun (Clina), ...
+               node/npm (Starsky), ...
 
 >lua
   require("telescope").load_extension("kaeru")
@@ -758,8 +830,226 @@ Lua API: `require("kaeru.kikru.lyrics")` — `resolve(track, opts, cb)`,
   require("kaeru.integrations").setup({ notify = true, scheme = true })
 <
 
-Lua API: `require("kaeru.integrations")` — `.pick(items, opts)`,
+Lua API: `require("kaeru.integrations")`, `.pick(items, opts)`,
 `.best_picker()`, `.statusline({width})`, `.lualine()`, `.job(args, opts, cb)`,
 `.with_progress(msg, fn)`, `.report()`, `.report_text()`, `.theme_for_colorscheme()`.
+
+==============================================================================
+22. STARSKY WEBCLIENT (SVELTEKIT)                            *kaeru-starsky*
+
+Starsky is the browser front end for kaeru.nvim: spec builder, parser, GitHub
+search, Mason and LSP explorer, SFTP studio, music, and a minimal code IDE on
+remote Neovim (open, save and `:` commands) with a NeoCodeium card. AI coding
+itself is done by the Neovim plugins (see |kaeru-ai|). It is a SvelteKit 3 app (Svelte 5, TypeScript,
+Vite 8) in the `starsky/` directory and is mobile-first: a bottom tab bar on
+phones, a top bar and two-column layout from 768px, and the three-column IDE from 1100px.
+
+COMMANDS                                                 *kaeru-starsky-commands*
+
+  :Kaeru starsky start     run `npm run dev -- --host 0.0.0.0 --port 5173`
+                           and open the browser (`:Kaeru! starsky start`
+                           does not open it)
+  :Kaeru starsky stop      stop the dev server
+  :Kaeru starsky open      open the URL in the system browser
+  :Kaeru starsky status    show the directory, framework, packages, and state
+  :Kaeru starsky build     run `npm run build` (Vite + adapter-node) into
+                           `starsky/build/`
+  :Kaeru starsky info      KIT splash: big pixel letters in a random color with
+                           an animated pixel 3 (q or <Esc> closes it)
+  :Kaeru web …             alias of :Kaeru starsky
+
+The first start needs packages: run `npm install` in `starsky/` once.
+
+PRODUCTION                                                 *kaeru-starsky-build*
+
+After `:Kaeru starsky build`, serve the production bundle with Node:
+
+  cd starsky && PORT=5173 HOST=0.0.0.0 node build
+
+CONFIGURATION                                         *kaeru-starsky-config*
+
+  starsky = {
+    host = "localhost",   -- host used in the browser URL
+    port = 5173,          -- Vite dev server port
+    dir  = nil,           -- nil = <repo>/starsky
+  },
+
+NEOVIM ACCESS                                              *kaeru-starsky-neovim*
+
+The API routes reach Neovim through the Node Neovim client (the `neovim`
+npm package). By default Starsky starts its own instance with
+`nvim --embed --headless -n -i NONE -u NONE` (Neovim 0.9 or newer, found on
+PATH). To use a Neovim you already run, start it with `nvim --listen <socket>`
+and export `STARSKY_NVIM_SOCKET=<socket>` before starting Starsky. Starsky
+then attaches to that session and never starts or stops it.
+
+The web IDE never serves `.git/`, `.env*`, `.npmrc`, `.netrc`, `.pypirc`, `id_*`
+keys or `*.pem`, `*.key`, `*.p12`, `*.pfx` files. They are hidden from the file
+list and refused on open, save, `:e` and read.
+
+The web terminal accepts only a fixed set of Ex commands (`help`, `w`, `e`,
+`ls`, `Kaeru save <repo>`, `Kaeru dir`, `Kikru play|pause|next|prev`). Anything
+else, such as shell escapes (`!id`), is refused.
+
+ICONS
+
+The icons are from Solar by 480 Design, licensed CC-BY-4.0
+(https://icon-sets.iconify.design/solar/). A generated subset is in
+`starsky/src/lib/client/solar.ts`; `npm run icons` regenerates it.
+
+==============================================================================
+23. WELCOME SCREEN AND STARSKY INFO                          *kaeru-welcome*
+
+WELCOME SCREEN
+
+When Neovim starts without file arguments, kaeru.nvim shows the ASCII logo
+(the same logo as `:Kaeru boot`) in a `nofile`, `nomodifiable` scratch buffer.
+`e` or `q` starts an empty buffer. It only appears when a UI is attached and
+the start buffer is untouched.
+
+>lua
+  require("kaeru").setup({ welcome = { enabled = false } }) -- default: true
+<
+
+STARSKY INFO                                                *:Kaeru-starsky-info*
+
+  :Kaeru starsky info      opens a floating window with the letters KIT drawn
+                           in pixels, in a random color, and an animated pixel
+                           3 beside them. The animation runs on a uv timer that
+                           stops when the window closes. `q` or `<Esc>` closes it.
+
+==============================================================================
+24. CVE LOOKUP                                                *kaeru-cve*
+
+  :Kaeru cve scan [dir]                  " every pinned package in dir (default: cwd)
+  :Kaeru cve check npm lodash 4.17.20    " one package version
+  :Kaeru cve check pip django
+
+Reads package-lock.json (npm), requirements.txt (pip, pinned == lines only),
+Cargo.lock (rust) and go.sum (go). Each package version is looked up in the
+GitHub Advisory Database, which links advisories to their CVE IDs. Withdrawn
+advisories are dropped.
+
+The GitHub API allows 60 unauthenticated requests per hour. A scan stops after
+`cve.max_queries` lookups (default 60) and says how many it skipped. Set
+$GITHUB_TOKEN (or `github.token`) to raise the limit.
+
+==============================================================================
+25. UPGRATOR (UPDATE PACKAGES)                           *kaeru-upgrade*
+
+  :Kaeru upgrade check                   " list outdated packages, changes nothing
+  :Kaeru upgrade apply                   " update within the version ranges (asks first)
+  :Kaeru upgrade apply latest            " npm only: move to the newest version
+
+Managers are found from the project's files: package.json (npm), requirements.txt
+or pyproject.toml (pip), Cargo.toml (cargo, needs cargo-outdated to check), go.mod
+(go), and lazy-lock.json (lazy.nvim, updated with :Lazy! update). A manager whose
+check fails is not updated. The output of every command goes to a log buffer.
+
+==============================================================================
+26. WINSO (EBOOK READER)                                      *kaeru-winso*
+
+  :Winso                                 " shelf: books you read, folders, settings
+  :Winso <path>                          " open a book
+  :Winso open | shelf | bookmarks | search <text> | info
+  :Winso ascii [name]                    " a picture as colored ASCII
+
+Formats: epub, fb2 (and .fb2.zip), docx, html, md, txt. Python 3 (standard
+library only) reads them. pdf needs `pdftotext` (poppler). mobi, azw and azw3
+need Calibre's `ebook-convert`. Not supported: DRM-protected books, djvu, cbz.
+
+The shelf (:Winso) lists books with a progress bar. Keys there:
+  <CR> open   a open a file   f browse folders   b bookmarks
+  s settings (theme, text width)   x forget a book   r refresh   q close
+
+Keys in the reader tab:
+  n / p      next / previous chapter       t   table of contents
+  /          search the whole book         b   add a bookmark
+  B          list bookmarks                + / -   wider / narrower text
+  T          next theme (night, paper, sepia)
+  i          book info                     S   shelf
+  ?          list these keys               q   close (progress is saved)
+
+Pictures: embedded images (EPUB, FB2) are extracted to stdpath("cache")/winso.
+A picture shows as a line such as `[image: 001-cover.png]`. On that line:
+  o          open the picture in the system viewer
+  v          view it as colored ASCII in a new tab (q closes it)
+  :Winso images | cover | ascii [name]   pick, open or view a picture
+The text reader stays text only. The ASCII view uses the xterm 256 colors.
+
+ASCII pictures are decoded by the standard library for 8-bit PNG and BMP.
+Other formats (JPEG, GIF, 16-bit PNG) need Pillow (pip install pillow) or
+ImageMagick's `convert`. Without either, `v` says which one is missing.
+
+Progress, bookmarks and settings are saved in stdpath("data")/winso/library.json.
+
+Termux (Android): install the tools with pkg (pkg install python poppler).
+Winso detects Termux through $TERMUX_VERSION and uses a narrower column. The
+reader opens in its own tab so it fills the screen.
+
+==============================================================================
+27. KERUOS (LAUNCHER)                                          *kaeru-keruos*
+
+  :KeruOS                                " open the launcher dashboard
+
+The dashboard is a small floating window with one number key per tool:
+
+  1  Kikru        music player and cast queue
+  2  Winso        ebook library and reader
+  3  Starsky      web IDE for the running Neovim
+  4  CVE          advisories for project dependencies
+  5  Upgrator     check outdated packages
+  6  Plugins      install and manage plugin specs
+  7  Receiver     Cast receiver status (running or off)
+
+Press the number to run the tool. <CR> runs the tool on the cursor line. q or
+<Esc> closes the dashboard. Windows narrower than 60 columns (phones, Termux)
+get a two-line layout for each tool, so it fits on a small screen.
+
+==============================================================================
+28. C CAST CLIENT (KAERU-CAST)                                  *kaeru-cast-c*
+
+A small C program sends links and transport commands to the Kikru cast server
+(`:Kikru cast server`, port 8722). It speaks HTTP over POSIX sockets, so the
+only requirement is a C compiler (gcc, clang or Termux clang). Source and
+tests are in tools/karu-c/.
+
+  make -C tools/karu-c                   " build tools/karu-c/kaeru-cast
+  kaeru-cast cast <url> [--mode play|queue|next]
+  kaeru-cast status                      " JSON state of the player
+  kaeru-cast play | pause | toggle | next | prev | stop
+  kaeru-cast volume <0-130>
+
+Global options come before the command: -H host, -p port (default 8722),
+-t token. The environment variables KAERU_CAST_HOST, KAERU_CAST_PORT and
+KAERU_CAST_TOKEN do the same. A token is needed only when the cast server is
+set up with one.
+
+Exit status: 0 on success, 1 on an HTTP error (for example 401 for a wrong
+token), 2 on a usage error, 3 when no server answers. A request that gets no
+reply within 15 seconds counts as "no server" and exits with status 3.
+
+A Go client is planned for later.
+
+==============================================================================
+29. PERFORMANCE                                          *kaeru-performance*
+
+Numbers below come from headless Neovim 0.11 in the development sandbox. Run
+the same checks on your own machine before you rely on them. CVE timings
+depend on the GitHub API.
+
+Startup. Loading the modules a session touches takes about 17 ms in total.
+kaeru.kikru is the largest, at about 8 ms with its dependencies. The plugin
+loads these modules lazily, so commands you never run cost nothing.
+
+Heavy work, measured before and after the change in commit ef8f53a:
+  CVE scan, 8 packages       4.5 s serial  ->  1.3 s with 4 lookups in flight
+                             (set cve.concurrency; the report is the same)
+  Winso wrap, 1.2 MB text    203 ms        ->  82 ms (wrap is per chapter)
+  JSON decode, 1.1 MB        about 60 ms   (unchanged; used for saved state)
+
+The CVE scan answers in report order, however the GitHub replies arrive.
+Set `cve.concurrency = 1` to get the old one-request-at-a-time behavior.
+
 
 vim:tw=78:ts=8:ft=help:norl:

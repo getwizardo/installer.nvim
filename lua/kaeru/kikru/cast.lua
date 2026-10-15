@@ -1,8 +1,8 @@
--- kaeru.nvim · Kikru — cast YouTube / YouTube Music (and friends) into Neovim.
+-- kaeru.nvim · Kikru: cast YouTube / YouTube Music (and friends) into Neovim.
 --
 -- The workflow this module implements is the one every music player has these
 -- days: you are watching something in the YouTube/YouTube Music app (or in a
--- browser tab) and you want it to keep playing — but through Kikru, with the
+-- browser tab) and you want it to keep playing, but through Kikru, with the
 -- 10-band EQ, the NodeLink filter chain and the spectrum analyzer on top.
 --
 -- Three ways in:
@@ -22,8 +22,8 @@
 --
 --   3. `:Kikru appcast` reads the *currently playing* item from any MPRIS
 --      player (the YouTube Music desktop app, a Chromium/Brave/Firefox tab,
---      Spotify, VLC, …) and continues it inside Kikru — this is the "cast the
---      app you already have open" path and needs no browser extension.
+--      Spotify, VLC, …) and continues it inside Kikru. This is the "cast the
+--      app you already have open" path, and it needs no browser extension.
 --
 -- Everything network-ish is optional: without yt-dlp the URLs are still
 -- classified, canonicalised and handed to the backend if it can play them.
@@ -127,7 +127,7 @@ function M.classify(url)
   }
   if not host then
     if raw:match("^%a[%w+.-]*:") and not raw:match("^%s") then
-      -- `mailto:`, `magnet:`, `ftp:` … — a scheme we cannot cast.
+      -- `mailto:`, `magnet:`, `ftp:` and similar are schemes we cannot cast.
       result.kind = "unknown"
       result.app = "unsupported"
       return result
@@ -618,7 +618,7 @@ function M.page()
   small { color:#5f7a70 }
 </style></head><body>
 <h1>▸ Kikru cast</h1>
-<small>Paste a YouTube / YouTube Music / SoundCloud link — it plays in Neovim (mpv + 10&nbsp;band EQ + FFT analyzer).</small>
+<small>Paste a YouTube / YouTube Music / SoundCloud link, it plays in Neovim (mpv + 10&nbsp;band EQ + FFT analyzer).</small>
 <form onsubmit="cast(event)">
   <input id="url" placeholder="https://music.youtube.com/watch?v=…" autofocus>
   <button>Cast</button>
@@ -651,6 +651,40 @@ setInterval(() => get('/status'), 4000);
 ]]
 end
 
+local STATUS_TEXT = {
+  [200] = "OK",
+  [204] = "No Content",
+  [400] = "Bad Request",
+  [401] = "Unauthorized",
+  [404] = "Not Found",
+  [415] = "Unsupported Media Type",
+  [500] = "Internal Server Error",
+}
+
+--- Write one HTTP/1.1 response and close the socket soon after.
+---@param client table  uv_tcp_t
+---@param cleanup fun()
+---@param status integer
+---@param content_type string
+---@param payload string
+local function respond(client, cleanup, status, content_type, payload)
+  local response = table.concat({
+    ("HTTP/1.1 %d %s"):format(status, STATUS_TEXT[status] or "OK"),
+    "Content-Type: " .. content_type,
+    "Content-Length: " .. tostring(#payload),
+    "Access-Control-Allow-Origin: *",
+    "Access-Control-Allow-Headers: content-type",
+    "Access-Control-Allow-Methods: GET, POST, OPTIONS",
+    "Connection: close",
+    "",
+    payload,
+  }, "\r\n")
+  pcall(function()
+    client:write(response)
+  end)
+  Compat.defer_fn(cleanup, 30)
+end
+
 --- Serve one connected socket: read the request head, dispatch, answer.
 ---@param client table  uv_tcp_t
 local function serve_client(client)
@@ -681,23 +715,15 @@ local function serve_client(client)
     if #body < content_length then
       return -- wait for the rest of the body
     end
-    local status, content_type, payload = M.handle_request(method or "GET", path or "/", body)
-    payload = payload or ""
-    local response = table.concat({
-      ("HTTP/1.1 %d %s"):format(status, status == 200 and "OK" or (status == 204 and "No Content" or (status == 400 and "Bad Request" or (status == 401 and "Unauthorized" or (status == 404 and "Not Found" or (status == 415 and "Unsupported Media Type" or "OK")))))),
-      "Content-Type: " .. content_type,
-      "Content-Length: " .. tostring(#payload),
-      "Access-Control-Allow-Origin: *",
-      "Access-Control-Allow-Headers: content-type",
-      "Access-Control-Allow-Methods: GET, POST, OPTIONS",
-      "Connection: close",
-      "",
-      payload,
-    }, "\r\n")
-    pcall(function()
-      client:write(response)
+    -- Routes touch the editor (notifications, playback), which is not allowed inside a
+    -- libuv callback. Run them on the main loop and always answer, even on error.
+    vim.schedule(function()
+      local ok, status, content_type, payload = pcall(M.handle_request, method or "GET", path or "/", body)
+      if not ok then
+        status, content_type, payload = 500, "application/json", vim.json.encode({ ok = false, error = tostring(status) })
+      end
+      respond(client, cleanup, status, content_type, payload or "")
     end)
-    Compat.defer_fn(cleanup, 30)
   end)
 end
 
@@ -782,7 +808,7 @@ function M.handler_script()
   local port = M.state.port or M.port()
   return table.concat({
     "#!/bin/sh",
-    "# kaeru.nvim · Kikru cast handler — forwards a kikru:// URL to the cast server.",
+    "# kaeru.nvim · Kikru cast handler, forwards a kikru:// URL to the cast server.",
     '# usage: kaeru-cast "kikru://cast?url=https://music.youtube.com/watch?v=…"',
     'url="$1"',
     'case "$url" in',
@@ -1038,7 +1064,7 @@ function M.play_tracks(tracks, mode, done, info)
   return done(true, ("casting %s"):format(label))
 end
 
---- `:Kikru cast <url|query>` — the friendly entry point.
+--- `:Kikru cast <url|query>`: the friendly entry point.
 ---@param url_or_query string
 ---@param opts? {mode?: string, cb?: fun(ok: boolean, message: string)}
 ---@return boolean started

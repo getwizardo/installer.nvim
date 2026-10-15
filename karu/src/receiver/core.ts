@@ -1,5 +1,5 @@
 /**
- * The Cast receiver state machine — sockets and TLS live in `server.ts`, so
+ * The Cast receiver state machine, sockets and TLS live in `server.ts`, so
  * everything here is a pure `handle()` call that can be unit-tested.
  *
  * Two endpoints are modelled, exactly like a real device:
@@ -23,7 +23,6 @@ import {
   connectionMessage,
   getStatus,
   heartbeat,
-  loadFailed,
   mediaStatus,
   messageType,
   parseJson,
@@ -34,7 +33,47 @@ import {
   type MediaInformation,
   type MediaStatusEntry,
 } from "../protocol/messages.ts";
+
+/** Commands that act on the loaded session, so they check `mediaSessionId`. */
+const TRANSPORT_COMMANDS = new Set(["PLAY", "PAUSE", "STOP", "SEEK", "SET_PLAYBACK_RATE", "EDIT_TRACKS_INFO"]);
+
+function numbersFrom(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((entry): entry is number => typeof entry === "number");
+}
+
+/** A queue entry from a media object plus the per-item options. Null when there is no content id. */
+function entryFrom(
+  raw: unknown,
+  options: { autoplay?: unknown; startTime?: unknown; activeTrackIds?: unknown; customData?: unknown }
+): QueueEntry | null {
+  if (!raw || typeof raw !== "object") return null;
+  const media = raw as MediaInformation;
+  if (typeof media.contentId !== "string" || media.contentId === "") return null;
+  const customData = options.customData && typeof options.customData === "object" ? (options.customData as Record<string, unknown>) : undefined;
+  return {
+    media,
+    autoplay: options.autoplay !== false,
+    startTime: typeof options.startTime === "number" && options.startTime >= 0 ? options.startTime : 0,
+    activeTrackIds: numbersFrom(options.activeTrackIds) ?? [],
+    ...(customData ? { customData } : {}),
+  };
+}
+
+/** Every item of a queue request, or undefined when one of them is malformed or the list is empty. */
+function entriesFrom(value: unknown): QueueEntry[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const entries: QueueEntry[] = [];
+  for (const raw of value) {
+    const item = raw as { media?: unknown; autoplay?: unknown; startTime?: unknown; activeTrackIds?: unknown; customData?: unknown } | null;
+    const entry = entryFrom(item?.media, item ?? {});
+    if (!entry) return undefined;
+    entries.push(entry);
+  }
+  return entries;
+}
 import { Reader, Writer, decodeString } from "../protocol/protobuf.ts";
+import { MediaQueue, isRepeatMode, type QueueEntry } from "./queue.ts";
 
 export const PLATFORM_ID = "receiver-0";
 /** supportedMediaCommands: pause|seek|volume|mute|skip-forward|skip-back|queue-* */
@@ -73,6 +112,9 @@ export interface MediaState {
   media?: MediaInformation;
   currentTime: number;
   volume: { level: number; muted: boolean };
+  currentItemId?: number;
+  playbackRate: number;
+  activeTrackIds: number[];
 }
 
 export interface PlayerBridge {
@@ -85,6 +127,10 @@ export interface PlayerBridge {
   /** Device-level volume changed by a sender. */
   onVolume?: (level: number, muted: boolean) => void;
   onStatusRequest?: () => void;
+  /** Playback rate changed by a sender (SET_PLAYBACK_RATE). */
+  onRate?: (rate: number) => void;
+  /** Active text/audio tracks changed by a sender (EDIT_TRACKS_INFO). */
+  onTracks?: (trackIds: number[]) => void;
 }
 
 export interface HandleResult {
@@ -118,10 +164,18 @@ export class ReceiverCore {
   private readonly senders = new Map<string, Sender>();
   private requestCounter = 0;
   private appRunning = false;
-  private mediaSessionCounter = 1;
+  private mediaSessionCounter = 0;
+  private readonly queue = new MediaQueue();
 
   volume = { level: 0.5, muted: false };
-  state: MediaState = { mediaSessionId: 0, playerState: "IDLE", currentTime: 0, volume: { level: 0.5, muted: false } };
+  state: MediaState = {
+    mediaSessionId: 0,
+    playerState: "IDLE",
+    currentTime: 0,
+    volume: { level: 0.5, muted: false },
+    playbackRate: 1,
+    activeTrackIds: [],
+  };
 
   constructor(options: ReceiverOptions) {
     this.config = {
@@ -234,7 +288,10 @@ export class ReceiverCore {
         if (typeof volume.muted === "boolean") this.volume.muted = volume.muted;
         this.state.volume = { ...this.volume };
         this.bridge.onVolume?.(this.volume.level, this.volume.muted);
-        return { text: this.statusTo(sourceId, requestId), binary: [] };
+        const status = this.statusTo(sourceId, requestId);
+        // Other senders see the new level too; the requester already has its reply.
+        const broadcast = this.statusTo("*", 0);
+        return { text: [...status, ...broadcast], binary: [] };
       }
       default:
         if (type !== "") this.log(`receiver: unknown message ${type}`);
@@ -244,63 +301,213 @@ export class ReceiverCore {
 
   private handleMedia(sender: Sender, sourceId: string, json: Json | null, type: string): HandleResult {
     const requestId = requestIdOf(json);
+    const reply = (payload: string): HandleResult => ({ text: [{ destinationId: sourceId, namespace: NS_MEDIA, payload }], binary: [] });
+    const invalid = (reason: string): HandleResult => reply(JSON.stringify({ type: "INVALID_REQUEST", requestId, reason }));
+    const changed = (): HandleResult => ({ text: this.broadcastMedia(requestId), binary: [] });
+
+    if (TRANSPORT_COMMANDS.has(type)) {
+      // A sender that names a session must name the current one. Without a loaded
+      // item there is no session to control.
+      if (!this.state.media) return invalid("INVALID_MEDIA_SESSION_ID");
+      if (json?.mediaSessionId !== undefined && json.mediaSessionId !== this.state.mediaSessionId) {
+        return invalid("INVALID_MEDIA_SESSION_ID");
+      }
+    }
+
     switch (type) {
       case "LOAD": {
-        const media = (json?.media ?? null) as MediaInformation | null;
-        if (!media || typeof media.contentId !== "string" || media.contentId === "") {
-          return { text: [], binary: [] };
-        }
-        const accepted = this.bridge.onLoad?.(media, {
-          autoplay: json?.autoplay !== false,
-          currentTime: typeof json?.currentTime === "number" ? json.currentTime : 0,
+        // LOAD replaces the whole queue with one item.
+        const entry = entryFrom(json?.media, {
+          autoplay: json?.autoplay,
+          startTime: json?.currentTime,
+          activeTrackIds: json?.activeTrackIds,
+          customData: json?.customData,
         });
-        if (accepted === false) {
-          return { text: [], binary: [this.loadFailedBinary(sourceId, requestId)] };
-        }
-        this.appRunning = true;
-        this.state = {
-          mediaSessionId: this.mediaSessionCounter,
-          playerState: "BUFFERING",
-          media,
-          currentTime: typeof json?.currentTime === "number" ? json.currentTime : 0,
-          volume: { ...this.volume },
-        };
-        this.log(`media: LOAD ${media.contentId}`);
-        return { text: this.mediaStatusTo(sourceId, requestId), binary: [] };
+        if (!entry) return { text: [], binary: [] };
+        this.queue.load([entry], 0);
+        return this.startCurrentFor(sourceId, requestId);
       }
+
+      case "QUEUE_LOAD": {
+        const entries = entriesFrom(json?.items);
+        if (!entries) return invalid("INVALID_PARAMS");
+        const startIndex = typeof json?.startIndex === "number" ? Math.floor(json.startIndex) : 0;
+        if (json?.repeatMode !== undefined && !isRepeatMode(json.repeatMode)) return invalid("INVALID_PARAMS");
+        const repeat = isRepeatMode(json?.repeatMode) ? json.repeatMode : this.queue.repeatMode;
+        this.queue.load(entries, startIndex, repeat);
+        const startTime = typeof json?.currentTime === "number" ? json.currentTime : undefined;
+        return this.startCurrentFor(sourceId, requestId, startTime);
+      }
+
+      case "QUEUE_INSERT": {
+        const entries = entriesFrom(json?.items);
+        if (!entries) return invalid("INVALID_PARAMS");
+        const before = typeof json?.insertBefore === "number" ? json.insertBefore : undefined;
+        this.queue.insert(entries, before);
+        return changed();
+      }
+
+      case "QUEUE_REMOVE": {
+        const ids = numbersFrom(json?.itemIds);
+        if (!ids || ids.length === 0) return invalid("INVALID_PARAMS");
+        const result = this.queue.remove(ids);
+        if (!result.currentRemoved) return changed();
+        if (this.queue.current()) return this.startCurrentFor(sourceId, requestId);
+        return this.stopFor(requestId);
+      }
+
+      case "QUEUE_REORDER": {
+        const ids = numbersFrom(json?.itemIds);
+        if (!ids || ids.length === 0) return invalid("INVALID_PARAMS");
+        const before = typeof json?.insertBefore === "number" ? json.insertBefore : undefined;
+        if (!this.queue.reorder(ids, before)) return invalid("INVALID_PARAMS");
+        return changed();
+      }
+
+      case "QUEUE_UPDATE": {
+        if (json?.repeatMode !== undefined) {
+          if (!isRepeatMode(json.repeatMode)) return invalid("INVALID_PARAMS");
+          this.queue.repeatMode = json.repeatMode;
+        }
+        const jump = typeof json?.jump === "number" ? Math.trunc(json.jump) : 0;
+        if (jump !== 0 && this.queue.current()) {
+          const index = Math.max(0, Math.min(this.queue.length - 1, this.queue.indexOf(this.queue.currentItemId!) + jump));
+          const target = this.queue.list()[index];
+          if (target) this.queue.jumpTo(target.itemId);
+          return this.startCurrentFor(sourceId, requestId);
+        }
+        return changed();
+      }
+
+      case "QUEUE_NEXT":
+      case "QUEUE_PREV": {
+        const target = type === "QUEUE_NEXT" ? this.queue.peekNext() : this.queue.peekPrev();
+        if (!target) return changed();
+        this.queue.jumpTo(target.itemId);
+        return this.startCurrentFor(sourceId, requestId);
+      }
+
+      case "QUEUE_GET_ITEM_IDS":
+        return reply(JSON.stringify({ type: "QUEUE_ITEM_IDS", requestId, itemIds: this.queue.ids() }));
+
+      case "QUEUE_GET_ITEMS": {
+        const wanted = numbersFrom(json?.itemIds);
+        const items = (wanted ? wanted.map((id) => this.queue.get(id)).filter((item) => item !== undefined) : this.queue.list()).map(
+          (item) => ({ itemId: item.itemId, media: item.media, autoplay: item.autoplay, startTime: item.startTime, activeTrackIds: item.activeTrackIds, customData: item.customData })
+        );
+        return reply(JSON.stringify({ type: "QUEUE_ITEMS", requestId, items }));
+      }
+
       case "PLAY":
         this.state.playerState = "PLAYING";
         this.state.idleReason = undefined;
         this.bridge.onPlay?.();
-        return { text: this.broadcastMedia(requestId), binary: [] };
+        return changed();
+
       case "PAUSE":
         this.state.playerState = "PAUSED";
         this.bridge.onPause?.();
-        return { text: this.broadcastMedia(requestId), binary: [] };
+        return changed();
+
       case "STOP":
-        this.state.playerState = "IDLE";
-        this.state.idleReason = "CANCELLED";
-        this.bridge.onStop?.();
-        return { text: this.broadcastMedia(requestId), binary: [] };
+        return this.stopFor(requestId);
+
       case "SEEK": {
         const relative = typeof json?.relativeTime === "number" ? (json.relativeTime as number) : undefined;
         const absolute = typeof json?.currentTime === "number" ? (json.currentTime as number) : undefined;
         const target = absolute ?? Math.max(0, this.state.currentTime + (relative ?? 0));
         this.state.currentTime = target;
+        // resumeState says whether playback continues after the seek.
+        if (json?.resumeState === "PLAY") {
+          this.state.playerState = "PLAYING";
+          this.state.idleReason = undefined;
+        } else if (json?.resumeState === "PAUSE") {
+          this.state.playerState = "PAUSED";
+        }
         this.bridge.onSeek?.(target);
-        return { text: this.broadcastMedia(requestId), binary: [] };
+        return changed();
       }
+
+      case "SET_PLAYBACK_RATE": {
+        const rate = json?.playbackRate;
+        if (typeof rate !== "number" || !(rate >= 0.25 && rate <= 4)) return invalid("INVALID_PARAMS");
+        this.state.playbackRate = rate;
+        this.bridge.onRate?.(rate);
+        return changed();
+      }
+
+      case "EDIT_TRACKS_INFO": {
+        const ids = numbersFrom(json?.activeTrackIds) ?? [];
+        this.state.activeTrackIds = ids;
+        this.bridge.onTracks?.(ids);
+        return changed();
+      }
+
       case "GET_STATUS":
       case "GET_MEDIA_STATUS":
         this.bridge.onStatusRequest?.();
         return { text: this.mediaStatusTo(sourceId, requestId), binary: [] };
-      default: {
-        const status = parseMediaStatus(json);
-        if (status) return { text: [], binary: [] };
-        this.log(`media: unknown message ${type} from ${sender.id}`);
+
+      case "PRECACHE":
+      case "USER_ACTION":
         return { text: [], binary: [] };
+
+      default: {
+        if (parseMediaStatus(json)) return { text: [], binary: [] };
+        this.log(`media: unsupported command ${type || "(none)"} from ${sender.id}`);
+        return invalid("INVALID_COMMAND");
       }
     }
+  }
+
+  /**
+   * Start the queue's current item and answer the sender. A refused item gets
+   * LOAD_FAILED addressed to the sender and no status broadcast, as before.
+   */
+  private startCurrentFor(sourceId: string, requestId: number, startTime?: number): HandleResult {
+    const item = this.queue.current();
+    if (!item) return this.stopFor(requestId);
+    if (!this.startCurrent(startTime)) {
+      return { text: [], binary: [this.loadFailedBinary(sourceId, requestId, item.itemId)] };
+    }
+    return { text: this.broadcastMedia(requestId), binary: [] };
+  }
+
+  /** Begin playback of the queue's current item. False when the bridge refuses it (state becomes IDLE/ERROR). */
+  private startCurrent(startTime?: number): boolean {
+    const item = this.queue.current();
+    if (!item) return false;
+    const currentTime = startTime ?? item.startTime;
+    const accepted = this.bridge.onLoad?.(item.media, { autoplay: item.autoplay, currentTime });
+    if (accepted === false) {
+      this.state = { ...this.state, playerState: "IDLE", idleReason: "ERROR", media: undefined, currentItemId: item.itemId };
+      this.log(`media: refused ${item.media.contentId}`);
+      return false;
+    }
+    this.appRunning = true;
+    this.state = {
+      mediaSessionId: this.nextSession(),
+      playerState: item.autoplay ? "BUFFERING" : "PAUSED",
+      media: item.media,
+      currentTime,
+      currentItemId: item.itemId,
+      volume: { ...this.volume },
+      playbackRate: this.state.playbackRate,
+      activeTrackIds: item.activeTrackIds,
+    };
+    this.log(`media: LOAD ${item.media.contentId}`);
+    return true;
+  }
+
+  private stopFor(requestId: number): HandleResult {
+    this.state = { ...this.state, playerState: "IDLE", idleReason: "CANCELLED" };
+    this.bridge.onStop?.();
+    return { text: this.broadcastMedia(requestId), binary: [] };
+  }
+
+  private nextSession(): number {
+    this.mediaSessionCounter += 1;
+    return this.mediaSessionCounter;
   }
 
   private handleDeviceAuth(sourceId: string, payloadType: number, payload: string | Uint8Array): HandleResult {
@@ -372,8 +579,13 @@ export class ReceiverCore {
       currentTime: this.state.currentTime,
       volume: { level: this.volume.level, muted: this.volume.muted },
       supportedMediaCommands: SUPPORTED_MEDIA_COMMANDS,
-      repeatMode: "REPEAT_OFF",
+      repeatMode: this.queue.repeatMode,
+      playbackRate: this.state.playbackRate,
+      activeTrackIds: this.state.activeTrackIds,
     };
+    if (this.state.currentItemId !== undefined) entry.currentItemId = this.state.currentItemId;
+    const next = this.queue.peekNext();
+    if (next && next.itemId !== this.state.currentItemId) entry.nextItemId = next.itemId;
     if (this.state.idleReason) entry.idleReason = this.state.idleReason;
     if (this.state.media) entry.media = this.state.media;
     return entry;
@@ -381,20 +593,25 @@ export class ReceiverCore {
 
   /** Called by the player bridge when the real playback state changes. */
   updateFromPlayer(update: Partial<MediaState>): OutgoingText[] {
-    if (update.playerState !== undefined) this.state.playerState = update.playerState;
-    if (update.currentTime !== undefined) this.state.currentTime = update.currentTime;
-    if (update.media !== undefined) this.state.media = update.media;
-    if (update.idleReason !== undefined) this.state.idleReason = update.idleReason;
-    if (this.state.mediaSessionId === 0) this.state.mediaSessionId = this.mediaSessionCounter;
+    const finished = update.playerState === "IDLE" && update.idleReason === "FINISHED";
+    const next = finished && this.queue.currentItemId !== undefined ? this.queue.peekNext() : undefined;
+    if (next) {
+      // The queue goes on by itself. A refused item leaves the state at IDLE/ERROR.
+      this.queue.jumpTo(next.itemId);
+      this.startCurrent();
+    } else {
+      if (update.playerState !== undefined) this.state.playerState = update.playerState;
+      if (update.currentTime !== undefined) this.state.currentTime = update.currentTime;
+      if (update.media !== undefined) this.state.media = update.media;
+      if (update.idleReason !== undefined) this.state.idleReason = update.idleReason;
+    }
+    if (this.state.mediaSessionId === 0) this.state.mediaSessionId = this.nextSession();
     return this.broadcastMedia();
   }
 
-  private loadFailedBinary(destinationId: string, requestId: number): OutgoingBinary {
-    return {
-      destinationId,
-      namespace: NS_MEDIA,
-      payload: new TextEncoder().encode(loadFailed(requestId, 103)),
-    };
+  private loadFailedBinary(destinationId: string, requestId: number, itemId?: number): OutgoingBinary {
+    const payload = JSON.stringify({ type: "LOAD_FAILED", requestId, itemId, detailedErrorCode: 103 });
+    return { destinationId, namespace: NS_MEDIA, payload: new TextEncoder().encode(payload) };
   }
 
   private sender(id: string): Sender {

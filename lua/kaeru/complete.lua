@@ -1,4 +1,4 @@
--- kaeru.nvim — autocomplete for everything the plugin exposes.
+-- kaeru.nvim: autocomplete for everything the plugin exposes.
 --
 --   1. `:` command-line completion (`:Kaeru <Tab>`, `:Kikru <Tab>`, …)
 --      * fuzzy, case- and separator-insensitive matching (`fole/laz` → `folke/lazy.nvim`)
@@ -273,12 +273,8 @@ M.command_specs = {
     desc = "kaeru.nvim: manage lazy.nvim plugins, Mason, SFTP, cache & the Starsky web client",
     usage = ":Kaeru <subcommand> [args]",
   },
-  Clina = {
-    desc = ":Clina — NeoCodeium (monkoose/neocodeium) inline completion & AI coding helpers",
-    usage = ":Clina <action> [args]",
-  },
   Kikru = {
-    desc = ":Kikru — Winamp-style player: 10-band EQ, NodeLink filters, radio & 2-Neovim sync",
+    desc = ":Kikru: Winamp-style player: 10-band EQ, NodeLink filters, radio & 2-Neovim sync",
     usage = ":Kikru <subcommand> [args]",
   },
 }
@@ -292,8 +288,7 @@ M.subcommands = {
   { word = "parse", menu = "parse a README / installer snippet", info = ":Kaeru parse [owner/repo|file]" },
   { word = "readme", menu = "alias of parse", info = ":Kaeru readme [owner/repo|file]" },
   { word = "dir", menu = "print the spec directory", info = ":Kaeru dir" },
-  { word = "ai", menu = "curated AI coding plugin presets", info = ":Kaeru ai [preset|ide]" },
-  { word = "clina", menu = "TypeScript AI coding helpers", info = ":Kaeru clina <action>" },
+  { word = "ai", menu = "curated AI coding plugin presets", info = ":Kaeru ai [preset]" },
   { word = "music", menu = "open the :Kikru", info = ":Kaeru music [action]" },
   { word = "karu", menu = "Google Cast (receive casts, cast to devices)", info = ":Kaeru karu <action>" },
   { word = "googlecast", menu = "alias of karu (Google Cast)" },
@@ -305,11 +300,14 @@ M.subcommands = {
   { word = "cache", menu = "plugin archive (zip / git bundle)", info = ":Kaeru cache <action>" },
   { word = "config", menu = "edit/reload kaeru.yaml", info = ":Kaeru config [edit|project|reload|show]" },
   { word = "mason", menu = "LSP/DAP/linter/formatter packages", info = ":Kaeru mason <action>" },
-  { word = "starsky", menu = "Next.js Starsky web client", info = ":Kaeru starsky [start|stop|open|status|build]" },
+  { word = "starsky", menu = "SvelteKit Starsky web client", info = ":Kaeru starsky [start|stop|open|status|build|info]" },
+  { word = "upgrade", menu = "update outdated packages in this project (npm, pip, cargo, go, lazy)", info = ":Kaeru upgrade [check|apply [latest]]" },
+  { word = "cve", menu = "known CVEs for the packages in this project", info = ":Kaeru cve [scan [dir]|check <npm|pip|rust|go> <name> [version]]" },
+  { word = "winso", menu = "ebook reader: library, bookmarks, search, pictures", info = ":Kaeru winso [library|open <file>|bookmarks|search <query>|images <file>|cover <file>|info <file>]" },
   { word = "web", menu = "alias of starsky", info = ":Kaeru web [action]" },
   { word = "pick", menu = "open a picker in telescope / fzf-lua / snacks / mini.pick", info = ":Kaeru pick [plugins|mason|sftp|cache|radio|queue|cast]" },
   { word = "integrations", menu = "what is installed and wired up", info = ":Kaeru integrations" },
-  { word = "complete", menu = "complete *anything* — pick from every candidate and run it", info = ":Kaeru complete [partial command line]" },
+  { word = "complete", menu = "complete *anything*, pick from every candidate and run it", info = ":Kaeru complete [partial command line]" },
 }
 
 M.mason_actions = {
@@ -367,57 +365,6 @@ M.sftp_actions = {
   { word = "version", menu = "remote sftp version" },
 }
 
-M.clina_actions = {
-  { word = "ide", menu = "open the Clina dashboard" },
-  { word = "neocodeium", menu = "NeoCodeium integration" },
-  { word = "install", menu = "write lua/plugins/neocodeium.lua" },
-  { word = "setup", menu = "bind the NeoCodeium keymaps" },
-  { word = "auth", menu = "run :NeoCodeium auth" },
-  { word = "toggle", menu = "toggle completion" },
-  { word = "enable", menu = "enable completion" },
-  { word = "disable", menu = "disable completion" },
-  { word = "enable_buffer", menu = "enable in this buffer" },
-  { word = "disable_buffer", menu = "disable in this buffer" },
-  { word = "toggle_buffer", menu = "toggle in this buffer" },
-  { word = "accept", menu = "accept the suggestion" },
-  { word = "accept_word", menu = "accept one word" },
-  { word = "accept_line", menu = "accept the current line" },
-  { word = "cycle", menu = "cycle suggestions" },
-  { word = "complete", menu = "manual completion" },
-  { word = "clear", menu = "clear the ghost text" },
-  { word = "chat", menu = "Windsurf chat in the browser" },
-  { word = "log", menu = "NeoCodeium log" },
-  { word = "restart", menu = "restart the language server" },
-  { word = "agent", menu = "agent mode" },
-  { word = "ask", menu = "ask a question" },
-  { word = "edit", menu = "edit with AI" },
-  { word = "spec", menu = "generate a lazy.nvim spec" },
-  { word = "apply", menu = "apply a diff" },
-  { word = "diff", menu = "show the pending diff" },
-  { word = "mcp", menu = "MCP tool servers" },
-  { word = "login", menu = "sign in to GitHub (same token as :Kaeru login)" },
-  { word = "logout", menu = "forget the GitHub token" },
-  { word = "whoami", menu = "show the signed-in GitHub account" },
-  { word = "refactor", menu = "AI refactor of the selection" },
-  { word = "model", menu = "choose the model for the current provider" },
-  { word = "plugins", menu = "AI coding plugin presets" },
-  { word = "open_log", menu = "open the NeoCodeium log" },
-  { word = "save", menu = "write the spec without installing" },
-  { word = "provider", menu = "choose a provider" },
-  { word = "status", menu = "session status" },
-  { word = "web", menu = "open the Starsky web client" },
-}
-
-M.clina_providers = {
-  { word = "neocodeium", menu = "monkoose/neocodeium (Windsurf)" },
-  { word = "anthropic", menu = "Claude API" },
-  { word = "openai", menu = "OpenAI API" },
-  { word = "gemini", menu = "Google Gemini" },
-  { word = "deepseek", menu = "DeepSeek" },
-  { word = "ollama", menu = "local Ollama" },
-  { word = "clina-ts", menu = "Starsky TypeScript bridge" },
-}
-
 M.cache_actions = {
   { word = "pack", menu = "archive a plugin (zip / git bundle)" },
   { word = "restore", menu = "restore a plugin from the cache" },
@@ -436,11 +383,12 @@ M.config_actions = {
 }
 
 M.starsky_actions = {
-  { word = "start", menu = "run the Next.js dev server" },
+  { word = "start", menu = "run the Vite dev server (npm run dev)" },
   { word = "stop", menu = "stop the dev server" },
   { word = "open", menu = "open the web client" },
   { word = "status", menu = "server status" },
   { word = "build", menu = "production build" },
+  { word = "info", menu = "KIT splash with an animated pixel 3" },
 }
 
 -- :Kikru -------------------------------------------------------------------
@@ -469,6 +417,7 @@ M.karu_actions = {
   { word = "discover", menu = "list Cast devices on the network", info = ":Karu discover [host:port]" },
   { word = "devices", menu = "alias of discover" },
   { word = "cast", menu = "cast a URL or search to a device", info = ":Karu cast <url|query> [device]" },
+  { word = "queue", menu = "play several URLs or searches in order", info = ":Karu queue <url|query>... (waits for each to finish)" },
   { word = "play", menu = "resume on the device" },
   { word = "pause", menu = "pause on the device" },
   { word = "toggle", menu = "play/pause" },
@@ -478,7 +427,7 @@ M.karu_actions = {
   { word = "volume", menu = "device volume", info = ":Karu volume <0-100|+10|-10|mute|unmute> [device]" },
   { word = "status", menu = "what the device is playing" },
   { word = "probe", menu = "reachability test", info = ":Karu probe <host[:port]>" },
-  { word = "receive", menu = "be a Cast device — casts land in Kikru", info = ":Karu receive [--name N] [--port P] [--no-mdns]" },
+  { word = "receive", menu = "be a Cast device, casts land in Kikru", info = ":Karu receive [--name N] [--port P] [--no-mdns]" },
   { word = "off", menu = "stop the receiver" },
   { word = "bridge", menu = "receiver + Kikru bridge status" },
   { word = "info", menu = "protocol/environment report" },
@@ -535,6 +484,7 @@ M.kikru_actions = {
   { word = "pause", menu = "pause" },
   { word = "toggle", menu = "toggle playback" },
   { word = "stop", menu = "stop playback" },
+  { word = "send", menu = "send playback to a Cast device (Karu)", info = ":Kikru send [device|off|stop|status|devices]" },
   { word = "next", menu = "next track" },
   { word = "prev", menu = "previous track" },
   { word = "volume", menu = "set the volume 0-130", info = ":Kikru volume 65" },
@@ -568,6 +518,8 @@ M.kikru_actions = {
   { word = "connect", menu = "connect as a 2-Neovim client", info = ":Kikru connect 127.0.0.1:41999" },
   { word = "disconnect", menu = "leave the 2-Neovim session" },
   { word = "devices", menu = "list paired Neovim devices" },
+  { word = "send", menu = "send playback to a Cast device (Karu)", info = ":Kikru send [device|off|stop|status|devices]" },
+  { word = "receive", menu = "be a Cast device; casts land in Kikru (Karu receiver)", info = ":Kikru receive [start|stop|status]" },
   { word = "handoff", menu = "route the audio output to a device" },
   { word = "daemon", menu = "local IPC daemon", info = ":Kikru daemon start|stop|status" },
   { word = "ipc", menu = "send a command to the daemon", info = ":Kikru ipc play" },
@@ -904,7 +856,7 @@ end
 
 --- Candidates straight out of Neovim (`getcompletion`), so our popup can offer
 --- files, buffers, options, events, colorschemes, help tags, … exactly like
---- `:e <Tab>` does — but fuzzy ranked and described.
+--- `:e <Tab>` does: but fuzzy ranked and described.
 ---@param category string
 ---@param base string
 ---@return KaeruCompletionItem[]
@@ -990,10 +942,10 @@ function M.everything(prefix)
       items[#items + 1] = item
     end
   end
-  for _, name in ipairs({ "Kaeru", "Kikru", "Karu", "Clina" }) do
+  for _, name in ipairs({ "Kaeru", "Kikru", "Karu" }) do
     push({ word = name, menu = "[" .. name .. "] command" })
   end
-  for _, name in ipairs({ "Kaeru", "Kikru", "Karu", "Clina" }) do
+  for _, name in ipairs({ "Kaeru", "Kikru", "Karu" }) do
     for _, item in ipairs(M.rank(M.resolve_for(name, { name, "" }), "")) do
       push({ word = name .. " " .. item.word, menu = item.menu, kind = item.kind })
     end
@@ -1073,7 +1025,7 @@ function M.detect_command(line)
   if command == "" then
     return nil
   end
-  local names = { "Kaeru", "Clina", "Kikru", "Karu" }
+  local names = { "Kaeru", "Kikru", "Karu" }
   for _, name in ipairs(names) do
     if command == name then
       return name
@@ -1171,15 +1123,9 @@ local function resolve_kaeru(tokens)
       return M.karu_devices()
     end
     return M.karu_devices()
-  elseif sub == "clina" then
-    if argc <= 3 then
-      return M.clina_actions
-    end
   elseif sub == "ai" then
     if argc <= 3 then
-      local items = M.ai_preset_items()
-      items[#items + 1] = { word = "ide", menu = "open the :Clina IDE" }
-      return items
+      return M.ai_preset_items()
     end
   elseif sub == "login" and argc <= 3 then
     return { { word = "gh", menu = "use the GitHub CLI token" }, { word = "token", menu = "paste a personal access token" }, { word = "device", menu = "browser device flow" } }
@@ -1253,7 +1199,7 @@ local function resolve_kaeru(tokens)
   elseif sub == "integrations" then
     return {}
   elseif sub == "complete" then
-    -- `:Kaeru complete <partial command line>` — complete the partial line.
+    -- `:Kaeru complete <partial command line>`: complete the partial line.
     local partial = table.concat(Compat.list_slice(tokens, 3), " ")
     return M.everything(partial)
   elseif sub == "config" and argc <= 3 then
@@ -1390,23 +1336,6 @@ local function resolve_kikru(tokens)
   return none()
 end
 
---- Resolve candidate items for `:Clina`.
----@param tokens string[]
----@return (string|KaeruCompletionItem)[]
-local function resolve_clina(tokens)
-  local argc = #tokens
-  if argc <= 2 then
-    return M.clina_actions
-  end
-  local action = (tokens[2] or ""):lower()
-  if action == "provider" or action == "model" then
-    return M.clina_providers
-  elseif action == "spec" or action == "agent" or action == "ask" then
-    return {}
-  end
-  return none()
-end
-
 -- Public completion API ----------------------------------------------------------------
 
 --- Rich completion items for a whole `:` command line (used by the user
@@ -1452,7 +1381,7 @@ function M.complete_items(cmdline, cursorpos)
   elseif name == "Karu" then
     candidates = M.resolve_karu(tokens)
   else
-    candidates = resolve_clina(tokens)
+    candidates = {}
   end
 
   -- Live GitHub search for repository arguments (results are cached for 5 min).
@@ -1480,7 +1409,7 @@ function M.resolve_karu(tokens)
   local argc = #tokens -- tokens[1] = command, tokens[#tokens] = arglead
   local sub = tokens[2]
   if sub == nil or sub == "" or (argc == 2 and previous(tokens) == nil) then
-    -- `:Karu <Tab>` — offer the actions plus the devices found last time.
+    -- `:Karu <Tab>`: offer the actions plus the devices found last time.
     local items = {}
     vim.list_extend(items, M.karu_actions)
     vim.list_extend(items, M.karu_devices())
@@ -1502,19 +1431,6 @@ end
 ---@param cursorpos? integer
 ---@return string[]
 function M.cmdline(arglead, cmdline, cursorpos)
-  local _ = arglead
-  local words = {}
-  for _, item in ipairs(M.complete_items(cmdline, cursorpos)) do
-    words[#words + 1] = item.word
-  end
-  return words
-end
-
----@param arglead string
----@param cmdline string
----@param cursorpos? integer
----@return string[]
-function M.clina_cmdline(arglead, cmdline, cursorpos)
   local _ = arglead
   local words = {}
   for _, item in ipairs(M.complete_items(cmdline, cursorpos)) do
@@ -1978,7 +1894,7 @@ end
 
 --- Resolve candidates for one of our commands by name (used by
 --- `M.everything` / `:Kaeru complete`).
----@param name string  "Kaeru" | "Kikru" | "Clina"
+---@param name string  "Kaeru" | "Kikru" | "Karu"
 ---@param tokens string[]
 ---@return (string|KaeruCompletionItem)[]
 function M.resolve_for(name, tokens)
@@ -1987,7 +1903,7 @@ function M.resolve_for(name, tokens)
   elseif name == "Kikru" then
     return resolve_kikru(tokens)
   end
-  return resolve_clina(tokens)
+  return {}
 end
 
 

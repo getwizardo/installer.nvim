@@ -1,4 +1,4 @@
--- kaeru.nvim · :Kikru — terminal visualizer.
+-- kaeru.nvim · :Kikru: terminal visualizer.
 --
 -- Rendering is a pure function of (mode, size, analysis frame) so it can be
 -- unit-tested and reused by the web client. Analysis frames come from

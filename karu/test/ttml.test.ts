@@ -1,5 +1,5 @@
 /**
- * TTML parser tests — the fixtures mirror the real profiles: Apple Music
+ * TTML parser tests, the fixtures mirror the real profiles: Apple Music
  * (`itunes:timing`, agents, translations, transliterations, `x-bg`), the
  * AMLL/QQ dialect (`amll:meta`, inline `x-translation` spans) and YouTube's
  * legacy `<timedtext format="3">`.

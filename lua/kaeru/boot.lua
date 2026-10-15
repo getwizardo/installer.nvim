@@ -1,4 +1,4 @@
--- ASCII Boot Animation for kaeru.nvim & Starsky (`:Kaeru boot`)
+-- ASCII boot animation for kaeru.nvim (`:Kaeru boot`)
 local UI = require("kaeru.ui")
 
 local M = {}
@@ -14,54 +14,57 @@ M.ascii_logo = {
   " |_____/   |_/_/    \\_\\_|  \\_\\_____/|_|\\_\\   |_|    |_| \\_|   \\/   |_____|_|  |_|",
 }
 
+-- Steps are user-facing feature names only: no paths, module names, hosts or
+-- library versions. The sequence is cosmetic; it does not probe anything.
 M.boot_steps = {
-  { id = "spec", label = "Initializing lazy.nvim Spec Builder & Validator", detail = "lua/plugins/*.lua [OK]" },
-  { id = "github", label = "Connecting GitHub Live Autocomplete API", detail = "api.github.com [READY]" },
-  { id = "mason", label = "Mounting https://mason-registry.dev Catalog", detail = "601 pkgs / 296 LSPs [MOUNTED]" },
-  { id = "clina", label = "Binding :Clina -> NeoCodeium (monkoose/neocodeium)", detail = "Ghost-Text + Windsurf [BOUND]" },
-  { id = "music", label = "Starting :Kikru 10-Band EQ & 2-Nvim RPC", detail = "Server<->Client TCP [ONLINE]" },
-  { id = "sftp", label = "Loading Dual-Pane SFTP Studio & SSH Workers", detail = "Batch SFTP [READY]" },
-  { id = "web", label = "Booting Starsky Web Code IDE (Web Components + Vaul)", detail = "Next.js 16 TS [READY]" },
+  { id = "specs", label = "Plugin specs" },
+  { id = "search", label = "Repository search" },
+  { id = "servers", label = "Language servers" },
+  { id = "ai", label = "AI presets" },
+  { id = "music", label = "Music player" },
+  { id = "files", label = "Remote files" },
+  { id = "web", label = "Web IDE" },
 }
 
---- Render a single frame `step_idx` (1..#M.boot_steps + 2) of the ASCII boot sequence.
+--- Render a single frame `step_idx` (1..#M.boot_steps + 1) of the ASCII boot sequence.
+--- Steps before `step_idx` are done, `step_idx` is running, the rest are pending.
 ---@param step_idx integer
 ---@param width? integer
 ---@return string[]
 function M.render_frame(step_idx, width)
   width = width or 88
   local total = #M.boot_steps
-  local progress = math.min(1.0, math.max(0.0, step_idx / total))
-  local bar_width = 54
-  local filled = math.floor(progress * bar_width)
-  local bar = string.rep("█", filled) .. string.rep("░", bar_width - filled)
-  local pct = math.floor(progress * 100)
+  local done = math.min(total, math.max(0, step_idx - 1))
+  local pct = math.floor(done / total * 100)
+  local bar_width = 40
+  local filled = math.floor(pct / 100 * bar_width)
+  local bar = string.rep("#", filled) .. string.rep(".", bar_width - filled)
 
   local lines = { "" }
   for _, l in ipairs(M.ascii_logo) do
     lines[#lines + 1] = "  " .. l
   end
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "    ★  KAERU.NVIM · STARSKY OS · NEOCODEIUM · MASON-REGISTRY.DEV · KIKRU  ★"
-  lines[#lines + 1] = "  " .. string.rep("─", width - 4)
-  lines[#lines + 1] = string.format("    BOOT PROGRESS [%s] %3d%%", bar, pct)
+  lines[#lines + 1] = "  kaeru.nvim"
+  lines[#lines + 1] = "  " .. string.rep("-", math.max(10, width - 4))
+  lines[#lines + 1] = string.format("  [%s] %3d%%", bar, pct)
   lines[#lines + 1] = ""
 
   for i, step in ipairs(M.boot_steps) do
+    local mark = "    "
     if i < step_idx then
-      lines[#lines + 1] = string.format("    [✓] %-50s %s", step.label, step.detail)
+      mark = "ok  "
     elseif i == step_idx then
-      lines[#lines + 1] = string.format("    [⟳] %-50s ...", step.label)
-    else
-      lines[#lines + 1] = string.format("    [·] %-50s", step.label)
+      mark = "... "
     end
+    lines[#lines + 1] = string.format("  %s%s", mark, step.label)
   end
 
   lines[#lines + 1] = ""
   if step_idx > total then
-    lines[#lines + 1] = "    ⚡ SYSTEM ONLINE — Press <CR> for :Kaeru, `c` for :Clina, `m` for :Kikru, `q` to close"
+    lines[#lines + 1] = "  Ready. <CR> plugin manager, m music, q close."
   else
-    lines[#lines + 1] = "    Booting subsystems… (press any key to skip)"
+    lines[#lines + 1] = "  q, <Esc> or <Space> skips."
   end
   return lines
 end
@@ -71,9 +74,9 @@ end
 function M.play(opts)
   opts = opts or {}
   local width = 90
-  local height = #M.ascii_logo + #M.boot_steps + 9
+  local height = #M.render_frame(#M.boot_steps + 1, width)
   local buf, win = UI.open({
-    title = " kaeru.nvim · ASCII Boot Sequence ",
+    title = " kaeru.nvim ",
     width = width,
     height = height,
     filetype = "kaeru-boot",
@@ -121,10 +124,6 @@ function M.play(opts)
   UI.map(buf, "<CR>", function()
     close_boot()
     require("kaeru").open()
-  end)
-  UI.map(buf, "c", function()
-    close_boot()
-    require("kaeru.clina").ide()
   end)
   UI.map(buf, "m", function()
     close_boot()

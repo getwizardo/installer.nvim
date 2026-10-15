@@ -78,6 +78,10 @@ export interface MediaStatusEntry {
   volume?: { level: number; muted: boolean };
   supportedMediaCommands?: number;
   repeatMode?: string;
+  currentItemId?: number;
+  nextItemId?: number;
+  playbackRate?: number;
+  activeTrackIds?: number[];
 }
 
 export interface MediaStatusPayload {
@@ -190,7 +194,7 @@ export function receiverStatusPayload(requestId: number, status: ReceiverStatus)
 }
 
 // ---------------------------------------------------------------------------
-// parsers (never throw — a malformed payload is ignored, like the real impls)
+// parsers (never throw: a malformed payload is ignored, like the real impls)
 // ---------------------------------------------------------------------------
 
 export function parseJson(text: string | undefined): Json | null {

@@ -1,5 +1,5 @@
 /**
- * DNS packet codec (the subset mDNS needs) — pure, no sockets, so it is fully
+ * DNS packet codec (the subset mDNS needs), pure, no sockets, so it is fully
  * unit-testable. Handles name compression pointers in both the question and
  * the RDATA sections, which real Cast devices do use.
  */

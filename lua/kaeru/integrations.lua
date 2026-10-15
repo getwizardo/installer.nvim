@@ -1,4 +1,4 @@
--- kaeru.nvim — integrations with the rest of the Neovim ecosystem.
+-- kaeru.nvim: integrations with the rest of the Neovim ecosystem.
 --
 -- kaeru.nvim stays dependency-free: every module here degrades gracefully, so
 -- the plugin works with nothing but Neovim itself and then *uses* whatever it
@@ -12,7 +12,7 @@
 --   jobs         plenary.nvim · luv · vim.fn.system
 --   themes       the active colorscheme picks the Kikru UI theme
 --   binaries     yt-dlp · mpv · ffmpeg/ffplay · vlc · mpc · playerctl · curl ·
---                gh · fzf · deno/bun/node (Clina's TypeScript engine) · …
+--                gh · fzf · deno/bun/node · …
 --
 -- `:Kaeru integrations` prints what was detected, `:Kaeru pick …` opens a
 -- picker in whatever plugin you actually use.
@@ -248,7 +248,7 @@ end
 
 -- Statusline ------------------------------------------------------------------------
 
---- Compact "▶ track — artist" or the queue summary, for any statusline.
+--- Compact "▶ track: artist" or the queue summary, for any statusline.
 ---@param opts? {width?: integer, icon?: boolean}
 ---@return string
 function M.statusline(opts)
@@ -259,7 +259,7 @@ function M.statusline(opts)
   end
   local icon = opts.icon == false and "" or (kikru.state.playing and not kikru.state.paused and "▶ " or "⏸ ")
   local track = kikru.visible_track and kikru.visible_track() or kikru.current_track()
-  local label = track and require("kaeru.kikru.tags").label(track) or "—"
+  local label = track and require("kaeru.kikru.tags").label(track) or "none"
   local width = opts.width or 40
   if #label > width then
     label = label:sub(1, width - 1) .. "…"
@@ -503,7 +503,7 @@ function M.report_text()
   local lines = { ":Kaeru integrations" }
   lines[#lines + 1] = ("  picker      %s (config ui.picker)"):format(report.active.picker)
   lines[#lines + 1] = ("  engine      %s"):format(report.active.engine)
-  lines[#lines + 1] = ("  theme       %s  (colorscheme: %s)"):format(report.active.theme, report.active.colorscheme ~= "" and report.active.colorscheme or "—")
+  lines[#lines + 1] = ("  theme       %s  (colorscheme: %s)"):format(report.active.theme, report.active.colorscheme ~= "" and report.active.colorscheme or "none")
   local plugin_names = Compat.tbl_keys(report.plugins)
   table.sort(plugin_names)
   local plugin_bits = {}

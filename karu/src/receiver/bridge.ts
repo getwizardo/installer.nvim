@@ -2,7 +2,7 @@
  * The bridge between an incoming Cast session and the local player.
  *
  * Cast receivers can only hand playback to something local, so Karu forwards
- * everything to **Kikru** — the same HTTP cast server the `kikru://` URL
+ * everything to **Kikru**, the same HTTP cast server the `kikru://` URL
  * handler and the appcast flow already use (`:Kikru cast server`, default
  * `http://127.0.0.1:8722`). If that server is not running, Karu can fall back
  * to launching mpv/ffplay directly so a cast is never silently dropped.
@@ -127,7 +127,7 @@ export class PlayerBridgeImpl implements PlayerBridge {
   /** Last-resort local playback when Kikru is not reachable. */
   private fallbackPlay(url: string): void {
     if (this.fallback === "none") {
-      this.log("bridge: Kikru unreachable and no fallback player configured — cast dropped");
+      this.log("bridge: Kikru unreachable and no fallback player configured, cast dropped");
       return;
     }
     this.killFallback();

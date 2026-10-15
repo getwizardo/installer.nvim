@@ -2,7 +2,7 @@
 # Karu launcher.
 #
 #   dist/src/cli.js   a compiled build (`npm run build`)
-#   src/cli.ts        the TypeScript sources, run directly — Node >= 22.6
+#   src/cli.ts        the TypeScript sources, run directly: Node >= 22.6
 #                     strips types natively, so no build step is required
 set -e
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

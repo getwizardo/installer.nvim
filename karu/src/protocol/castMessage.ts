@@ -28,7 +28,7 @@ export const NS_DEVICE_AUTH = "urn:x-cast:com.google.cast.tp.deviceauth";
 export const NS_MEDIA = "urn:x-cast:com.google.cast.media";
 export const NS_SETUP = "urn:x-cast:com.google.cast.tp.setup";
 
-/** The Google "Default Media Receiver" app id — every sender knows it. */
+/** The Google "Default Media Receiver" app id, every sender knows it. */
 export const APP_DEFAULT_MEDIA_RECEIVER = "CC1AD845";
 
 export interface CastMessage {
@@ -87,7 +87,7 @@ export function decodeCastMessage(buf: Uint8Array): CastMessage {
         msg.payloadBinary = field.data!.slice();
         break;
       default:
-        // Unknown field — `Reader.next()` already consumed it.
+        // Unknown field: `Reader.next()` already consumed it.
         break;
     }
   }
@@ -111,7 +111,7 @@ export interface FrameParser {
 }
 
 /**
- * Incremental frame parser — TCP gives no message boundaries, so we buffer
+ * Incremental frame parser. TCP gives no message boundaries, so we buffer
  * until a whole frame is available. Frames larger than `maxFrame` (1 MiB, the
  * sanity limit real receivers use) are rejected instead of buffered forever.
  */
@@ -146,7 +146,7 @@ export function createFrameParser(maxFrame = 1 << 20): FrameParser {
   };
 }
 
-/** JSON payload helpers — every non-binary Cast message body is JSON. */
+/** JSON payload helpers, every non-binary Cast message body is JSON. */
 export function jsonPayload(msg: CastMessage): Record<string, unknown> | null {
   if (msg.payloadType !== PAYLOAD_STRING || !msg.payloadUtf8) return null;
   try {

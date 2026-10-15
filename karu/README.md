@@ -1,4 +1,4 @@
-# Karu — Google Cast, in TypeScript
+# Karu: Google Cast, in TypeScript
 
 Karu is the Cast component of **kaeru.nvim**: it speaks the protocol Google's
 Chromecast devices use (CASTV2 over TLS on port 8009, advertised over mDNS as
@@ -24,11 +24,11 @@ Chromecast devices use (CASTV2 over TLS on port 8009, advertised over mDNS as
    └────────────────────────────────┘        └───────────────┘
 ```
 
-**Sender** — `karu discover`, `karu cast`, `karu control`, `karu seek`,
+**Sender**: `karu discover`, `karu cast`, `karu control`, `karu seek`,
 `karu volume`, `karu status`: find real Cast devices on the LAN and drive them
 (launch the Default Media Receiver, load a media URL, transport control).
 
-**Receiver** — `karu receive`: appear in the Cast device list of the YouTube /
+**Receiver**: `karu receive`: appear in the Cast device list of the YouTube /
 YouTube Music / Chrome / iOS apps and play what they hand over. Every `LOAD`
 is bridged into [Kikru](../lua/kaeru/kikru), the Lua player, so casts land in
 the Neovim queue with the EQ, the analyzer and the rest of the player. When
@@ -79,33 +79,57 @@ karu: bridge → Kikru http://127.0.0.1:8722/cast
 
 ## Protocol notes
 
-* **Framing** — every message is `uint32 big-endian length` followed by a
+* **Framing**, every message is `uint32 big-endian length` followed by a
   protobuf `CastMessage`; the receiver refuses frames larger than 1 MiB.
-* **`CastMessage`** — `protocol_version=CASTV2_1_0`, `source_id`,
+* **`CastMessage`**, `protocol_version=CASTV2_1_0`, `source_id`,
   `destination_id`, `namespace`, `payload_type=STRING`, `payload_utf8`.
   The platform endpoint is `receiver-0`; senders call themselves `sender-<n>`.
-* **Namespaces** — `urn:x-cast:com.google.cast.tp.connection` (CONNECT/CLOSE),
+* **Namespaces**, `urn:x-cast:com.google.cast.tp.connection` (CONNECT/CLOSE),
   `…tp.heartbeat` (PING/PONG), `…receiver` (GET_STATUS, LAUNCH, STOP,
-  SET_VOLUME), `…media` (LOAD, PLAY, PAUSE, STOP, SEEK, GET_STATUS),
-  `…tp.deviceauth` (AuthMessage — challenge/response).
-* **Launching** — `LAUNCH` with `appId: CC1AD845` (Default Media Receiver)
+  SET_VOLUME), `…media` (LOAD, PLAY, PAUSE, STOP, SEEK, GET_STATUS,
+  SET_PLAYBACK_RATE, EDIT_TRACKS_INFO, and the queue commands below),
+  `…tp.deviceauth` (AuthMessage, challenge/response).
+* **Launching**, `LAUNCH` with `appId: CC1AD845` (Default Media Receiver)
   returns a `transportId`; the sender has to open a *second* logical channel by
   sending `CONNECT` addressed to that transport before talking media.
-* **Media** — `LOAD { media: { contentId, contentType, streamType, metadata },
+* **Media**, `LOAD { media: { contentId, contentType, streamType, metadata },
   autoplay }` answers `MEDIA_STATUS` and the receiver broadcasts new
   `MEDIA_STATUS` frames on every state change (`BUFFERING`, `PLAYING`,
   `PAUSED`, `IDLE` + `idleReason`). `supportedMediaCommands` is the bitmask
   `1|2|4|8|16|32|64|128` (pause, seek, volume…), which is what makes the
   scrub bar in the phone app light up.
-* **mDNS** — a query for `_googlecast._tcp.local` PTR; answers carry PTR +
+* **Queue**, `QUEUE_LOAD { items, startIndex, repeatMode }` replaces the
+  queue; `QUEUE_INSERT`, `QUEUE_REMOVE`, `QUEUE_REORDER`, `QUEUE_UPDATE`
+  (`repeatMode`, relative `jump`), `QUEUE_NEXT`, `QUEUE_PREV`,
+  `QUEUE_GET_ITEM_IDS` and `QUEUE_GET_ITEMS` edit it. `LOAD` replaces the
+  queue with one item. When an item finishes (`IDLE` + `FINISHED`) the receiver
+  starts the next one by itself. `REPEAT_OFF` stops after the last item,
+  `REPEAT_ALL` wraps, `REPEAT_SINGLE` replays the item. `REPEAT_ALL_AND_SHUFFLE`
+  behaves like `REPEAT_ALL`: shuffle order is not implemented, so the queue
+  plays in order. Status reports `currentItemId`, `nextItemId`, `repeatMode`,
+  `playbackRate` and `activeTrackIds`.
+* **Sessions and errors**, a transport command (`PLAY`, `PAUSE`, `STOP`,
+  `SEEK`, `SET_PLAYBACK_RATE`, `EDIT_TRACKS_INFO`) is refused with
+  `{"type":"INVALID_REQUEST","requestId","reason":"INVALID_MEDIA_SESSION_ID"}`
+  when nothing is loaded or when it names a `mediaSessionId` other than the
+  current one. A command the receiver does not know gets
+  `reason: "INVALID_COMMAND"`; a malformed queue or rate request gets
+  `"INVALID_PARAMS"`. These reason strings are Karu's own choice, not taken from
+  a device. A refused `LOAD` or queue item answers `LOAD_FAILED` (code 103) with
+  the item id, and the state goes to `IDLE` with `idleReason: "ERROR"`.
+* **Broadcasts**, state changes from `STOP` and `SET_VOLUME` go to every
+  connected sender, not only the one that asked, so each phone sees the same
+  volume. The requesting sender gets its own reply as well, so it can receive
+  the same status twice; senders match replies by `requestId`.
+* **mDNS**, a query for `_googlecast._tcp.local` PTR; answers carry PTR +
   SRV (port 8009) + TXT + A records. TXT keys: `id` (12 hex), `fn` (friendly
   name), `md` (model), `ca` (2800), `ic`, `ve`, `st`, `rs`.
-* **TLS** — CASTV2 runs inside TLS. Real devices present a Google-issued
+* **TLS**. CASTV2 runs inside TLS. Real devices present a Google-issued
   certificate; a receiver *we* implement generates a self-signed ECDSA P-256
   certificate (`src/net/cert.ts`, written with no dependencies and verified in
   tests with `crypto.X509Certificate`) and accepts any client certificate
   (`VerifyClientCertIfGiven`).
-* **Device auth** — the sender sends a 32-byte challenge; the receiver answers
+* **Device auth**, the sender sends a 32-byte challenge; the receiver answers
   with `AuthResponse { signature, client_auth_certificate, client_ca }` where
   the signature is ECDSA-SHA256 over the challenge with the advertised
   certificate's key. Official senders only *require* this for protected
@@ -124,10 +148,12 @@ and the mDNS service definition used by Chrome
 ```
 karu info                                     protocol + environment report
 karu version                                  version
-karu discover [--timeout MS] [--address HOST[:PORT]]
+karu discover [--timeout MS] [--address HOST[:PORT]] [--watch [--interval MS]]
 karu probe HOST[:PORT]                        reachability + status of one device
 karu cast <url|query> [DEVICE] [--device NAME|ID|ADDRESS|INDEX]
           [--autoplay false] [--title T] [--content-type AUDIO|VIDEO] [--json]
+karu queue <url|query|path>... [--file FILE] [--device ...] [--poll MS]
+          plays each item after the previous one ends (failures are skipped)
 karu control play|pause|toggle|stop|quit [DEVICE]
 karu seek <seconds> [DEVICE]
 karu volume <0-100|+N|-N|mute|unmute|toggle> [DEVICE]
@@ -142,7 +168,7 @@ karu lyrics FILE|- [--format lrc|ttml|srt|vtt|json|plain|summary] [--lang CODE]
 `DEVICE` is a device name, id, or `host[:port]`; only the *second positional*
 or `--device` is ever treated as a device, so a URL is never mistaken for one.
 `--json` (also honoured by `cast`, `status`, `receive`) prints one JSON object
-per line — that is what the Neovim side consumes.
+per line, that is what the Neovim side consumes.
 
 Environment: `KARU_DEVICES` (extra `host[:port]` candidates, comma separated)
 and `KIKRU_CAST_URL` (where the receiver hands media over, default
@@ -155,9 +181,9 @@ line per event (`cast`, `play`, `pause`, `stop`, `seek`, `volume`) and finally
 
 ## Lyrics
 
-`karu lyrics` converts between the lyric formats. It exists because TTML —
+`karu lyrics` converts between the lyric formats. It exists because TTML, 
 what Apple Music, QQ Music and NetEase serve, and what the AMLL project
-archives — carries per-syllable timing, duet agents, background vocals and
+archives, carries per-syllable timing, duet agents, background vocals and
 translation/transliteration tracks that LRC cannot express; Kikru's karaoke
 renderer speaks enhanced LRC, so the conversion happens here, once, in
 TypeScript.
@@ -178,18 +204,18 @@ $ karu lyrics song.ttml --format vtt --translations            # WebVTT + transl
 
 What the parser understands:
 
-* **Apple Music** — `itunes:timing="Word" | "Line" | "None"`, `<p begin end
+* **Apple Music**, `itunes:timing="Word" | "Line" | "None"`, `<p begin end
   itunes:key ttm:agent itunes:songPart>`, word `<span>`s, `<br/>`,
   `<iTunesMetadata>` with `<translations>` (`<text for="L1">`), `<songwriters>`,
   `<audio lyricOffset>`, `<transliterations>`, `ttm:role="x-bg"` (and inline
   `x-translation` spans found in the wild).
-* **AMLL / QQ / NetEase** — the same shape plus `amll:meta` (repeated keys
+* **AMLL / QQ / NetEase**, the same shape plus `amll:meta` (repeated keys
   collect into arrays) and syllable-level spans that have to be re-joined
   (`lit` + `tle`).
-* **YouTube timedtext** — `<timedtext format="3">`, milliseconds `t`/`d`, `<s>`
+* **YouTube timedtext**, `<timedtext format="3">`, milliseconds `t`/`d`, `<s>`
   spans with *relative* `t` offsets.
 * Time syntax: `1:23.456`, `0:01:23.456`, `83.456`, `83s`, `1.5m`, `2h`,
-  `120ms`, `300f`, `12t` — all rounded to milliseconds.
+  `120ms`, `300f`, `12t`, all rounded to milliseconds.
 * `parse(toTtml(doc))` is equivalent to `doc` for lines, words, agents,
   translations and transliterations (asserted by the test-suite against real
   corpus files from `amll-ttml-db` and DAW-export Apple fixtures).
@@ -206,6 +232,7 @@ plus `translationByLine` back into `lua/kaeru/kikru/lyrics.lua`.
 ```vim
 :Karu                      " status of the first device
 :Karu discover             " who is on the network
+:Karu queue <url|query>...  " play several, one after another
 :Karu cast <url|query> [dev]
 :Karu play | pause | toggle | quit | next | prev [dev]
 :Karu seek <seconds> [dev]
@@ -264,5 +291,11 @@ round-trips, and the `karu lyrics` CLI itself as a child process).
 * The receiver signs device-auth challenges with its own self-signed
   certificate, not a Google-issued one, so DRM/protected content will not play.
 * IPv4 mDNS is implemented (AAAA records are parsed but not advertised).
+* The queue and the media commands are covered by in-process mock tests
+  (`receiver_queue.test.ts`, `receiver_media.test.ts`). The basic session is
+  also tested over real TLS in `integration.test.ts`. No real phone or TV has
+  been used to check these, so sender compatibility is not yet verified.
+* `QUEUE_GET_ITEM_RANGE` is not implemented. It gets `INVALID_COMMAND`.
+* Shuffle is not implemented (see the queue notes above).
 
 MIT, same as kaeru.nvim.

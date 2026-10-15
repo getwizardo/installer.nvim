@@ -1,0 +1,485 @@
+/*
+ * Starsky for Neovim: mobile-first theme.
+ *
+ * Base styles target a 360px phone. Larger layouts are added with min-width
+ * media queries only, so nothing ever has to be "un-done" for small screens.
+ */
+:root {
+	--bg: #070a12;
+	--panel: #0d1424;
+	--panel-2: #121b30;
+	--border: #26314d;
+	--text: #e6edf7;
+	--muted: #8b98b5;
+	--accent: #7aa2ff;
+	--green: #3fb950;
+	--red: #ff6b6b;
+	--amber: #e3b341;
+	--radius: 12px;
+	--tap: 44px;
+	color-scheme: dark;
+	font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	-webkit-text-size-adjust: 100%;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	min-height: 100%;
+}
+
+body {
+	/* room for the fixed bottom tab bar + iPhone home indicator */
+	padding-bottom: calc(68px + env(safe-area-inset-bottom));
+}
+
+h1,
+h2,
+h3 {
+	line-height: 1.2;
+	margin: 0 0 0.5rem;
+}
+
+h2 {
+	font-size: 1.05rem;
+}
+
+h3 {
+	font-size: 0.95rem;
+}
+
+code,
+pre,
+textarea,
+.mono {
+	font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+a {
+	color: var(--accent);
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+
+/* 16px inputs stop iOS Safari from zooming on focus */
+input,
+select,
+textarea {
+	font-size: 16px;
+	width: 100%;
+	min-width: 0;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 0.6rem 0.75rem;
+	min-height: var(--tap);
+}
+
+textarea {
+	min-height: 8rem;
+	resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+button {
+	min-height: var(--tap);
+	min-width: var(--tap);
+	padding: 0.5rem 0.9rem;
+	border-radius: 10px;
+	border: 1px solid var(--border);
+	background: var(--panel-2);
+	cursor: pointer;
+	touch-action: manipulation;
+}
+
+button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+button.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: #06101f;
+	font-weight: 700;
+}
+
+button.success {
+	background: rgba(63, 185, 80, 0.16);
+	border-color: rgba(63, 185, 80, 0.5);
+	color: var(--green);
+}
+
+button.danger {
+	background: rgba(255, 107, 107, 0.12);
+	border-color: rgba(255, 107, 107, 0.5);
+	color: var(--red);
+}
+
+button.ghost {
+	background: transparent;
+}
+
+button.chip[aria-pressed='true'] {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+.row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+}
+
+.stack {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.muted {
+	color: var(--muted);
+}
+
+.small {
+	font-size: 0.8rem;
+}
+
+.card {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.85rem;
+	min-width: 0;
+}
+
+.card-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 0.5rem;
+	margin-bottom: 0.6rem;
+}
+
+.badge {
+	display: inline-block;
+	font-size: 0.72rem;
+	padding: 0.15rem 0.5rem;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.badge.ok {
+	color: var(--green);
+	border-color: rgba(63, 185, 80, 0.5);
+}
+
+.badge.warn {
+	color: var(--amber);
+	border-color: rgba(227, 179, 65, 0.5);
+}
+
+.badge.err {
+	color: var(--red);
+	border-color: rgba(255, 107, 107, 0.5);
+}
+
+.banner {
+	padding: 0.5rem 0.7rem;
+	border-radius: 10px;
+	font-size: 0.85rem;
+	background: rgba(122, 162, 255, 0.1);
+	border: 1px solid rgba(122, 162, 255, 0.35);
+	overflow-wrap: anywhere;
+}
+
+.banner.ok {
+	background: rgba(63, 185, 80, 0.12);
+	border-color: rgba(63, 185, 80, 0.45);
+	color: var(--green);
+}
+
+.banner.err {
+	background: rgba(255, 107, 107, 0.1);
+	border-color: rgba(255, 107, 107, 0.45);
+	color: var(--red);
+}
+
+pre.code {
+	margin: 0;
+	padding: 0.7rem;
+	background: #05080f;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	overflow: auto;
+	max-height: 60vh;
+	font-size: 0.8rem;
+	line-height: 1.45;
+	white-space: pre;
+}
+
+.list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 0.35rem;
+}
+
+.list-item {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	width: 100%;
+	min-height: var(--tap);
+	text-align: left;
+	background: transparent;
+	border: 1px solid transparent;
+	padding: 0.4rem 0.55rem;
+	border-radius: 10px;
+}
+
+.list-item:hover,
+.list-item.active {
+	background: var(--panel-2);
+	border-color: var(--border);
+}
+
+.list-item .name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.field {
+	display: grid;
+	gap: 0.3rem;
+}
+
+.field > span {
+	font-size: 0.8rem;
+	color: var(--muted);
+}
+
+.field small {
+	color: var(--muted);
+	font-size: 0.75rem;
+}
+
+/* ---- app shell -------------------------------------------------------- */
+
+.topbar {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	padding: calc(0.6rem + env(safe-area-inset-top)) 0.9rem 0.6rem;
+	background: rgba(7, 10, 18, 0.92);
+	backdrop-filter: blur(8px);
+	border-bottom: 1px solid var(--border);
+}
+
+.brand {
+	font-weight: 800;
+	letter-spacing: 0.02em;
+	font-size: 1rem;
+}
+
+.brand small {
+	display: block;
+	font-weight: 500;
+	color: var(--muted);
+	font-size: 0.7rem;
+}
+
+.stage {
+	padding: 0.75rem;
+	display: grid;
+	gap: 0.75rem;
+}
+
+/* panels lay their cards out with .split (2 cols) or .ide (3 cols) */
+.split {
+	display: grid;
+	gap: 0.75rem;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.ide {
+	display: grid;
+	gap: 0.75rem;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+/* bottom tab bar on phones: horizontally scrollable, thumb reachable */
+.tabbar {
+	position: fixed;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 20;
+	display: flex;
+	gap: 0.25rem;
+	padding: 0.35rem 0.4rem calc(0.35rem + env(safe-area-inset-bottom));
+	background: rgba(13, 20, 36, 0.96);
+	border-top: 1px solid var(--border);
+	overflow-x: auto;
+	scroll-snap-type: x proximity;
+	-webkit-overflow-scrolling: touch;
+}
+
+.tabbar button {
+	flex: 0 0 auto;
+	display: grid;
+	justify-items: center;
+	gap: 0.1rem;
+	min-width: 64px;
+	padding: 0.3rem 0.5rem;
+	border: 0;
+	background: transparent;
+	font-size: 0.7rem;
+	color: var(--muted);
+	scroll-snap-align: center;
+}
+
+.tabbar button .ico {
+	font-size: 1.15rem;
+	line-height: 1;
+}
+
+.tabbar button[aria-current='page'] {
+	color: var(--accent);
+	background: var(--panel-2);
+}
+
+/* ---- responsive: tablet and up ---------------------------------------- */
+
+@media (min-width: 768px) {
+	body {
+		padding-bottom: 0;
+	}
+
+	.stage {
+		padding: 1rem 1.25rem 2rem;
+		max-width: 1280px;
+		margin: 0 auto;
+	}
+
+	.split {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		align-items: start;
+	}
+
+	.split > .wide {
+		grid-column: 1 / -1;
+	}
+
+	/* top navigation replaces the bottom bar on tablets and desktops */
+	.tabbar {
+		position: sticky;
+		top: 0;
+		bottom: auto;
+		justify-content: center;
+		border-top: 0;
+		border-bottom: 1px solid var(--border);
+		padding: 0.4rem 0.75rem;
+	}
+
+	.tabbar button {
+		flex-direction: row;
+		gap: 0.4rem;
+		font-size: 0.85rem;
+		padding: 0.4rem 0.8rem;
+		align-items: center;
+	}
+}
+
+/* ---- wide desktop: the IDE gets sidebar | editor | assistant ----------- */
+
+@media (min-width: 1100px) {
+	.ide {
+		grid-template-columns: 240px minmax(0, 1fr) 320px;
+		align-items: start;
+	}
+
+	.ide > .wide {
+		grid-column: auto;
+	}
+
+	.ide > .span-2 {
+		grid-column: span 2;
+	}
+}
+
+/* file explorer: a collapsible drawer on phones, always open on desktop */
+.explorer {
+	display: none;
+	margin-top: 0.5rem;
+	max-height: 320px;
+	overflow: auto;
+}
+
+.explorer.open {
+	display: grid;
+}
+
+@media (min-width: 1100px) {
+	.explorer {
+		display: grid;
+		max-height: none;
+	}
+}
+
+/* chips: toggle buttons for filters, presets and suggestions */
+.chip {
+	border-radius: 999px;
+	padding: 0.3rem 0.75rem;
+	min-height: 36px;
+	font-size: 0.85rem;
+}
+
+.chip.small {
+	min-height: 36px;
+	font-size: 0.8rem;
+}
+
+.chip[aria-pressed='true'] {
+	border-color: var(--accent);
+	color: var(--accent);
+	background: rgba(122, 162, 255, 0.12);
+}
+
+.keymaps li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+}

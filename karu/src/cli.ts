@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Karu CLI — the surface Neovim talks to.
+ * Karu CLI, the surface Neovim talks to.
  *
  * Every command prints either human text or, with `--json`, exactly one JSON
  * object per line (`{"event":"ready",…}` for long-running mode), so
@@ -13,6 +13,8 @@ import { CAST_PORT, CastReceiverServer, defaultCertDir } from "./receiver/server
 import { deviceIdFrom, hostName, primaryAddress } from "./net/mdns.ts";
 import { PlayerBridgeImpl } from "./receiver/bridge.ts";
 import { CastClient } from "./sender/client.ts";
+import { runQueue, type QueueItem } from "./sender/queue.ts";
+import { watchDevices } from "./sender/watch.ts";
 import { discover, looksLikeAddress, parseAddress, probeAddress, selectDevice, type DiscoveredDevice } from "./sender/discovery.ts";
 import { APP_ID } from "./protocol/messages.ts";
 import { convert, detect } from "./lyrics/index.ts";
@@ -109,7 +111,7 @@ function emitter(json: boolean): Emitter {
   };
 }
 
-const HELP = `karu ${VERSION} — Google Cast for Neovim (Kikru)
+const HELP = `karu ${VERSION}. Google Cast for Neovim (Kikru)
 
   karu receive [--name NAME] [--port 8009] [--no-mdns] [--bridge URL]
                [--token T] [--fallback mpv|ffplay|none] [--cert-dir DIR]
@@ -118,6 +120,13 @@ const HELP = `karu ${VERSION} — Google Cast for Neovim (Kikru)
 
   karu discover [--timeout MS] [--address HOST[:PORT]] [--json]
       Find Cast devices over mDNS (plus the addresses you pass).
+  karu discover --watch [--interval MS] [--address HOST[:PORT]] [--json]
+      Keep scanning and report devices as they appear (device_found) and go away (device_lost).
+
+  karu queue <url|query|path>... [--file FILE] [--device ...] [--poll MS] [--json]
+      Play the items one after another. An item ends when the receiver goes idle
+      after playing. A failed item is reported and the queue goes on. A cancelled
+      item stops the queue. --file reads one item per line (blank lines and # comments are skipped).
 
   karu probe HOST[:PORT] [--json]
       Reachability test: TLS + GET_STATUS.
@@ -135,10 +144,18 @@ const HELP = `karu ${VERSION} — Google Cast for Neovim (Kikru)
   karu lyrics FILE|- [--format lrc|ttml|srt|vtt|json|plain|summary] [--lang CODE]
                      [--offset MS] [--out FILE] [--json]
       Parse Apple Music / AMLL (QQ, NetEase) / YouTube TTML and convert it.
-      Default output is enhanced LRC — the format Kikru's karaoke renderer
-      understands — so \`karu lyrics song.ttml > song.lrc\` is a whole pipeline.
+      Default output is enhanced LRC, the format Kikru's karaoke renderer
+      understands, so \`karu lyrics song.ttml > song.lrc\` is a whole pipeline.
 
 Flags: --json machine-readable output (one object per line).`;
+
+/** One item per line; blank lines and `#` comments are skipped. */
+function readQueueFile(path: string): string[] {
+  return readFileSync(path, "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+}
 
 /** Read all of stdin (a pipe may be non-blocking, so `readFileSync(0)` is not enough). */
 async function readStdin(): Promise<string> {
@@ -153,7 +170,7 @@ async function resolveMediaTarget(target: string, log: (message: string) => void
   // Not a URL: hand it to yt-dlp (the same resolver Kikru uses) to get a stream.
   const ytdlp = await resolveWithYtDlp(target, log);
   if (ytdlp) return { url: ytdlp };
-  throw new Error("not a URL and yt-dlp is unavailable — pass a direct media URL");
+  throw new Error("not a URL and yt-dlp is unavailable, pass a direct media URL");
 }
 
 function resolveWithYtDlp(query: string, log: (message: string) => void): Promise<string | null> {
@@ -214,7 +231,7 @@ async function withDevice<T>(
   if (!device) {
     throw new Error(
       devices.length === 0
-        ? "no Cast devices found — pass --address HOST[:PORT] or check the network"
+        ? "no Cast devices found, pass --address HOST[:PORT] or check the network"
         : `no device matches “${wanted}” (found: ${devices.map((entry) => entry.name).join(", ")})`
     );
   }
@@ -384,9 +401,51 @@ async function main(): Promise<void> {
       return;
     }
 
+    case "queue": {
+      const sources = [...args.positionals];
+      const file = flagString(args, "file");
+      if (file) sources.push(...readQueueFile(file));
+      if (sources.length === 0) return out.error("queue needs URLs, paths or search queries, or --file FILE");
+      const items: QueueItem[] = sources.map((source) => ({ source }));
+      const log = (message: string) => out.line(`# ${message}`);
+      const { device, result } = await withDevice(args, undefined, async (client) => {
+        await client.launch();
+        return runQueue(
+          items,
+          {
+            async load(item) {
+              const resolved = await resolveMediaTarget(item.source, log);
+              return client.loadMedia({ url: resolved.url, ...(resolved.title ? { title: resolved.title } : {}), autoplay: true });
+            },
+            status: () => client.refreshMediaStatus(),
+            sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
+            now: () => Date.now(),
+            onEvent: (event) => out.out({ ok: !("error" in event), ...event }),
+          },
+          { pollMs: flagNumber(args, "poll") ?? 2000, startTimeoutMs: 20_000 }
+        );
+      });
+      out.out({ ok: result.failed === 0, device: deviceSummary(device), ...result });
+      return;
+    }
+
     case "discover":
     case "devices":
     case "ls": {
+      if (flagBool(args, "watch")) {
+        await watchDevices<DiscoveredDevice>(
+          {
+            scan: () => discover({ timeoutMs: flagNumber(args, "timeout") ?? 3000, addresses: collectAddresses(args), log: () => {} }),
+            key: (device) => `${device.address}:${device.port}`,
+            onAppear: (device) => out.out({ ok: true, event: "device_found", device: deviceSummary(device) }),
+            onDisappear: (device) => out.out({ ok: true, event: "device_lost", device: deviceSummary(device) }),
+            onError: (message) => out.out({ ok: false, event: "scan_failed", error: message }),
+            sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
+          },
+          { intervalMs: flagNumber(args, "interval") ?? 5000 }
+        );
+        return;
+      }
       const devices = await discover({
         timeoutMs: flagNumber(args, "timeout") ?? 3000,
         addresses: collectAddresses(args),
@@ -399,7 +458,7 @@ async function main(): Promise<void> {
       } else {
         devices.forEach((device, index) => {
           const volume = device.status ? ` · ${Math.round((device.status.volume ?? 0) * 100)}%` : "";
-          out.line(`${index + 1}. ${device.name} — ${device.address}:${device.port} (${device.model}${volume})`);
+          out.line(`${index + 1}. ${device.name}, ${device.address}:${device.port} (${device.model}${volume})`);
         });
       }
       return;
@@ -497,7 +556,7 @@ async function main(): Promise<void> {
     }
 
     case "status": {
-      // `karu status [DEVICE]` — the device is the *first* positional here.
+      // `karu status [DEVICE]`: the device is the *first* positional here.
       const { device, result } = await withDevice(args, args.positionals[0], async (client) => {
         const status = await client.getStatus();
         await client.launch();
@@ -515,7 +574,7 @@ async function main(): Promise<void> {
     }
 
     default:
-      out.error(`unknown command “${args.command}” — try: karu help`);
+      out.error(`unknown command “${args.command}”, try: karu help`);
   }
 }
 

@@ -1,6 +1,6 @@
 /**
  * CLI tests: the launcher, argument parsing, and one full flow with real child
- * processes — `karu receive` (a Cast device) + `karu cast`/`control` (a sender)
+ * processes, `karu receive` (a Cast device) + `karu cast`/`control` (a sender)
  * + a stub Kikru cast server that records what the receiver bridged.
  */
 import { test } from "node:test";

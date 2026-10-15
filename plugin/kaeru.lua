@@ -3,6 +3,9 @@ if vim.g.loaded_kaeru_nvim then
 end
 vim.g.loaded_kaeru_nvim = true
 
+-- ASCII welcome screen on startup (see `welcome` in setup()).
+require("kaeru.welcome").attach()
+
 if vim.fn.has("nvim-0.8") ~= 1 then
   vim.notify("kaeru.nvim requires Neovim >= 0.8", vim.log.levels.ERROR)
   return
@@ -79,8 +82,6 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
         end)
       end,
     })
-  elseif sub == "clina" then
-    require("kaeru.clina").dispatch(Compat.list_slice(args, 2), nil, cmd.bang)
   elseif sub == "music" or sub == "kikru" or sub == "player" then
     require("kaeru.kikru").dispatch(Compat.list_slice(args, 2))
     return
@@ -100,9 +101,7 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
     vim.notify("Spec files are written to " .. kaeru.plugins_dir(), vim.log.levels.INFO, { title = "kaeru.nvim" })
   elseif sub == "ai" then
     local ai = require("kaeru.ai")
-    if args[2] == "ide" or args[2] == "clina" then
-      return require("kaeru.clina").dispatch(Compat.list_slice(args, 3))
-    elseif args[2] then
+    if args[2] then
       local preset = ai.get(args[2])
       if not preset then
         return vim.notify("Unknown AI preset: " .. args[2], vim.log.levels.ERROR, { title = "kaeru.nvim" })
@@ -289,6 +288,12 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
     else
       vim.notify("Unknown config action: " .. action .. "\nUse: " .. table.concat(config_actions, ", "), vim.log.levels.ERROR, { title = "kaeru.nvim" })
     end
+  elseif sub == "cve" then
+    require("kaeru.cve").command({ unpack(args, 2) })
+  elseif sub == "upgrade" or sub == "upgrator" then
+    require("kaeru.upgrator").command({ unpack(args, 2) })
+  elseif sub == "winso" or sub == "ebook" then
+    require("kaeru.winso").command({ unpack(args, 2) })
   elseif sub == "starsky" or sub == "web" then
     local starsky = require("kaeru.starsky")
     local action = args[2] or "start"
@@ -302,6 +307,8 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
       starsky.status()
     elseif action == "build" then
       starsky.build()
+    elseif action == "info" then
+      starsky.info()
     else
       vim.notify("Unknown starsky action: " .. action .. "\nUse: " .. table.concat(starsky_actions, ", "), vim.log.levels.ERROR, { title = "kaeru.nvim" })
     end
@@ -334,27 +341,6 @@ end, {
   end,
 })
 
-vim.api.nvim_create_user_command("Clina", function(cmd)
-  local kaeru = require("kaeru")
-  kaeru.ensure_setup()
-  local range_text = nil
-  if cmd.range and cmd.range > 0 then
-    local ok, lines = pcall(vim.api.nvim_buf_get_lines, 0, cmd.line1 - 1, cmd.line2, false)
-    if ok and lines then
-      range_text = table.concat(lines, "\n")
-    end
-  end
-  require("kaeru.clina").dispatch(cmd.fargs, range_text, cmd.bang)
-end, {
-  nargs = "*",
-  bang = true,
-  range = true,
-  desc = ":Clina — NeoCodeium AI Coding IDE integration for Neovim",
-  complete = function(_, cmdline, cursorpos)
-    return complete(cmdline, cursorpos)
-  end,
-})
-
 vim.api.nvim_create_user_command("Kikru", function(cmd)
   local kaeru = require("kaeru")
   kaeru.ensure_setup()
@@ -367,7 +353,7 @@ vim.api.nvim_create_user_command("Kikru", function(cmd)
 end, {
   nargs = "*",
   bang = true,
-  desc = ":Kikru — Built-in Kikru Player with 10-band EQ, Visualizer, Radio & 2-Neovim Device Controller",
+  desc = ":Kikru: Built-in Kikru Player with 10-band EQ, Visualizer, Radio & 2-Neovim Device Controller",
   complete = function(_, cmdline, cursorpos)
     return complete(cmdline, cursorpos)
   end,
@@ -403,3 +389,26 @@ vim.schedule(function()
     require("kaeru.complete").setup_cmdline()
   end)
 end)
+
+vim.api.nvim_create_user_command("Winso", function(cmd)
+  require("kaeru.winso").command(cmd.fargs)
+end, {
+  nargs = "*",
+  complete = function(arglead, cmdline)
+    local parts = vim.split(cmdline, "%s+", { trimempty = true })
+    if #parts <= 2 and not cmdline:match("%s$") or #parts <= 1 then
+      return vim.tbl_filter(function(word)
+        return word:find(arglead, 1, true) == 1
+      end, { "open", "library", "bookmarks", "search", "images", "cover", "info" })
+    end
+    return vim.fn.getcompletion(arglead, "file")
+  end,
+  desc = "Winso: read eBooks (epub, fb2, pdf, mobi, txt, md, docx, html)",
+})
+
+vim.api.nvim_create_user_command("KeruOS", function()
+  require("kaeru").ensure_setup()
+  require("kaeru.keruos").open()
+end, {
+  desc = ":KeruOS, launcher dashboard for Kikru, Winso, Starsky, CVE, Upgrator, plugins and the Cast receiver",
+})

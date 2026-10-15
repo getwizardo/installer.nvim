@@ -1,8 +1,8 @@
--- kaeru.nvim · :Kikru — the floating player window.
+-- kaeru.nvim · :Kikru: the floating player window.
 --
 -- Layout is a terminal take on the Winamp 2.x skin cliamp revives: an LCD
 -- header with a scrolling marquee, a live spectrum analyzer, the 10-band EQ,
--- the playlist and a key legend — but it also has real panes for the radio
+-- the playlist and a key legend, but it also has real panes for the radio
 -- browser, the search results, the NodeLink style filters, lyrics, the
 -- 2-Neovim devices and the help screen.
 local UI = require("kaeru.ui")
@@ -158,7 +158,7 @@ function M.render_header()
   local theme = M.theme()
   local lines, spans = {}, {}
 
-  local title = track and Tags.label(track) or "no track loaded — press `/` to search, `R` for radio"
+  local title = track and Tags.label(track) or "no track loaded, press `/` to search, `R` for radio"
   local marquee = M.marquee("♫ " .. title, w, M.state.marquee)
   lines[#lines + 1] = "  " .. marquee
   hl(lines, spans, 0, 2, 2 + #marquee, theme.accent)
@@ -242,7 +242,7 @@ function M.render_playlist(rows)
   local playlist = p and p.playlist
   local lines = {}
   if not playlist or #playlist.items == 0 then
-    lines[#lines + 1] = "  (queue is empty — `/` search · `R` radio · `:Kikru add <path|url>`)"
+    lines[#lines + 1] = "  (queue is empty, `/` search · `R` radio · `:Kikru add <path|url>`)"
     return lines
   end
   local items = p.filtered_items and p.filtered_items() or playlist.items
@@ -272,10 +272,10 @@ function M.render_radio()
   local results = p and p.radio_results() or {}
   local query = p and p.radio_query() or ""
   local lines = {
-    ("  RADIO BROWSER (Radio Browser 30k+ stations) — query: %s"):format(query ~= "" and query or "(press `/` to search)"),
+    ("  RADIO BROWSER (Radio Browser 30k+ stations), query: %s"):format(query ~= "" and query or "(press `/` to search)"),
   }
   if #results == 0 then
-    lines[#lines + 1] = "  no stations — `/` searches the directory, `S` lists curated SomaFM channels"
+    lines[#lines + 1] = "  no stations, `/` searches the directory, `S` lists curated SomaFM channels"
     for _, station in ipairs(require("kaeru.kikru.radio").stations) do
       lines[#lines + 1] = ("    · %-40s %-24s %s"):format(station.title, station.genre, station.bitrate)
     end
@@ -307,7 +307,7 @@ function M.render_search()
     ("  sources: %s"):format(table.concat({ "auto", "youtube_music", "youtube", "soundcloud", "bandcamp", "radio", "subsonic", "rss" }, ", ")),
   }
   if #results == 0 then
-    lines[#lines + 1] = "  no results yet — type a query and press <CR>"
+    lines[#lines + 1] = "  no results yet, type a query and press <CR>"
     return lines
   end
   local rows = math.max(1, (M.state.layout.height or 24) - 9)
@@ -336,7 +336,7 @@ function M.render_filters()
   local p = player()
   local spec = (state().filters) or {}
   local lines = {
-    ("  FILTERS (NodeLink / LavaLink vocabulary) — active: %s"):format(Filters.describe(spec)),
+    ("  FILTERS (NodeLink / LavaLink vocabulary), active: %s"):format(Filters.describe(spec)),
     "",
     "  equalizer presets:",
   }
@@ -454,7 +454,7 @@ function M.render_devices()
   }
   local devices = daemon.device_list()
   if #devices == 0 then
-    lines[#lines + 1] = "  no paired devices — `D` starts a server, `C` connects as a client"
+    lines[#lines + 1] = "  no paired devices, `D` starts a server, `C` connects as a client"
     return lines
   end
   for index, device in ipairs(devices) do
@@ -471,7 +471,7 @@ end
 ---@return string[]
 function M.render_help()
   local lines = {
-    "  :Kikru — key reference (press `?` to close)",
+    "  :Kikru, key reference (press `?` to close)",
     "",
     "  TRANSPORT      space play/pause · x play · c pause · v stop · z prev · b/n next",
     "                 ←/→ seek ∓5s · H/L seek ∓30s · -/+ volume · 9/0 volume · m mute",
@@ -485,6 +485,7 @@ function M.render_help()
     "",
     "  SOURCES        / search (youtube · soundcloud · radio · subsonic · rss)",
     "                 R radio pane · S curated SomaFM channels · y lyrics",
+    "                 W toggle the Cast receiver (phones and apps cast into Kikru)",
     "                 o open the current track on its source page · Y yank path",
     "",
     "  VIEWS          1 main · 2 playlist · 3 radio · 4 search · 5 filters · 6 lyrics",
@@ -789,6 +790,10 @@ local function bindings(buf)
   end)
   UI.map(buf, "r", function()
     act("repeat")
+  end)
+  UI.map(buf, "W", function()
+    require("kaeru.kikru").receiver_toggle()
+    M.render()
   end)
   UI.map(buf, "w", function()
     M.prompt("Save playlist as: ", function(value)

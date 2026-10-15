@@ -1,4 +1,4 @@
--- kaeru.nvim · :Kikru — playlist / queue engine.
+-- kaeru.nvim · :Kikru: playlist / queue engine.
 --
 -- cliamp keeps its queues in human readable files (M3U + TOML, see
 -- https://cliamp.stream/docs/playlists); :Kikru supports the same formats
@@ -382,7 +382,7 @@ function M.parse_m3u(text)
   return tracks
 end
 
---- PLS and M3U/EXTM3U are the same dialect for our purposes — keep the
+--- PLS and M3U/EXTM3U are the same dialect for our purposes, keep the
 --- explicit entry point the playlist docs advertise.
 ---@param text string
 ---@return KikruTagTrack[]
@@ -739,7 +739,7 @@ function M.scan_tracks(dir, opts)
   return tracks
 end
 
---- Queue one or more tracks right after the current entry — the "play next"
+--- Queue one or more tracks right after the current entry, the "play next"
 --- behaviour of every music player (and of a cast arriving while something is
 --- already playing).
 ---@param playlist KikruPlaylist
