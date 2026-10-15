@@ -78,17 +78,17 @@ Optional — each one unlocks more, everything degrades gracefully without them:
 ```lua
 -- lua/plugins/kaeru.lua
 return {
-  "getwizardo/installer.nvim", -- the repository is being renamed to kaeru.nvim
+  "getwizardo/installer.nvim", -- repository slug; the plugin itself is kaeru.nvim
   cmd = { "Kaeru", "Kikru", "Clina" },
   opts = {},
 }
 ```
 
-> **Repo name.** The plugin is *kaeru.nvim*: every module lives in `lua/kaeru`,
-> the commands are `:Kaeru` / `:Kikru` / `:Clina` and the docs are
-> `doc/kaeru.txt`. The GitHub repository still answers to
-> `getwizardo/installer.nvim`; once it is renamed to `getwizardo/kaeru.nvim`
-> (GitHub keeps redirecting the old URL) simply update the spec string.
+> **Name.** The plugin is *kaeru.nvim*: every module lives in `lua/kaeru`, the
+> commands are `:Kaeru` / `:Kikru` / `:Clina`, the help file is `doc/kaeru.txt`
+> and augroups, sockets and state directories are all `kaeru*`. The GitHub
+> repository keeps its historical slug `getwizardo/installer.nvim`, so that is
+> what goes in the lazy.nvim spec.
 
 ## Usage
 
