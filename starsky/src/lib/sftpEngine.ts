@@ -140,7 +140,7 @@ export function getSftpProfiles(): SftpProfile[] {
       uploadOnSave: false,
       ignore: [".git", "node_modules", ".next", "dist"],
       mode: "sandbox",
-      source: "kaeru.yamlpreset",
+      source: "kaeru.yaml preset",
     });
   }
 

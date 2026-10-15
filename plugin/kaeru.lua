@@ -55,11 +55,37 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
       return
     end
     kaeru.save({ repo = args[2] }, { force = cmd.bang })
+  elseif sub == "pick" then
+    local source = args[2]
+    require("kaeru.integrations.telescope").open(source)
+  elseif sub == "integrations" then
+    vim.notify(require("kaeru.integrations").report_text(), vim.log.levels.INFO, { title = "kaeru.nvim" })
+  elseif sub == "complete" then
+    local partial = table.concat(Compat.list_slice(args, 2), " ")
+    local complete = require("kaeru.complete")
+    local items = complete.everything(partial)
+    if #items == 0 then
+      vim.notify("Nothing matches " .. tostring(partial), vim.log.levels.WARN, { title = "kaeru.nvim" })
+      return
+    end
+    require("kaeru.integrations").pick(items, {
+      title = ":Kaeru complete " .. partial,
+      on_choice = function(item)
+        if not item then
+          return
+        end
+        vim.schedule(function()
+          vim.cmd(item.word)
+        end)
+      end,
+    })
   elseif sub == "clina" then
     require("kaeru.clina").dispatch(Compat.list_slice(args, 2), nil, cmd.bang)
-  elseif sub == "music" then
+  elseif sub == "music" or sub == "kikru" or sub == "player" then
     require("kaeru.kikru").dispatch(Compat.list_slice(args, 2))
     return
+  elseif sub == "cast" then
+    require("kaeru.kikru").dispatch(vim.list_extend({ "cast" }, Compat.list_slice(args, 2)))
   elseif sub == "boot" then
     require("kaeru.boot").play()
   elseif sub == "parse" or sub == "readme" then
@@ -329,6 +355,30 @@ end, {
   desc = ":Kikru — Built-in Kikru Player with 10-band EQ, Visualizer, Radio & 2-Neovim Device Controller",
   complete = function(_, cmdline, cursorpos)
     return complete(cmdline, cursorpos)
+  end,
+})
+
+--- Legacy `:MusicPlayer` alias (kaeru.nvim ≥2 calls the player `:Kikru`).
+vim.api.nvim_create_user_command("MusicPlayer", function(cmd)
+  local kaeru = require("kaeru")
+  kaeru.ensure_setup()
+  local kikru = require("kaeru.kikru")
+  if cmd.bang and #cmd.fargs == 0 then
+    kikru.action("toggle")
+    return
+  end
+  kikru.dispatch(cmd.fargs)
+end, {
+  nargs = "*",
+  bang = true,
+  desc = "Kikru (alias of :Kikru, deprecated)",
+  complete = function(_, cmdline, cursorpos)
+    local items = Complete.complete_items(cmdline, cursorpos)
+    local Config = require("kaeru.config")
+    if (Config.options.complete or {}).items == "word" then
+      return Complete.words(items)
+    end
+    return items
   end,
 })
 

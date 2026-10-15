@@ -12,6 +12,10 @@ Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **fro
 - **SFTP & SFTP Studio UI** (`:Kaeru sftp` / `:Kaeru sftp ui`): dual-pane floating Local Project ↔ Remote Server SFTP Studio UI inside Neovim and in the Next.js Webclient, plus parallel `sftp` workers, upload-on-save, every sftp command, remote file browser, and multiple SSH keys / ssh-config / ProxyJump.
 - **`kaeru.yaml`**: all configuration in a global or per-project YAML file (built-in parser, no dependencies).
 - **Mason (all 601 servers built-in)**: install LSP servers, DAP adapters, linters, formatters, compilers and runtimes from the [mason.nvim](https://github.com/mason-org/mason.nvim) registry (with built-in catalog of all 601 Mason packages & 296 `lspconfig` server mappings for offline/instant autocomplete), `ensure_installed` in `kaeru.yaml`, and one-command scaffolds for lspconfig / nvim-dap / conform + nvim-lint.
+- **Autocomplete for *everything*** (`:Kaeru complete`, `complete.any`): fuzzy `:` command-line completion for `:Kaeru`, `:Kikru` and `:Clina` — every subcommand, argument, repository, Mason package, radio station, EQ preset, filter, theme, playlist, file, directory, buffer, option, event, colorscheme, help tag and environment variable — with descriptions in the popup, live GitHub search, `<Tab>` cycling and ready-made [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) / [blink.cmp](https://github.com/Saghen/blink.cmp) cmdline sources.
+- **`:Kikru` — a Winamp-style player in Lua** (inspired by [cliamp](https://github.com/bjarneo/cliamp) and [NodeLink](https://github.com/PerformanC/NodeLink)): LCD marquee, FFT spectrum / wave / VU / matrix analyzers, 10-band EQ (31 Hz – 16 kHz) with per-band editing and presets, LavaLink-style filter chain (timescale, tremolo, vibrato, 8D rotation, karaoke, lowpass, echo, reverb, chorus, phaser, compressor, distortion, channel mix), internet radio (curated + 30 000 Radio Browser stations), synced lyrics (tags → `.lrc` → [LRCLIB](https://lrclib.net)), M3U/PLS/TOML/JSON playlists, file-library indexing, MPRIS/MPD control, multi-engine backends (mpv · ffplay · VLC), a headless IPC daemon and 2-Neovim remote — all inside Neovim.
+- **Cast YouTube & YouTube Music into Neovim**: `:Kikru cast <url|search>`, `:Kikru youtube …`, `:Kikru ytmusic …`, plus a built-in cast server (`:Kikru cast server`) with a phone/bookmarklet page, a `kikru://` URL-scheme handler for "Open with Kikru" and `:Kikru appcast`, which picks up whatever the YouTube/YT Music app (or any MPRIS player: Spotify, browser tab, VLC) is playing right now and continues it with your EQ.
+- **Integrations with the ecosystem you already use**: [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) extension (`:Telescope kaeru …`), [fzf-lua](https://github.com/ibhagwan/fzf-lua), [snacks.nvim](https://github.com/folke/snacks.nvim) picker, [mini.pick](https://github.com/echasnovski/mini.nvim), [lualine](https://github.com/nvim-lualine/lualine.nvim) component, [nvim-notify](https://github.com/rcarriga/nvim-notify), [fidget.nvim](https://github.com/j-hui/fidget.nvim), [plenary.nvim](https://github.com/nvim-lua/plenary.nvim) jobs, plus detection of every external binary (`yt-dlp`, `mpv`, `ffmpeg`, `vlc`, `playerctl`, `mpc`, `gh`, `fzf`, `node`/`deno`/`bun`, …). `:Kaeru integrations` prints the report.
 - **Plugin cache**: installed plugins archived as `cache/<name>.nvimpack` (zip, `.git` included) or `.pack` (git bundle for large repos) and restored before install — offline re-installs.
 - **Starsky for Neovim Webclient** (`:Kaeru starsky` / `starsky/`): **Next.js 16 (TypeScript App Router)** webclient scaffolded via `yarn create next-app`, featuring the `:Kaeru` Spec Saver, `:Clina` TypeScript AI Coding IDE, SFTP Studio UI, all 601 Mason servers, 296 LSPconfig servers, and the universal 11-manager README parser.
 
@@ -57,6 +61,18 @@ return {
 - lazy.nvim using the [structured setup](https://lazy.folke.io/installation) (`spec = { { import = "plugins" } }`)
 - `curl` (for the GitHub browser)
 
+Optional — each one unlocks more, everything degrades gracefully without them:
+
+| Binary | Unlocks |
+| --- | --- |
+| `mpv` (or `ffplay` / `vlc`) | Kikru playback, the EQ and the filter chain (`:Kikru engine` shows what is used) |
+| `yt-dlp` | YouTube / YouTube Music / SoundCloud / Bandcamp / Mixcloud / Bilibili casting and search |
+| `playerctl` | `:Kikru appcast` — continue the YouTube Music app, Spotify or a browser tab (MPRIS) |
+| `mpc` | MPD control |
+| `gh` | GitHub sign-in without pasting a token |
+| `fzf`, `telescope.nvim`, `fzf-lua`, `snacks.nvim`, `mini.pick` | Picker backends for `:Kaeru pick`, `:Kaeru complete`, the Mason picker, … |
+| `node` / `deno` / `bun` | Clina's TypeScript AI engine |
+
 ## Installation
 
 ```lua
@@ -88,6 +104,11 @@ return {
 | `:Kaeru cache [...]`        | `list`, `pack [name\|all]`, `restore <name>`, `remove`, `clean`, `dir`   |
 | `:Kaeru mason [...]`        | Mason picker, `lsp\|dap\|linter\|formatter`, `install`, `ensure`, `export`, `scaffold` — see below |
 | `:Kaeru starsky [...]`      | `start`, `stop`, `open`, `status`, `build` — Next.js TypeScript Starsky Webclient |
+| `:Kaeru pick [source]`      | Open a picker (telescope / fzf-lua / snacks / mini.pick / `vim.ui.select`) over `plugins`, `mason`, `sftp`, `cache`, `radio`, `queue`, `cast` |
+| `:Kaeru complete [partial]` | **Complete anything**: pick from every candidate for a partial command line and run it |
+| `:Kaeru integrations`       | Report every detected picker, plugin and external binary |
+| `:Kikru [...]`              | The player — see [Kikru](#:kikru--the-player) below |
+| `:MusicPlayer [...]`        | Legacy alias of `:Kikru` (kept so old keymaps keep working) |
 
 ### Modal keys
 
@@ -121,6 +142,208 @@ return {
 | `q` / `<Esc>` | Close                                                      |
 
 GitHub allows 10 unauthenticated searches per minute; signed-in users get 30.
+
+## Autocomplete everything
+
+kaeru.nvim ships its own completion engine — no dependency on cmp, blink or
+anything else — and then *also* plugs into them.
+
+**On the `:` command line** (for `:Kaeru`, `:Kikru` and `:Clina`):
+
+- fuzzy matching that ignores case and separators: `fole/laz` → `folke/lazy.nvim`,
+  `ytm lo` → `:Kikru ytmusic lofi`
+- every candidate carries a description (`menu`/`info`) shown in the popup
+- contextual arguments: repositories (static list + **live GitHub search**, cached
+  5 min), Mason packages by category, SFTP profiles, cache entries, AI presets,
+  EQ presets, filter presets, visualizer modes, themes, engines, radio stations,
+  queue/playlist actions, cast targets, playlists, and *paths* where a path makes
+  sense
+- live popup while typing (`CmdlineChanged`, 45 ms debounce), `<Tab>`/`<S-Tab>`
+  cycling, and `wildoptions=pum,fuzzy` set for the `:` line
+- `complete.any = true` extends the popup to **every** `:` command (files,
+  buffers, options, events, filetypes, colorschemes, help tags, mappings,
+  environment variables, shell commands, augroups, tags)
+
+```lua
+require("kaeru").setup({
+  complete = { cmdline = true, cmdline_tab = true, items = "dict", any = false },
+})
+```
+
+**As a source for your completion plugin**
+
+```lua
+-- nvim-cmp
+require("cmp").register_source("kaeru", require("kaeru.complete").cmp_source())
+
+-- blink.cmp
+require("blink.cmp").setup({
+  cmdline = { sources = { "kaeru", "cmdline", "path" } },
+  sources = {
+    providers = { kaeru = require("kaeru.complete").blink_source() },
+    default = { "lsp", "path", "buffer", "kaeru" },
+  },
+})
+```
+
+**Everywhere else** — the modal form uses the same engine as
+`omnifunc`/`completefunc` (auto-triggered while typing, `<C-Space>` on demand)
+including the live GitHub repository lookup.
+
+**`:Kaeru complete`** is the escape hatch: it fuzzy-completes *anything*
+(commands, files, options, our own subcommands, …) in a picker and runs the
+chosen line — a discoverability browser for the whole editor:
+
+```vim
+:Kaeru complete Kikru ca        " → :Kikru cast … / :Kikru cast server …
+:Kaeru complete Kaeru mason i   " → :Kaeru mason install …
+```
+
+## `:Kikru` — the player
+
+`:Kikru` opens a floating, Winamp-2.x-inspired player (the layout and feature
+set follow [cliamp](https://github.com/bjarneo/cliamp); the filter vocabulary
+follows LavaLink/[NodeLink](https://github.com/PerformanC/NodeLink)).
+
+```
+╭─────────────── ── Kikru ──────────────────────────────╮
+│  ▶ 1. Lofi Girl · Beats to Code / Relax To             │
+│  03:12 ━━━━━━━━━━━━━━━━━━━╸─────────  ·  128 kbps      │
+│  ▁▂▄▅▇█▇▅▄▃▂▁▂▃▅▇█▇▅▃▂▁▁▂▄▆█▆▄▂  spectrum             │
+│  31  62 125 250 500 1k 2k 4k 8k 16k                    │
+│  +2  +1   0  -1  -2   0  +1  +2  +3  +1   lofi-coding   │
+╰────────────────────────────────────────────────────────╯
+```
+
+| Key | Action |
+| --- | --- |
+| `<Space>` | play / pause |
+| `z` / `b` | next / previous track |
+| `←` / `→` | seek ±5 s |
+| `-` / `+` | volume down / up |
+| `e` / `E` | 10-band EQ view / cycle presets |
+| `f` | LavaLink-style filters (timescale, tremolo, 8D, karaoke, …) |
+| `R` | radio browser (curated + Radio Browser search) |
+| `/` | search (YouTube, YouTube Music, SoundCloud, …) |
+| `P` | playlist / queue pane |
+| `l` | synced lyrics (tags → `.lrc` → LRCLIB) |
+| `c` | cast pane (link, server, appcast) |
+| `?` | help · `q` close |
+
+Command line:
+
+```vim
+:Kikru                                   " open the player
+:Kikru play  <station|track|url>         " play anything
+:Kikru queue add <url|dir>               " queue a track, a playlist or a folder
+:Kikru library ~/Music                   " index a folder (recursive, tag reading)
+:Kikru eq synthwave                      " EQ preset (flat, lofi-coding, bass-boost, …)
+:Kikru band 1 4                          " band 1 → +4 dB (bands are 31 Hz…16 kHz)
+:Kikru filter vaporwave                  " filter preset (nightcore, 8D, karaoke, …)
+:Kikru visualizer spectrum               " spectrum | bars | wave | vu | matrix | starfield
+:Kikru radio lofi                        " internet radio search
+:Kikru playlist save coding.m3u          " M3U · PLS · TOML · JSON
+:Kikru engine                            " which backends are installed
+:Kikru daemon start                      " headless IPC daemon (socket)
+:Kikru server 41999                      " 2-Neovim remote (control another Neovim)
+:Kikru connect 192.168.1.20:41999        " …or be controlled by one
+:Kikru status --json                     " machine-readable state
+```
+
+State (volume, EQ, filters, queue, lyrics) is persisted to
+`stdpath("data")/kaeru/kikru.json` when `kikru.persist = true`.
+
+## Casting YouTube & YouTube Music
+
+Three ways to get a link (or the app you are already playing) into Neovim:
+
+```vim
+" 1. paste a link, or just type a search
+:Kikru cast https://music.youtube.com/watch?v=dQw4w9WgXcQ
+:Kikru cast https://www.youtube.com/playlist?list=PL…      " whole playlist → queue
+:Kikru cast lofi hip hop radio                             " → YouTube Music search
+:Kikru youtube deep house mixes --queue                    " YouTube search → queue
+:Kikru ytmusic daft punk discovery                         " YouTube Music search
+:Kikru cast <url> --next                                   " insert after current track
+
+" 2. cast from a phone / browser / Stream Deck: a tiny HTTP server
+:Kikru cast server                                         " http://127.0.0.1:8722
+```
+
+Open `http://127.0.0.1:8722` in any browser (or on your phone, see below) to get
+a cast box plus transport buttons. Endpoints (CORS-enabled, JSON):
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /cast?url=…&mode=play\|queue\|next` | cast a link or a search |
+| `POST /cast {"url": "…"}` | same, for shortcuts/apps |
+| `GET /ytm?q=…` · `GET /youtube?q=…` | search and play |
+| `GET /appcast` | continue whatever MPRIS is playing |
+| `GET /status` · `/queue` · `/eq?preset=…` · `/volume?value=70` | read/steer the player |
+| `GET /play\|pause\|toggle\|next\|prev\|stop` · `/open` | transport |
+
+```vim
+:Kikru cast scheme        " install the kikru:// URL handler (+ ~/.local/bin/kaeru-cast)
+:Kikru cast status        " server/scheme/yt-dlp report
+:Kikru cast log           " recent casts
+```
+
+Once the scheme handler is installed, "Open with Kikru" / `xdg-open
+"kikru://cast?url=<link>"` plays the link in Neovim.
+
+**Cast the app that is playing** — no extension needed:
+
+```vim
+:Kikru appcast      " reads the current item of the YouTube Music app, a
+                    " Chromium/Brave/Firefox tab, Spotify, VLC, … over MPRIS
+                    " and continues it here (position, EQ and analyzer included)
+```
+
+YouTube Music specifics: `watch?v=…&list=RD…` mixes are treated as a video with
+YouTube's radio following it, `playlist?list=PL…` expands to a full queue with
+`yt-dlp --flat-playlist`, `shorts/`, `live/`, `youtu.be/`, `m.youtube.com`,
+timestamps (`&t=1m30s`) and `@handle` / `channel/` links are all classified —
+`:Kaeru complete Kikru cast` shows what is recognised.
+
+```yaml
+# kaeru.yaml
+kikru:
+  cast:
+    port: 8722          # cast server (127.0.0.1)
+    token: null        # optional shared secret → every request needs ?token=…
+    auto_start: false  # start the server with the player
+    ui: true           # focus the player when a cast arrives
+```
+
+Phone on the same Wi-Fi: the server binds `127.0.0.1` only. To reach it from a
+phone, forward the port (`ssh -L 8722:127.0.0.1:8722 you@laptop`) or add an
+iOS/Android shortcut that posts to the URL — or simply use the `kikru://`
+handler on the machine that runs Neovim.
+
+## Integrations
+
+```vim
+:Kaeru integrations        " ✓ / · for every picker, plugin and binary
+```
+
+```lua
+-- telescope
+require("telescope").load_extension("kaeru")
+-- :Telescope kaeru plugins | mason | sftp | cache | radio | queue | cast
+
+-- lualine
+require("kaeru.integrations").setup_lualine()          -- adds the now-playing component
+-- or as a component: { require("kaeru.integrations").lualine(), cond = ... }
+
+-- statusline without a plugin
+require("kaeru.integrations").setup_statusline()
+
+-- notifications & progress (nvim-notify, fidget)
+require("kaeru.integrations").setup({ notify = true, scheme = true })
+```
+
+The Kikru theme follows your `:colorscheme` (tokyonight, nord, dracula, gruvbox,
+catppuccin, …) unless you pin `kikru.theme`.
 
 ## GitHub account
 
@@ -267,7 +490,7 @@ Scaffolds write ready-to-use lazy.nvim specs into your plugins directory and ins
 | --- | --- | --- |
 | `lsp` | `lua/plugins/mason.lua` | mason.nvim, mason-lspconfig.nvim, nvim-lspconfig (`ensure_installed` from `kaeru.yaml`) |
 | `dap` | `lua/plugins/dap.lua` | nvim-dap, nvim-dap-ui, nvim-nio, mason-nvim-dap.nvim |
-| `tools` | `lua/plugins/tools.lua` | mason-tool-kaeru.nvim, conform.nvim, nvim-lint |
+| `tools` | `lua/plugins/tools.lua` | mason-tool-installer.nvim, conform.nvim, nvim-lint |
 
 ```yaml
 # kaeru.yaml
@@ -302,6 +525,24 @@ require("kaeru").setup({
     auto_login = true, -- use any available token when the browser opens
   },
   ai = { enabled = false, exclude = {} },
+  -- Live `:` autocomplete (see "Autocomplete everything")
+  complete = { cmdline = true, cmdline_tab = true, items = "dict", any = false },
+  -- The Kikru player (`:Kikru`); `music` is accepted as an alias of `kikru`
+  kikru = {
+    engine = "auto",                 -- auto | mpv | ffplay | vlc | mpd | mpris
+    volume = 78,
+    eq_preset = "lofi-coding",
+    visualizer = "spectrum",
+    theme = "winamp",
+    persist = true,
+    playlist_dir = nil,              -- nil = stdpath("data")/kaeru/playlists
+    ipc_socket = nil,                -- nil = $XDG_RUNTIME_DIR/nvim-kaeru-kikru.sock
+    daemon_on_start = false,
+    cast = { port = 8722, token = nil, auto_start = false, ui = true },
+    subsonic = { url = nil, user = nil, password = nil },
+    ytdlp_cookies = nil,
+    ytdlp_extra_args = {},
+  },
   cache = {
     enabled = true,
     dir = vim.fn.stdpath("cache") .. "/kaeru",
@@ -337,7 +578,41 @@ kaeru.sftp.upload_project()                      -- parallel upload
 kaeru.sftp.run("git pull")                       -- command over ssh
 kaeru.cache.pack("noice.nvim")                   -- archive a plugin
 kaeru.config.dump()                              -- effective config as YAML
+
+-- the player
+local kikru = require("kaeru.kikru")
+kikru.action("eq_preset", { preset = "synthwave" })
+kikru.cast("https://music.youtube.com/watch?v=…")   -- cast a link
+kikru.youtube_music("lofi beats")                   -- YT Music search → play
+kikru.appcast()                                     -- continue the MPRIS app
+kikru.cast_server(8722)                             -- start the cast server
+kikru.get_snapshot()                                -- everything the UI/web needs
+
+-- completion engine
+local complete = require("kaeru.complete")
+complete.complete_items("Kikru cast https://youtu.be/…", 30)  -- rich items
+complete.everything("teles")                                  -- *everything* fuzzy
+complete.cmp_source() / complete.blink_source()               -- cmp/blink providers
+
+-- integrations
+require("kaeru.integrations").pick(items, { title = "…", on_choice = fn })
+require("kaeru.integrations").statusline({ width = 40 })
+require("kaeru.integrations").job({ "yt-dlp", "-g", url }, {}, cb)  -- plenary when available
 ```
+
+### Migrating from 1.x
+
+| 1.x | 2.x |
+| --- | --- |
+| `installer.nvim`, `:Installer` | `kaeru.nvim`, `:Kaeru` |
+| `:MusicPlayer`, `require("installer.music")` | `:Kikru`, `require("kaeru.kikru")` |
+| `require("installer").music` | `require("kaeru").kikru` (alias `require("kaeru").music` remains) |
+| `music:` in `kaeru.yaml` | `kikru:` (both accepted) |
+| `:Installer music …` | `:Kikru …` (both accepted) |
+
+Help tags, augroups, the `installed_kaeru_nvim` global, the spec directory and
+the palette are all renamed accordingly; `:MusicPlayer` still works and simply
+forwards to `:Kikru`.
 
 ## How it works
 

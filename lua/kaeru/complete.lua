@@ -304,6 +304,9 @@ M.subcommands = {
   { word = "mason", menu = "LSP/DAP/linter/formatter packages", info = ":Kaeru mason <action>" },
   { word = "starsky", menu = "Next.js Starsky web client", info = ":Kaeru starsky [start|stop|open|status|build]" },
   { word = "web", menu = "alias of starsky", info = ":Kaeru web [action]" },
+  { word = "pick", menu = "open a picker in telescope / fzf-lua / snacks / mini.pick", info = ":Kaeru pick [plugins|mason|sftp|cache|radio|queue|cast]" },
+  { word = "integrations", menu = "what is installed and wired up", info = ":Kaeru integrations" },
+  { word = "complete", menu = "complete *anything* — pick from every candidate and run it", info = ":Kaeru complete [partial command line]" },
 }
 
 M.mason_actions = {
@@ -438,6 +441,24 @@ M.starsky_actions = {
 }
 
 -- :Kikru -------------------------------------------------------------------
+
+M.pick_sources = { "plugins", "mason", "sftp", "cache", "radio", "queue", "cast", "commands", "files" }
+M.completion_categories = {
+  "command",
+  "file",
+  "dir",
+  "buffer",
+  "event",
+  "filetype",
+  "help",
+  "option",
+  "color",
+  "shellcmd",
+  "environment",
+  "augroup",
+  "mapping",
+  "tag",
+}
 
 M.kikru_cast_targets = { "youtube", "youtube-music", "ytmusic", "ytm", "playlist", "video", "radio", "app", "mpris", "browser" }
 M.kikru_cast_actions = {
@@ -822,6 +843,69 @@ function M.words(list)
   return out
 end
 
+-- Native (Neovim) completion categories -----------------------------------------------
+
+--- Candidates straight out of Neovim (`getcompletion`), so our popup can offer
+--- files, buffers, options, events, colorschemes, help tags, … exactly like
+--- `:e <Tab>` does — but fuzzy ranked and described.
+---@param category string
+---@param base string
+---@return InstallerCompletionItem[]
+function M.native_items(category, base, menu)
+  local items = {}
+  for _, word in ipairs(Compat.getcompletion(base or "", category)) do
+    if word ~= "" then
+      items[#items + 1] = { word = word, menu = menu or ("[" .. category .. "]"), kind = category }
+    end
+  end
+  return items
+end
+
+--- Everything a `:` line could possibly complete to: our own commands first,
+--- then every native category Neovim knows about. This is what
+--- `:Kaeru complete <prefix>` (and `complete.any = true`) uses.
+---@param prefix? string
+---@return InstallerCompletionItem[]
+function M.everything(prefix)
+  prefix = prefix or ""
+  local items = {}
+  local seen = {}
+  local function push(item)
+    if item and item.word and item.word ~= "" and not seen[item.word] then
+      seen[item.word] = true
+      items[#items + 1] = item
+    end
+  end
+  for _, name in ipairs({ "Kaeru", "Kikru", "Clina" }) do
+    push({ word = name, menu = "[" .. name .. "] command" })
+  end
+  for _, name in ipairs({ "Kaeru", "Kikru", "Clina" }) do
+    for _, item in ipairs(M.rank(M.resolve_for(name, { name, "" }), "")) do
+      push({ word = name .. " " .. item.word, menu = item.menu, kind = item.kind })
+    end
+  end
+  for category, menu in pairs({
+    command = "command",
+    file = "file",
+    dir = "directory",
+    buffer = "buffer",
+    color = "colorscheme",
+    event = "autocmd event",
+    filetype = "filetype",
+    help = "help tag",
+    option = "option",
+    environment = "environment",
+    augroup = "augroup",
+    mapping = "mapping",
+    tag = "tag",
+  }) do
+    for _, item in ipairs(M.native_items(category, prefix, "[" .. menu .. "]")) do
+      push(item)
+    end
+  end
+  return M.rank(items, prefix, { limit = 500 })
+end
+
 -- Command line parsing ---------------------------------------------------------------
 
 --- Strip the leading range / `:` / bang and split chained commands on `|`.
@@ -994,14 +1078,17 @@ local function resolve_kaeru(tokens)
     if action == "select" then
       return M.sftp_profiles()
     end
-    if action == "upload" or action == "download" or action == "browse" then
-      if vim.fn.getcompletion then
-        local ok, files = pcall(vim.fn.getcompletion, tokens[#tokens], action == "browse" and "file" or "file_in_path")
-        if ok and type(files) == "table" then
-          return files
-        end
-      end
-      return {}
+    if action == "upload" or action == "download" or action == "browse" or action == "diff" then
+      local base = tokens[#tokens] or ""
+      local items = M.native_items("file", base, "[local file]")
+      vim.list_extend(items, M.native_items("dir", base, "[local dir]"))
+      return items
+    end
+    if action == "profile" or action == "connect" or action == "exec" or action == "test" then
+      return M.sftp_profiles()
+    end
+    if action == "init" or action == "config" then
+      return M.native_items("file", tokens[#tokens] or "", "[config file]")
     end
     return none()
   elseif sub == "cache" then
@@ -1040,6 +1127,22 @@ local function resolve_kaeru(tokens)
       return M.mason_names({ category = categories[action] })
     end
     return M.mason_names()
+  elseif sub == "pick" then
+    if argc <= 3 then
+      local items = {}
+      for _, source in ipairs(M.pick_sources) do
+        items[#items + 1] = { word = source, menu = "picker source" }
+      end
+      vim.list_extend(items, M.native_items(tokens[#tokens] or "", "file", "[file]"))
+      return items
+    end
+    return {}
+  elseif sub == "integrations" then
+    return {}
+  elseif sub == "complete" then
+    -- `:Kaeru complete <partial command line>` — complete the partial line.
+    local partial = table.concat(Compat.list_slice(tokens, 3), " ")
+    return M.everything(partial)
   elseif sub == "config" and argc <= 3 then
     return M.config_actions
   elseif (sub == "starsky" or sub == "web") and argc <= 3 then
@@ -1051,7 +1154,7 @@ end
 --- Resolve candidate items for `:Kikru`.
 ---@param tokens string[]
 ---@return (string|KaeruCompletionItem)[]
-local function resolve_music(tokens)
+local function resolve_kikru(tokens)
   local argc = #tokens
   local first = tokens[2]
   if first == nil then
@@ -1097,6 +1200,26 @@ local function resolve_music(tokens)
       return modes
     end
   end
+  if argc >= 5 and (action == "playlist" or action == "playlists") then
+    local sub_action = (tokens[3] or ""):lower()
+    if sub_action == "load" or sub_action == "open" or sub_action == "save" then
+      local items = {}
+      for _, name in ipairs((function()
+        local ok, playlist = pcall(require, "kaeru.kikru.playlist")
+        return ok and playlist.available() or {}
+      end)()) do
+        items[#items + 1] = { word = name, menu = "[playlist]" }
+      end
+      vim.list_extend(items, M.native_items("file", tokens[#tokens] or "", "[file]"))
+      return items
+    end
+  end
+  if argc == 5 and (action == "queue" or action == "enqueue") then
+    local sub_action = (tokens[3] or ""):lower()
+    if sub_action == "load" or sub_action == "save" then
+      return M.native_items("file", tokens[#tokens] or "", "[playlist file]")
+    end
+  end
   if argc == 3 or argc == 4 then
     if action == "eq" or action == "presets" then
       return M.kikru_eq_presets
@@ -1120,14 +1243,20 @@ local function resolve_music(tokens)
       return M.kikru_ipc_actions
     elseif action == "daemon" then
       return { "start", "stop", "status" }
-    elseif action == "play" or action == "add" or action == "library" or action == "index" or action == "lyrics" then
-      if vim.fn.getcompletion and (action == "library" or action == "index") then
-        local ok, dirs = pcall(vim.fn.getcompletion, tokens[#tokens], "dir")
-        if ok and type(dirs) == "table" then
-          return dirs
-        end
+    elseif action == "play" or action == "add" or action == "lyrics" then
+      local items = vim.deepcopy(M.kikru_sources)
+      vim.list_extend(items, M.native_items("file", tokens[#tokens] or "", "[local file]"))
+      return items
+    elseif action == "library" or action == "index" then
+      return M.native_items("dir", tokens[#tokens] or "", "[local dir]")
+    elseif action == "band" then
+      local items = {}
+      for band = 1, 10 do
+        items[#items + 1] = { word = tostring(band), menu = ("%s Hz"):format(({ 31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000 })[band]) }
       end
-      return M.kikru_sources
+      return items
+    elseif action == "volume" or action == "vol" or action == "seek" or action == "speed" or action == "preamp" then
+      return {}
     end
   end
   return none()
@@ -1161,6 +1290,18 @@ function M.complete_items(cmdline, cursorpos)
   local line = cursorpos and tostring(cmdline):sub(1, cursorpos) or tostring(cmdline)
   local name = M.detect_command(line)
   if not name then
+    -- `complete.any = true` turns kaeru.nvim's popup into a completion
+    -- front-end for *every* `:` command (files, buffers, options, …).
+    local settings = (Config.options.complete or {})
+    if settings.any then
+      local _, _, arglead = M.parse_cmdline(line)
+      local items = M.everything(arglead)
+      for _, item in ipairs(items) do
+        item.kind = item.kind or "i"
+        item.score = nil
+      end
+      return items
+    end
     return {}
   end
   local tokens, command, arglead = M.parse_cmdline(line)
@@ -1169,7 +1310,7 @@ function M.complete_items(cmdline, cursorpos)
   if name == "Kaeru" then
     candidates = resolve_kaeru(tokens)
   elseif name == "Kikru" then
-    candidates = resolve_music(tokens)
+    candidates = resolve_kikru(tokens)
   else
     candidates = resolve_clina(tokens)
   end
@@ -1671,5 +1812,20 @@ function M.trigger(buf, win, explicit)
   end
   vim.fn.complete(start_col + 1, items)
 end
+
+--- Resolve candidates for one of our commands by name (used by
+--- `M.everything` / `:Kaeru complete`).
+---@param name string  "Kaeru" | "Kikru" | "Clina"
+---@param tokens string[]
+---@return (string|InstallerCompletionItem)[]
+function M.resolve_for(name, tokens)
+  if name == "Kaeru" then
+    return resolve_kaeru(tokens)
+  elseif name == "Kikru" then
+    return resolve_kikru(tokens)
+  end
+  return resolve_clina(tokens)
+end
+
 
 return M

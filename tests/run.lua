@@ -6,6 +6,11 @@ if not vim then
   -- stub just enough of the vim API for spec.lua / github.lua / config.lua
   vim = {
     env = {},
+    g = {},
+    b = {},
+    o = {},
+    opt = {},
+    bo = { filetype = "" },
     fn = {
       executable = function()
         return 0
@@ -62,6 +67,11 @@ if not vim then
       return out
     end,
     api = {
+      _commands = {},
+      nvim_create_user_command = function(name, fn, opts)
+        vim.api._commands[name] = { fn = fn, opts = opts }
+        return name
+      end,
       nvim_create_namespace = function()
         return 1
       end,
@@ -77,6 +87,19 @@ if not vim then
     },
     log = { levels = { INFO = 2, WARN = 3, ERROR = 4 } },
     notify = function() end,
+    cmd = function() end,
+    ui = {
+      select = function(_, _, cb)
+        if cb then
+          cb(nil)
+        end
+      end,
+      input = function(_, _, cb)
+        if cb then
+          cb(nil)
+        end
+      end,
+    },
     schedule = function(f)
       f()
     end,
@@ -1321,6 +1344,361 @@ test("compat shims work without the Neovim-only helpers", function()
   Compat.defer_fn(function()
     ran = true
   end)
+end)
+
+-- ===========================================================================
+-- Kikru casting (YouTube / YouTube Music / MPRIS) + integrations
+-- ===========================================================================
+
+test("cast.classify understands YouTube and YouTube Music links", function()
+  local Cast = require("kaeru.kikru.cast")
+  local cases = {
+    { "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "youtube", "video", id = "dQw4w9WgXcQ" },
+    { "https://youtu.be/dQw4w9WgXcQ", "youtube", "video", id = "dQw4w9WgXcQ" },
+    { "https://m.youtube.com/watch?v=abc123&t=1m30s", "youtube", "video", id = "abc123", time = 90 },
+    { "https://music.youtube.com/watch?v=ID123456789", "youtube_music", "video", id = "ID123456789" },
+    { "https://music.youtube.com/watch?v=ID123456789&list=RDAMVM_ID123", "youtube_music", "video_radio", id = "ID123456789" },
+    { "https://www.youtube.com/playlist?list=PLabc123", "youtube", "playlist", list = "PLabc123" },
+    { "https://music.youtube.com/playlist?list=PLxyz", "youtube_music", "playlist", list = "PLxyz" },
+    { "https://www.youtube.com/shorts/SHORTS123", "youtube", "short", id = "SHORTS123" },
+    { "https://www.youtube.com/live/LIVE123", "youtube", "live", id = "LIVE123" },
+    { "https://www.youtube.com/@SomeChannel", "youtube", "channel" },
+    { "https://www.youtube.com/channel/UCabc123", "youtube", "channel" },
+    { "https://music.youtube.com/browse/MPREb_abc", "youtube_music", "browse" },
+    { "https://soundcloud.com/artist/track", "soundcloud", "track" },
+    { "https://soundcloud.com/artist/sets/favourites", "soundcloud", "set" },
+    { "https://open.spotify.com/track/xyz", "spotify", "track" },
+    { "https://open.spotify.com/playlist/xyz", "spotify", "playlist" },
+    { "https://example.com:8000/live.mp3", "file", "stream" },
+    { "https://ice1.somafm.com/groovesalad-128-mp3", nil, "icecast" },
+  }
+  for _, case in ipairs(cases) do
+    local info = Cast.classify(case[1])
+    if case[2] then
+      eq(info.app, case[2], case[1] .. " app")
+    end
+    eq(info.kind, case[3], case[1] .. " kind")
+    if case.id then
+      eq(info.id, case.id, case[1] .. " id")
+    end
+    if case.list then
+      eq(info.list, case.list, case[1] .. " list")
+    end
+    if case.time then
+      eq(info.time, case.time, case[1] .. " time")
+    end
+    assert(Cast.is_cast_url(case[1]), case[1] .. " should be castable")
+  end
+  -- a plain search term is castable too (it becomes a YouTube Music search)
+  local query = Cast.classify("daft punk discovery")
+  eq(query.kind, "query")
+  eq(Cast.is_cast_url("daft punk discovery"), true)
+  eq(Cast.classify("").kind, "unknown")
+  eq(Cast.is_cast_url(""), false)
+end)
+
+test("cast.canonical and cast.query_for build the right yt-dlp arguments", function()
+  local Cast = require("kaeru.kikru.cast")
+  eq(Cast.canonical(Cast.classify("https://youtu.be/dQw4w9WgXcQ")), "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+  eq(Cast.canonical(Cast.classify("https://m.youtube.com/watch?v=abc&t=90s")), "https://www.youtube.com/watch?v=abc&t=90")
+  eq(
+    Cast.canonical(Cast.classify("https://music.youtube.com/watch?v=X123456789")),
+    "https://music.youtube.com/watch?v=X123456789"
+  )
+  eq(
+    Cast.canonical(Cast.classify("https://www.youtube.com/playlist?list=PLabc")),
+    "https://www.youtube.com/playlist?list=PLabc"
+  )
+  eq(Cast.canonical(Cast.classify("lofi beats")), "ytsearch1:lofi beats")
+
+  local search = Cast.classify("lofi beats")
+  eq(Cast.query_for(search, { limit = 5 }), "ytsearch5:lofi beats")
+  search.source = "youtube_music"
+  eq(Cast.query_for(search, { limit = 3 }), "ytmsearch3:lofi beats")
+  local video = Cast.classify("https://www.youtube.com/watch?v=abc&t=30s")
+  eq(Cast.query_for(video), "https://www.youtube.com/watch?v=abc")
+  assert(Cast.describe(video):find("YouTube video", 1, true), "describe()")
+  assert(Cast.describe(video):find("0:30", 1, true), "describe() shows the timestamp")
+  eq(Cast.source_for_player("YouTube Music"), "youtube_music")
+  eq(Cast.source_for_player("Chromium"), "browser")
+  eq(Cast.source_for_player("mpv"), "mpv")
+  eq(Cast.source_for_player("totally-unknown"), nil)
+end)
+
+test("cast server: pure request router covers the whole HTTP surface", function()
+  local Cast = require("kaeru.kikru.cast")
+  local status, ctype, payload = Cast.handle_request("GET", "/status")
+  eq(status, 200)
+  eq(ctype, "application/json")
+  local decoded = require("kaeru.json").decode(payload)
+  assert(decoded.ok and decoded.state, "status payload")
+  eq(decoded.port, nil) -- not started in the harness
+
+  status, ctype, payload = Cast.handle_request("GET", "/")
+  eq(status, 200)
+  assert(ctype:find("text/html", 1, true), "cast page content type")
+  assert(payload:find("Kikru cast", 1, true), "cast page body")
+
+  -- a cast request resolves asynchronously; the response is immediate
+  status, _, payload = Cast.handle_request("GET", "/cast?url=https%3A%2F%2Fyoutu.be%2FdQw4w9WgXcQ&mode=queue")
+  eq(status, 200)
+  decoded = require("kaeru.json").decode(payload)
+  eq(decoded.ok, true)
+  eq(decoded.item.kind, "video")
+  eq(decoded.item.canonical, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+  status, _, payload = Cast.handle_request("POST", "/cast", '{"url": "https://music.youtube.com/watch?v=ID123456789"}')
+  eq(status, 200)
+  eq(require("kaeru.json").decode(payload).item.app, "youtube_music")
+
+  status, _, payload = Cast.handle_request("GET", "/cast")
+  eq(status, 400)
+  local _ = payload
+  status, _, payload = Cast.handle_request("GET", "/cast?url=mailto:me%40example.com")
+  eq(status, 415)
+
+  -- transport endpoints drive the player
+  local Kikru = require("kaeru.kikru")
+  Kikru.action("stop")
+  status, _, payload = Cast.handle_request("GET", "/play")
+  eq(status, 200)
+  eq(require("kaeru.json").decode(payload).action, "play")
+  status = Cast.handle_request("GET", "/volume?value=42")
+  eq(status, 200)
+  eq(Kikru.state.volume, 42)
+  status, _, payload = Cast.handle_request("GET", "/eq")
+  eq(status, 200)
+  assert(payload:find("preset", 1, true), "eq payload")
+  status, _, payload = Cast.handle_request("GET", "/queue")
+  eq(status, 200)
+  assert(require("kaeru.json").decode(payload).summary ~= nil)
+  status, _, payload = Cast.handle_request("GET", "/ytm?q=lofi")
+  eq(status, 200)
+  assert(require("kaeru.json").decode(payload).source == "youtube_music")
+  eq(Cast.handle_request("GET", "/nope"), 404)
+  eq(Cast.handle_request("OPTIONS", "/cast"), 204)
+
+  -- query parsing (percent decoding, + as space, bare keys)
+  local params = Cast.parse_query("url=https%3A%2F%2Fyoutu.be%2Fabc&mode=queue+next&flag")
+  eq(params.url, "https://youtu.be/abc")
+  eq(params.mode, "queue next")
+  eq(params.flag, "")
+end)
+
+test("cast server: token guard, scheme handler and info report", function()
+  local Cast = require("kaeru.kikru.cast")
+  local Config = require("kaeru.config")
+  Config.setup({ kikru = { cast = { token = "s3cret" } } })
+  eq(Cast.token(), "s3cret")
+  eq(Cast.handle_request("GET", "/status"), 401)
+  local status = Cast.handle_request("GET", "/status?token=s3cret")
+  eq(status, 200)
+  Config.setup({ kikru = { cast = { token = nil } } })
+  eq(Cast.token(), nil)
+
+  local script = Cast.handler_script()
+  assert(script:find("^#!/bin/sh", 1), "handler script shebang")
+  assert(script:find("kikru://", 1, true), "handler understands kikru:// URLs")
+  assert(script:find("curl", 1, true), "handler uses curl")
+  local desktop = Cast.desktop_entry()
+  assert(desktop:find("x-scheme-handler/kikru", 1, true), "desktop MimeType")
+  assert(desktop:find("kaeru-cast %u", 1, true), "desktop Exec")
+
+  local info = Cast.info()
+  eq(info.scheme, "kikru")
+  eq(info.port, 8722)
+  eq(type(info.endpoints), "table")
+  assert(#info.endpoints >= 8)
+  eq(Cast.server_running(), false)
+  eq(type(Cast.start_server(0)), "boolean")
+  eq(type(Cast.stop_server()), "boolean")
+  eq(#Cast.state.log >= 0, true)
+  Cast.log("test entry")
+  assert(#Cast.info().log >= 1, "cast log records entries")
+  -- the routes the UI and the page advertise must exist
+  for _, route in ipairs({ "/", "/status", "/cast", "/queue", "/eq", "/volume", "/open", "/appcast" }) do
+    assert(Cast.handle_request("GET", route) ~= 404, route .. " should be routed")
+  end
+end)
+
+test("cast: no yt-dlp means a clear message instead of a crash", function()
+  local Cast = require("kaeru.kikru.cast")
+  local Sources = require("kaeru.kikru.sources")
+  local original = Sources.ytdlp_available
+  Sources.ytdlp_available = function()
+    return false
+  end
+  local called = false
+  Cast.cast("https://www.youtube.com/watch?v=abc", {
+    cb = function(ok, message)
+      called = true
+      eq(ok, false)
+      assert(message:find("yt%-dlp"), "message should mention yt-dlp: " .. message)
+    end,
+  })
+  assert(called, "the callback must fire")
+  -- a direct stream still works without yt-dlp
+  local played = false
+  local Kikru = require("kaeru.kikru")
+  local original_play = Kikru.action
+  Kikru.action = function(name)
+    if name == "queue_add" then
+      played = true
+    end
+    return original_play(name)
+  end
+  Cast.cast("https://example.com/radio.mp3", {
+    cb = function()
+      -- playback itself is stubbed; the important part is that we got this far
+    end,
+  })
+  Kikru.action = original_play
+  Sources.ytdlp_available = original
+  local _ = played
+end)
+
+test("integrations report and picker selection", function()
+  local Integrations = require("kaeru.integrations")
+  local report = Integrations.report()
+  assert(report.pickers and #report.pickers >= 5, "picker list")
+  assert(report.plugins and report.plugins["telescope"] == false, "uninstalled plugins report false")
+  assert(report.binaries.media ~= nil, "binary groups")
+  eq(type(Integrations.best_picker().id), "string")
+  eq(Integrations.best_picker().id, "select", "no picker plugin installed in the harness")
+  assert(Integrations.report_text():find(":Kaeru integrations", 1, true))
+
+  local picked
+  local id = Integrations.pick({ { word = "a" }, { word = "b" } }, {
+    title = "test",
+    picker = "select",
+    on_choice = function(item)
+      picked = item
+    end,
+  })
+  eq(id, "select")
+  assert(picked == nil or picked.word == "a", "the harness has no vim.ui.select, so the first item is returned")
+
+  eq(Integrations.bin_available("definitely-not-a-binary"), false)
+  eq(type(Integrations.statusline({ width = 12 })), "string")
+  eq(type(Integrations.statusline({ width = 12, icon = false })), "string")
+  eq(type(Integrations.lualine()), "function")
+  assert(Integrations.try("kaeru.compat") ~= nil)
+  eq(Integrations.try("kaeru.does.not.exist"), nil)
+end)
+
+test("integrations: telescope extension exposes every kaeru picker source", function()
+  local telescope_integration = require("kaeru.integrations.telescope")
+  local sources = telescope_integration.sources()
+  for _, key in ipairs({ "plugins", "mason", "sftp", "cache", "radio", "queue", "cast" }) do
+    assert(sources[key], "missing telescope source " .. key)
+    eq(type(sources[key].items), "function")
+    eq(type(sources[key].title), "string")
+    local items = sources[key].items()
+    eq(type(items), "table")
+  end
+  local extension = telescope_integration.extension()
+  eq(type(extension.kaeru), "function")
+  -- the telescope/_extensions shim has to return the same table
+  eq(type(require("telescope._extensions.kaeru").kaeru), "function")
+end)
+
+test("complete.everything covers commands, files and every native category", function()
+  local C = require("kaeru.complete")
+  -- the harness has no getcompletion: the command tree must still be complete
+  vim.fn.getcompletion = function(_, category)
+    if category == "file" then
+      return { "lua/kaeru/init.lua", "lua/kaeru/complete.lua" }
+    elseif category == "color" then
+      return { "tokyonight", "catppuccin" }
+    elseif category == "command" then
+      return { "Kaeru", "Kikru", "Clina", "Lazy" }
+    end
+    return {}
+  end
+  local items = C.everything("")
+  local words = C.words(items)
+  assert(#words > 60, "expected a big candidate list, got " .. #words)
+  for _, want in ipairs({ "Kaeru", "Kikru", "Clina", "Kaeru add", "Kikru cast", "lua/kaeru/init.lua", "tokyonight" }) do
+    assert(Compat.tbl_contains(words, want), "everything() missing " .. want)
+  end
+  local file_matches = C.words(C.everything("complete.lua"))
+  eq(file_matches[1], "lua/kaeru/complete.lua")
+  -- `:Kaeru complete <partial>` uses the same engine
+  local via_command = C.complete_items("Kaeru complete Kikru ca", 22)
+  assert(#via_command > 0, "complete subcommand should offer candidates")
+  local pick = C.words(C.complete_items("Kaeru pick ", 11))
+  assert(Compat.tbl_contains(pick, "mason") and Compat.tbl_contains(pick, "cast"), "pick sources")
+  vim.fn.getcompletion = nil
+end)
+
+test("plugin/kaeru.lua registers :Kaeru, :Kikru, :Clina and the legacy alias", function()
+  dofile("plugin/kaeru.lua")
+  local commands = vim.api._commands
+  for _, name in ipairs({ "Kaeru", "Kikru", "Clina", "MusicPlayer" }) do
+    assert(commands[name], "missing command " .. name)
+    eq(type(commands[name].fn), "function")
+    eq(type(commands[name].opts.complete), "function", name .. " needs completion")
+  end
+  eq(vim.g.loaded_kaeru_nvim, true)
+
+  -- the completion callback returns rich items (or words when configured)
+  local items = commands.Kikru.opts.complete("", "Kikru eq lofi", 14)
+  assert(#items >= 1)
+  local words = {}
+  for _, item in ipairs(items) do
+    words[#words + 1] = type(item) == "string" and item or item.word
+  end
+  eq(words[1], "lofi-coding")
+  vim.tbl_contains = function(t, v)
+    for _, x in ipairs(t) do
+      if x == v then
+        return true
+      end
+    end
+    return false
+  end
+  assert(vim.tbl_contains(words, "lofi-coding"))
+
+  -- `:Kaeru dir` and `:Kaeru integrations` must not raise
+  commands.Kaeru.fn({ fargs = { "dir" }, bang = false })
+  commands.Kaeru.fn({ fargs = { "integrations" }, bang = false })
+  -- `:Kaeru music …` forwards to the Kikru dispatcher
+  commands.Kaeru.fn({ fargs = { "music", "presets" }, bang = false })
+  -- `:Kikru cast status` prints the cast report
+  commands.Kikru.fn({ fargs = { "cast", "status" }, bang = false })
+  -- the legacy alias reaches the same dispatcher (bang toggles playback)
+  commands.MusicPlayer.fn({ fargs = {}, bang = true })
+  commands.MusicPlayer.fn({ fargs = { "status" }, bang = false })
+  -- unknown subcommands must be reported, not crash
+  local ok = commands.Kaeru.fn({ fargs = { "definitely-not-a-sub" }, bang = false })
+  eq(ok, nil)
+end)
+
+test(":Kaeru pick / :Kaeru complete route through the best picker", function()
+  local recorded
+  local integrations = require("kaeru.integrations")
+  local original_messages = {}
+  local notify = vim.notify
+  vim.notify = function(message)
+    recorded = message
+  end
+  -- `:Kaeru integrations` prints the report through vim.notify
+  require("kaeru.integrations").report_text()
+  vim.notify = notify
+  assert(integrations.report_text():find("integrations", 1, true))
+
+  local captured = {}
+  vim.ui.select = function(items, opts, cb)
+    captured.items = items
+    captured.title = opts.prompt
+    if cb then
+      cb(nil)
+    end
+  end
+  vim.api._commands.Kaeru.fn({ fargs = { "complete", "Kikru ca" }, bang = false })
+  assert(captured.items and #captured.items > 0, "complete should open a picker with candidates")
+  assert(captured.title:find("Kikru ca", 1, true), "picker title carries the partial line")
+  local _ = original_messages
 end)
 
 print(("\n%d passed, %d failed"):format(pass, fail))

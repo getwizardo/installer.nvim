@@ -41,6 +41,9 @@ M.defaults = {
     height = 0.7, -- number of rows, or a fraction of the editor height (browser only)
     winblend = 0,
     autocomplete = true, -- auto-trigger completion popup inside the :Kaeru modal
+    -- Picker used by `:Kaeru pick`, `:Kaeru complete` and the Kikru views:
+    -- nil = auto (snacks > fzf-lua > telescope > mini.pick > vim.ui.select)
+    picker = nil, -- "snacks" | "fzf_lua" | "telescope" | "mini_pick" | "select"
   },
 
   -- Starsky for Neovim Webclient settings (`:Kaeru starsky`).
@@ -87,6 +90,9 @@ M.defaults = {
     cmdline_tab = true,
     -- "dict" shows descriptions in the popup; use "word" for old Neovim builds.
     items = "dict",
+    -- Also complete *foreign* `:` command lines (files, buffers, options, …)
+    -- through kaeru.nvim's popup. Off by default: Neovim already does that.
+    any = false,
   },
 
   -- AI coding presets (`:Kaeru ai`). Disabled by default.
@@ -365,6 +371,13 @@ function M.template()
     "  border: rounded",
     "  width: 0.6",
     "  height: 0.7",
+    "  # picker: telescope   # snacks | fzf_lua | telescope | mini_pick | select",
+    "",
+    "complete:",
+    "  cmdline: true           # live `:` popup for :Kaeru / :Kikru / :Clina",
+    "  cmdline_tab: true       # <Tab> / <S-Tab> cycle candidates",
+    "  items: dict             # dict (descriptions) | word (plain)",
+    "  any: false              # also complete every other `:` command",
     "",
     "github:",
     "  # token: ghp_xxx           # or use :Kaeru login / $GITHUB_TOKEN / gh",

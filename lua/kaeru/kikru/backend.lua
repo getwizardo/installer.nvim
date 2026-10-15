@@ -586,7 +586,15 @@ function M.load(track, opts, cb)
   M.status.position = 0
   M.status.live = track.format == "stream" or M.status.duration == 0
 
-  local engine = opts.engine or M.engine
+  local engine = opts.engine or M.pick_engine()
+  if not engine then
+    local err = "no audio backend found — install mpv, ffplay or VLC (see :Kikru engine)"
+    M.emit("error", { message = err })
+    if cb then
+      cb(false, err)
+    end
+    return false, err
+  end
   if engine == "none" or not M.running() then
     local ok, err = M.start({
       volume = M.status.volume,

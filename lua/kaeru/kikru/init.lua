@@ -241,6 +241,22 @@ function M.auto_advance()
   if #M.playlist.items == 0 then
     return
   end
+  -- Guard against infinite "skip the broken track" loops: a queue where
+  -- *nothing* can start (no engine, offline, dead stream) must stop, not spin.
+  if M._advancing then
+    return
+  end
+  M._advancing = true
+  M._advance_steps = (M._advance_steps or 0) + 1
+  if M._advance_steps > math.max(3, #M.playlist.items) then
+    M._advancing = false
+    M._advance_steps = 0
+    M.state.playing = false
+    M.state.paused = true
+    UI.notify(":Kikru · every track in the queue failed to play", vim.log.levels.ERROR)
+    M.bump()
+    return
+  end
   local track, index, stopped = Playlist.next(M.playlist, { auto = true })
   if stopped or not track then
     M.state.playing = false
@@ -249,13 +265,24 @@ function M.auto_advance()
     return
   end
   M.state.index = index or M.playlist.index
-  M.play(track, { autoplay = true, remember = false })
+  local ok = pcall(M.play, track, { autoplay = true, remember = false })
+  M._advancing = false
+  return ok
 end
 
---- Playback failed: skip to the next entry (cliamp behaves the same way).
+--- Playback failed: skip to the next entry (cliamp behaves the same way), but
+--- never loop forever — three consecutive failures stop the player.
 ---@param message string
 function M.playback_error(message)
   UI.notify(":Kikru · " .. message, vim.log.levels.WARN)
+  M._error_streak = (M._error_streak or 0) + 1
+  if M._error_streak >= 3 or not Backend.engine or Backend.engine == "none" then
+    M._error_streak = 0
+    M.state.playing = false
+    M.state.paused = true
+    M.bump()
+    return
+  end
   if #M.playlist.items > 1 then
     M.auto_advance()
   else

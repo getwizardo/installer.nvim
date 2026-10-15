@@ -71,11 +71,19 @@ M.stream_hosts = {
 local function split_url(url)
   url = tostring(url or ""):gsub("^%s+", ""):gsub("%s+$", "")
   local scheme, rest = url:match("^(%a[%w+.-]*)://(.*)$")
+  if scheme and scheme:lower() ~= "http" and scheme:lower() ~= "https" then
+    -- mailto:, magnet:, spotify:, kikru:// … are not things we stream
+    return nil
+  end
   if not scheme then
-    rest = url:gsub("^//", "")
-    if rest:match("^[%w-]+%.[%a]") then
-      scheme = "https"
+    if url:match("^%a[%w+.-]*:[^/]") then
+      return nil -- a scheme we do not handle (or a Windows drive letter)
     end
+    rest = url:gsub("^//", "")
+    if not rest:match("^[%w%-%.]+%.[%a][%w%-%.]*[/:?]?") then
+      return nil -- not a URL at all: treat the caller's text as a search query
+    end
+    scheme = "https"
   end
   if not rest or rest == "" then
     return nil
@@ -83,7 +91,11 @@ local function split_url(url)
   local authority, path_and_query = rest:match("^([^/?#]*)(.*)$")
   local host = (authority or ""):gsub("^[^@]*@", ""):gsub(":%d+$", "")
   host = host:lower()
-  local path, query_string = (path_and_query or ""):match("^([^?]*)?%??(.*)$")
+  if host == "" then
+    return nil
+  end
+  local path, query_string = (path_and_query or ""):match("^([^?]*)(.*)$")
+  query_string = (query_string or ""):gsub("^%?", "")
   local query = {}
   for pair in tostring(query_string or ""):gmatch("[^&]+") do
     local key, value = pair:match("^([^=]+)=(.*)$")
@@ -114,6 +126,12 @@ function M.classify(url)
     source = "auto",
   }
   if not host then
+    if raw:match("^%a[%w+.-]*:") and not raw:match("^%s") then
+      -- `mailto:`, `magnet:`, `ftp:` … — a scheme we cannot cast.
+      result.kind = "unknown"
+      result.app = "unsupported"
+      return result
+    end
     -- Not a URL: a search string. `:Kikru cast lofi hip hop` should just work.
     if raw ~= "" then
       result.kind = "query"
@@ -128,7 +146,7 @@ function M.classify(url)
   local app = M.hosts[host] or M.stream_hosts[host]
   if not app then
     -- Unknown host: might be an icecast stream, a Subsonic server, a raw file…
-    if host:match("radio%-browser") or path:match("%.m3u8?$") or path:match("%.pls$") then
+    if host:find("radio%-browser") or path:match("%.m3u8?$") or path:match("%.pls$") then
       result.app = "radio"
       result.kind = "stream"
       result.streamable = true
@@ -137,7 +155,8 @@ function M.classify(url)
       result.app = "file"
       result.kind = "stream"
       result.streamable = true
-    elseif path == "" or path == "/" then
+    elseif path == "" or path == "/" or host:find("ice") or host:find("stream") or host:find("radio") or host:find("somafm") then
+      -- Icecast/SHOUTcast style endpoints (ice1.somafm.com, streams.example.org:8000/…)
       result.app = "radio"
       result.kind = "icecast"
       result.streamable = true
@@ -153,6 +172,44 @@ function M.classify(url)
   result.app = app
   result.source = app == "youtube" and "youtube" or (app == "youtube_music" and "youtube_music" or app)
   result.streamable = true
+  -- non-YouTube providers (SoundCloud, Bandcamp, …) are still castable: yt-dlp
+  -- has an extractor for each of them.
+  if M.stream_hosts[host] then
+    local segments = {}
+    for segment in path:gmatch("[^/]+") do
+      segments[#segments + 1] = segment
+    end
+    local known = {
+      track = true,
+      album = true,
+      playlist = true,
+      set = true,
+      sets = true,
+      artist = true,
+      video = true,
+      watch = true,
+      song = true,
+      chapter = true,
+    }
+    local kind = "page"
+    if host:find("soundcloud", 1, true) then
+      if path:find("/sets/", 1, true) then
+        kind = "set"
+      elseif #segments >= 2 then
+        kind = "track"
+      end
+    elseif app == "spotify" then
+      kind = known[segments[1] or ""] and segments[1] or "page"
+    elseif segments[1] and known[segments[1]] then
+      kind = segments[1]
+    elseif #segments >= 2 then
+      kind = "track"
+    end
+    result.kind = kind
+    result.id = segments[#segments]
+    result.source = app
+    return result
+  end
 
   -- youtu.be/<id>, /shorts/<id>, /live/<id>, /embed/<id>, /watch?v=<id>
   local video_id = path:match("^/(shorts)/([%w_%-]+)") and path:match("^/shorts/([%w_%-]+)")
@@ -249,7 +306,7 @@ function M.canonical(info, opts)
   else
     return info.url
   end
-  if info.list and info.kind == "playlist" then
+  if info.list and info.kind == "playlist" and not base:find("list=" .. info.list, 1, true) then
     base = base .. (base:find("?", 1, true) and "&" or "?") .. "list=" .. info.list
   end
   if opts.keep_time ~= false and info.time and info.time > 0 then
@@ -262,7 +319,13 @@ end
 ---@return boolean
 function M.is_cast_url(url)
   local info = M.classify(url)
-  return info.kind ~= "unknown" and info.kind ~= "page"
+  if info.kind == "unknown" then
+    return false
+  end
+  if info.kind == "page" then
+    return info.app ~= "unknown" and info.app ~= "generic"
+  end
+  return true
 end
 
 --- Human readable one-liner for the UI/status line.
