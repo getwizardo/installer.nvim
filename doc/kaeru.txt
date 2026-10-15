@@ -946,6 +946,13 @@ Keys in the reader tab:
   B          list bookmarks                + / -   wider / narrower text
   i          book info                     q   close (progress is saved)
 
+Pictures: embedded images (EPUB, FB2) are extracted to stdpath("cache")/winso
+and shown as a line such as `[image: 001-cover.png]`. Put the cursor on that
+line and press `o` to open the picture in the system viewer. Also:
+  :Winso images                          " pick a picture from the book
+  :Winso cover                           " open the cover (or the first picture)
+The reader is text only. Pictures are opened outside Neovim, not drawn inline.
+
 Progress and bookmarks are saved in stdpath("data")/winso/library.json.
 
 Termux (Android): install the tools with pkg (pkg install python poppler).

@@ -1270,6 +1270,29 @@ test("winso: extractor output parses and the library round-trips", function()
   os.remove(path)
 end)
 
+test("winso: pictures are single lines, openers and cache dirs", function()
+  local W = require("kaeru.winso")
+  local lines = W.wrap("Before the picture.\n\n[[image: 001-cover.png]]\n\nAfter the picture.", 12)
+  local found = false
+  for _, l in ipairs(lines) do
+    if l == "[image: 001-cover.png]" then
+      found = true
+    end
+  end
+  assert(found, "placeholder becomes [image: NAME] and is not wrapped")
+
+  local termux_argv = W.opener_command("/x/a.png", { TERMUX_VERSION = "1" }, function(n) return n == "termux-open" end)
+  eq(termux_argv[1], "termux-open", "Termux uses termux-open")
+  local xdg = W.opener_command("/x/a.png", { HOME = "/h" }, function(n) return n == "xdg-open" end)
+  eq(xdg[1], "xdg-open")
+  eq(W.opener_command("/x/a.png", {}, function() return false end), nil, "no viewer gives nil")
+
+  local a = W.image_cache_dir("/books/a.epub")
+  local b = W.image_cache_dir("/books/b.epub")
+  assert(a ~= b, "different books get different cache dirs")
+  eq(a, W.image_cache_dir("/books/a.epub"), "cache dir is stable")
+end)
+
 -- SFTP UI, NeoCodeium AI preset, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
 test("sftp ui helpers and the NeoCodeium AI preset", function()
   local Sftp = require("kaeru.sftp")

@@ -399,7 +399,7 @@ end, {
     if #parts <= 2 and not cmdline:match("%s$") or #parts <= 1 then
       return vim.tbl_filter(function(word)
         return word:find(arglead, 1, true) == 1
-      end, { "open", "library", "bookmarks", "search", "info" })
+      end, { "open", "library", "bookmarks", "search", "images", "cover", "info" })
     end
     return vim.fn.getcompletion(arglead, "file")
   end,

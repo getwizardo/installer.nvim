@@ -62,6 +62,53 @@ function M.install_hints(termux)
   }
 end
 
+--- The command that opens a file in the system viewer. Termux first, then the desktop tools.
+---@param path string
+---@param env? table
+---@param executable? fun(name: string): boolean
+---@return string[]|nil argv
+function M.opener_command(path, env, executable)
+  env = env or (vim and vim.env) or {}
+  executable = executable or function(name)
+    return vim.fn.executable(name) == 1
+  end
+  if M.is_termux(env) and executable("termux-open") then
+    return { "termux-open", path }
+  end
+  if env.OS == "Windows_NT" then
+    return { "cmd", "/c", "start", "", path }
+  end
+  if executable("xdg-open") then
+    return { "xdg-open", path }
+  end
+  if executable("open") then
+    return { "open", path }
+  end
+  return nil
+end
+
+--- Open an image (or any file) in the system viewer.
+---@param path string
+function M.open_external(path)
+  local argv = M.opener_command(path)
+  if not argv then
+    return notify("No image viewer found. On Termux install termux-api; on desktop install xdg-open.", vim.log.levels.WARN)
+  end
+  vim.fn.jobstart(argv, { detach = true })
+  notify("Opened " .. vim.fn.fnamemodify(path, ":t"))
+end
+
+--- Cache directory for one book's images (stable per path).
+---@param path string
+---@return string
+function M.image_cache_dir(path)
+  local hash = 5381
+  for i = 1, #path do
+    hash = (hash * 33 + path:byte(i)) % 4294967296
+  end
+  return vim.fn.stdpath("cache") .. "/winso/" .. ("%08x"):format(hash)
+end
+
 -- ---------------------------------------------------------------------------------------
 -- text layout (pure)
 
@@ -109,8 +156,12 @@ function M.wrap(text, width)
     end
   end
   for index, para in ipairs(paragraphs) do
+    local image = para:match("^%[%[image: (.-)%]%]$")
     if para == "" then
       out[#out + 1] = ""
+    elseif image then
+      -- a picture is one line, never wrapped, so `o` can find its name
+      out[#out + 1] = "[image: " .. image .. "]"
     else
       local current = ""
       for word in para:gmatch("%S+") do
@@ -211,6 +262,7 @@ function M.info_lines(book)
     "Format:   " .. (book.format or "?"),
     "Chapters: " .. #book.chapters,
     ("Words:    about %d"):format(words),
+    "Images:   " .. #(book.images or {}),
     "File:     " .. (book.path or "?"),
   }
 end
@@ -305,7 +357,8 @@ function M.load(path, cb)
     local hint = M.install_hints(M.is_termux())
     return cb("Winso needs python3 to read books (" .. hint.python .. ")", nil)
   end
-  require("kaeru.process").run({ py, script, path }, function(res)
+  local image_dir = M.image_cache_dir(path)
+  require("kaeru.process").run({ py, script, path, "--images", image_dir }, function(res)
     if res.code ~= 0 then
       local msg = (res.stderr ~= "" and res.stderr or res.stdout):gsub("%s+$", "")
       return cb(msg ~= "" and msg or ("extractor failed (" .. res.code .. ")"), nil)
@@ -315,6 +368,7 @@ function M.load(path, cb)
       return cb(err, nil)
     end
     book.path = path
+    book.image_dir = image_dir
     book.title = (book.title and book.title ~= "") and book.title or vim.fn.fnamemodify(path, ":t:r")
     book.author = book.author or ""
     book.format = book.format or ""
@@ -491,6 +545,14 @@ local function attach_keys(buf)
   map(buf, "-", function()
     resize(-4)
   end, "narrower text")
+  map(buf, "o", function()
+    local s = st()
+    local name = vim.api.nvim_get_current_line():match("^%[image: (.-)%]$")
+    if not name then
+      return notify("No picture on this line (picture lines look like [image: name])")
+    end
+    M.open_external(s.book.image_dir .. "/" .. name)
+  end, "open picture")
   map(buf, "i", function()
     local s = st()
     local lines = M.info_lines(s.book)
@@ -625,6 +687,35 @@ function M.command(args)
           end
           M.show(book, { chapter = all[idx].mark.chapter, line = all[idx].mark.line })
         end)
+      end
+    end)
+  elseif action == "images" or action == "cover" then
+    local buf = vim.api.nvim_get_current_buf()
+    local st = state.buffers[buf]
+    if not st or not st.book then
+      return notify("Open a book first", vim.log.levels.WARN)
+    end
+    local images = st.book.images or {}
+    if #images == 0 then
+      return notify("This book has no embedded pictures")
+    end
+    if action == "cover" then
+      local pick = images[1]
+      for _, img in ipairs(images) do
+        if img.name:lower():find("cover", 1, true) then
+          pick = img
+          break
+        end
+      end
+      return M.open_external(st.book.image_dir .. "/" .. pick.name)
+    end
+    local labels = {}
+    for _, img in ipairs(images) do
+      labels[#labels + 1] = ("%s  %dx%d"):format(img.name, img.width, img.height)
+    end
+    return vim.ui.select(labels, { prompt = "Pictures" }, function(_, idx)
+      if idx then
+        M.open_external(st.book.image_dir .. "/" .. images[idx].name)
       end
     end)
   elseif action == "info" then
