@@ -1,4 +1,4 @@
--- kaeru.nvim · :Kikru — a Winamp-style terminal player for Neovim.
+-- kaeru.nvim · :Kikru. A Winamp-style terminal player for Neovim.
 --
 --   :Kikru                     open the player (Winamp-style float)
 --   :Kikru play <path|url|q>   resolve any source and start playing
@@ -223,7 +223,7 @@ function M.on_backend_event(event, data)
     if reason == "eof" or reason == nil then
       M.auto_advance()
     elseif reason == "error" then
-      M.playback_error("playback failed — trying the next track")
+      M.playback_error("playback failed. Trying the next track")
     end
   elseif event == "eof" then
     M.auto_advance()
@@ -271,7 +271,7 @@ function M.auto_advance()
 end
 
 --- Playback failed: skip to the next entry (cliamp behaves the same way), but
---- never loop forever — three consecutive failures stop the player.
+--- never loop forever. Three consecutive failures stop the player.
 ---@param message string
 function M.playback_error(message)
   UI.notify(":Kikru · " .. message, vim.log.levels.WARN)
@@ -500,7 +500,7 @@ function M.apply_snapshot(snap, rev)
   M.bump()
 end
 
---- Broadcast state to peers (server) — throttled.
+--- Broadcast state to peers from the server. Throttled.
 function M.broadcast_state()
   Daemon.schedule_broadcast()
 end
@@ -1966,7 +1966,7 @@ function M.dispatch(args)
         ("  server      %s %s"):format(info.running and "listening" or "stopped", info.url),
         ("  scheme      %s://  (install with `:Kikru cast scheme`)"):format(info.scheme),
         ("  yt-dlp      %s"):format(info.ytdlp and "available" or "missing (install yt-dlp)"),
-        ("  last cast   %s"):format(info.last and (info.last.url .. " (" .. info.last.kind .. ")") or "—"),
+        ("  last cast   %s"):format(info.last and (info.last.url .. " (" .. info.last.kind .. ")") or "none"),
         "  endpoints:",
       }
       for _, endpoint in ipairs(info.endpoints) do
@@ -2028,7 +2028,7 @@ function M.dispatch(args)
       lines[#lines + 1] = ("  %-14s %-34s prefix: %s"):format(source.id, source.name, source.prefix ~= "" and source.prefix or "-")
     end
     if #lines == 1 then
-      lines[#lines + 1] = "  none available — install mpv and yt-dlp"
+      lines[#lines + 1] = "  none available. Install mpv and yt-dlp"
     end
     UI.notify(table.concat(lines, "\n"))
   elseif sub == "library" or sub == "index" then
@@ -2049,7 +2049,7 @@ function M.dispatch(args)
       local ttml_ok, ttml_reason = Lyrics.ttml_available()
       lines[#lines + 1] = ttml_ok
           and "  ttml       Apple Music / QQ / NetEase TTML through `karu lyrics` (sidecar .ttml files work too)"
-        or ("  ttml       needs the karu CLI — " .. (ttml_reason or "not available"))
+        or ("  ttml       needs the karu CLI, " .. (ttml_reason or "not available"))
       UI.notify(table.concat(lines, "\n"))
     elseif action == "save" or action == "write" then
       local track = M.current_track()
@@ -2076,7 +2076,7 @@ function M.dispatch(args)
           if index > 8 then
             break
           end
-          lines[#lines + 1] = ("  %s — %s (%s)%s"):format(
+          lines[#lines + 1] = ("  %s, %s (%s)%s"):format(
             hit.title or "?",
             hit.artist or "?",
             hit.isrc or hit.id or "?",
@@ -2141,7 +2141,7 @@ function M.dispatch(args)
       UI.notify(":Kikru · no paired devices (" .. Daemon.transport_label() .. ")")
       return true
     end
-    local lines = { ":Kikru 2-Neovim devices — " .. Daemon.transport_label() }
+    local lines = { ":Kikru 2-Neovim devices: " .. Daemon.transport_label() }
     for index, device in ipairs(devices) do
       lines[#lines + 1] = ("  %d. %-34s %-8s %-22s %s"):format(index, device.name or device.id, device.role or "?", device.addr or "", device.active and "[ACTIVE]" or "")
     end
