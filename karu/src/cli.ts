@@ -15,6 +15,8 @@ import { PlayerBridgeImpl } from "./receiver/bridge.ts";
 import { CastClient } from "./sender/client.ts";
 import { discover, looksLikeAddress, parseAddress, probeAddress, selectDevice, type DiscoveredDevice } from "./sender/discovery.ts";
 import { APP_ID } from "./protocol/messages.ts";
+import { convert, detect } from "./lyrics/index.ts";
+import { readFileSync, writeFileSync } from "node:fs";
 
 export const VERSION = "1.0.0";
 
@@ -130,7 +132,20 @@ const HELP = `karu ${VERSION} — Google Cast for Neovim (Kikru)
   karu status [DEVICE] [--json]
   karu info [--json]                          protocol + environment report
 
+  karu lyrics FILE|- [--format lrc|ttml|json|plain|summary] [--lang CODE]
+                     [--offset MS] [--out FILE] [--json]
+      Parse Apple Music / AMLL (QQ, NetEase) / YouTube TTML and convert it.
+      Default output is enhanced LRC — the format Kikru's karaoke renderer
+      understands — so \`karu lyrics song.ttml > song.lrc\` is a whole pipeline.
+
 Flags: --json machine-readable output (one object per line).`;
+
+/** Read all of stdin (a pipe may be non-blocking, so `readFileSync(0)` is not enough). */
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
+}
 
 async function resolveMediaTarget(target: string, log: (message: string) => void): Promise<{ url: string; title?: string }> {
   if (/^(https?|rtsp|rtmp|file):\/\//i.test(target)) return { url: target };
@@ -318,6 +333,50 @@ async function main(): Promise<void> {
       process.on("SIGINT", shutdown);
       process.on("SIGTERM", shutdown);
       // Keep the process alive; sockets + the responder hold the event loop.
+      return;
+    }
+
+    case "lyrics":
+    case "ttml": {
+      const path = args.positionals[0] ?? "-";
+      let text: string;
+      try {
+        text = path === "-" ? await readStdin() : readFileSync(path, "utf8");
+      } catch (error) {
+        out.error(`cannot read ${path === "-" ? "stdin" : path}: ${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+      const format = flagString(args, "format") ?? (json ? "json" : "lrc");
+      const offsetMs = flagNumber(args, "offset") ?? 0;
+      const translations = flagBool(args, "translations", false);
+      const lang = flagString(args, "lang");
+      try {
+        const conversion = convert(text, { offsetMs, translations, ...(lang ? { lang } : {}) });
+        const payload = { ...conversion.json, input: path === "-" ? "stdin" : path, format };
+        const rendered =
+          format === "json"
+            ? JSON.stringify(payload)
+            : format === "ttml"
+              ? conversion.ttml
+              : format === "plain"
+                ? conversion.plain
+                : format === "summary"
+                  ? conversion.summary
+                  : format === "lrc"
+                    ? conversion.lrc
+                    : undefined;
+        if (rendered === undefined) {
+          out.error(`unknown --format ${format} (use lrc, ttml, json, plain or summary)`);
+          return;
+        }
+        const destination = flagString(args, "out");
+        if (destination) writeFileSync(destination, rendered.endsWith("\n") ? rendered : `${rendered}\n`);
+        else if (format === "json" || !json) out.line(rendered);
+        else out.out(payload);
+        if (!json && destination) out.line(`ok ${detect(text)} → ${format} · ${conversion.summary}`);
+      } catch (error) {
+        out.error(error instanceof Error ? error.message : String(error));
+      }
       return;
     }
 
