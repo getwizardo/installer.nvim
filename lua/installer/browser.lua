@@ -289,6 +289,24 @@ local function choose()
   cb(repo)
 end
 
+local function parse_and_open()
+  local repo = current()
+  if not repo then
+    return
+  end
+  local full_name = repo.full_name
+  M.close()
+  UI.notify("Fetching and parsing README.md for " .. full_name .. "…")
+  require("installer.parser").parse_github(full_name, function(err, res)
+    if err or not res or not res.primary then
+      UI.notify("Opening bare spec for " .. full_name .. (err and (" (" .. err .. ")") or ""))
+      return require("installer").open({ repo = full_name })
+    end
+    UI.notify(("Parsed %s spec from %s README.md"):format(res.primary_manager or "plugin", full_name))
+    require("installer").open(res.primary)
+  end)
+end
+
 local function quick_install()
   local repo = current()
   if not repo then
@@ -358,6 +376,10 @@ local function preview()
   UI.map(buf, "i", function()
     close_preview()
     quick_install()
+  end)
+  UI.map(buf, "p", function()
+    close_preview()
+    parse_and_open()
   end)
   GitHub.readme(repo.full_name, function(err, text)
     if not vim.api.nvim_buf_is_valid(buf) then
@@ -453,6 +475,7 @@ local function show_help()
   UI.notify(table.concat({
     "GitHub browser keys:",
     "  <CR>      open the install modal with this plugin",
+    "  p         parse README.md & open modal with extracted spec",
     "  i         quick install with a bare spec",
     "  K         preview README",
     "  o         open on GitHub",
@@ -555,6 +578,7 @@ function M.open(opts)
     UI.map(list_buf, lhs, rhs, "n", desc)
   end
   lmap("<CR>", choose, "Open install modal")
+  lmap("p", parse_and_open, "Parse README & open modal")
   lmap("i", quick_install, "Quick install")
   lmap("K", preview, "Preview README")
   lmap("o", open_in_browser, "Open on GitHub")

@@ -16,6 +16,31 @@ if not vim then
       expand = function(p)
         return p
       end,
+      fnamemodify = function(p)
+        return p
+      end,
+      getcwd = function()
+        return "/tmp/installer-test"
+      end,
+      findfile = function()
+        return ""
+      end,
+      mkdir = function(p)
+        os.execute("mkdir -p " .. string.format("%q", p))
+        return 1
+      end,
+      filereadable = function(p)
+        local f = io.open(p, "r")
+        if f then
+          f:close()
+          return 1
+        end
+        return 0
+      end,
+      isdirectory = function(p)
+        local code = os.execute("test -d " .. string.format("%q", p))
+        return (code == 0 or code == true) and 1 or 0
+      end,
       stdpath = function()
         return "/tmp/installer-test"
       end,
@@ -40,8 +65,18 @@ if not vim then
       nvim_create_namespace = function()
         return 1
       end,
+      nvim_create_augroup = function()
+        return 1
+      end,
+      nvim_create_autocmd = function()
+        return 1
+      end,
+      nvim_list_uis = function()
+        return {}
+      end,
     },
     log = { levels = { INFO = 2, WARN = 3, ERROR = 4 } },
+    notify = function() end,
     schedule = function(f)
       f()
     end,
@@ -641,6 +676,314 @@ test("mason packages / resolve / language_for with a fake registry", function()
   eq(Mason.language_for(""), nil)
   package.preload["mason-registry"] = nil
   package.loaded["mason-registry"] = nil
+end)
+
+-- mason built-in data fallback (all 601 Mason servers) --------------------------
+test("mason fallback catalog resolves all 601 servers & lspconfig names", function()
+  local Mason = require("installer.mason")
+  local all = Mason.packages()
+  assert(#all >= 600, "expected >= 600 built-in Mason packages, got " .. #all)
+  local lsps = Mason.packages({ category = "LSP" })
+  assert(#lsps >= 300, "expected >= 300 LSP servers, got " .. #lsps)
+  eq(Mason.resolve("lua_ls"), "lua-language-server")
+  eq(Mason.resolve("ts_ls"), "typescript-language-server")
+  eq(Mason.resolve("vtsls"), "vtsls")
+  eq(Mason.resolve("pyright"), "pyright")
+  eq(Mason.resolve("rust_analyzer"), "rust-analyzer")
+  eq(Mason.resolve("clangd"), "clangd")
+end)
+
+-- README.md & multi-manager installer parser -----------------------------------
+test("parser parses lazy.nvim README spec", function()
+  local Parser = require("installer.parser")
+  local md = [[
+# noice.nvim
+## Installation
+### lazy.nvim
+```lua
+return {
+  "folke/noice.nvim",
+  event = "VeryLazy",
+  opts = {
+    presets = { bottom_search = true },
+  },
+  dependencies = {
+    "MunifTanjim/nui.nvim",
+    "rcarriga/nvim-notify",
+  },
+}
+```
+]]
+  local res = Parser.parse(md)
+  assert(res.primary, "expected primary spec")
+  eq(res.primary_manager, "lazy")
+  eq(res.primary.repo, "folke/noice.nvim")
+  eq(res.primary.event, "VeryLazy")
+  eq(res.primary.dependencies, "MunifTanjim/nui.nvim, rcarriga/nvim-notify")
+  local g = assert(Spec.generate(res.primary, { header = false }))
+  local spec = assert(loadstring(g.source))()
+  eq(spec[1], "folke/noice.nvim")
+  eq(spec.opts.presets.bottom_search, true)
+end)
+
+test("parser parses packer.nvim use spec", function()
+  local Parser = require("installer.parser")
+  local md = [[
+## Installation
+```lua
+use {
+  'nvim-telescope/telescope.nvim', tag = '0.1.8',
+  requires = { {'nvim-lua/plenary.nvim'}, {'nvim-tree/nvim-web-devicons', opt = true} },
+  run = 'make',
+  cmd = 'Telescope',
+  opt = true,
+  as = 'telescope',
+}
+```
+]]
+  local res = Parser.parse(md)
+  assert(res.primary)
+  eq(res.primary_manager, "packer")
+  eq(res.primary.repo, "nvim-telescope/telescope.nvim")
+  eq(res.primary.tag, "0.1.8")
+  eq(res.primary.dependencies, "nvim-lua/plenary.nvim, nvim-tree/nvim-web-devicons")
+  eq(res.primary.build, "make")
+  eq(res.primary.cmd, "Telescope")
+  eq(res.primary.lazy, "true")
+  eq(res.primary.name, "telescope")
+  local g = assert(Spec.generate(res.primary, { header = false }))
+  local spec = assert(loadstring(g.source))()
+  eq(spec[1], "nvim-telescope/telescope.nvim")
+  eq(spec.build, "make")
+end)
+
+test("parser parses vim-plug Plug spec and multi-Plug dependencies", function()
+  local Parser = require("installer.parser")
+  local md = [[
+```vim
+call plug#begin()
+Plug 'nvim-lua/plenary.nvim'
+Plug 'nvim-telescope/telescope.nvim', { 'tag': '0.1.8', 'do': ':UpdateRemotePlugins', 'on': 'Telescope', 'for': ['lua', 'python'] }
+call plug#end()
+```
+]]
+  local res = Parser.parse(md)
+  assert(res.primary)
+  eq(res.primary_manager, "vim-plug")
+  eq(res.primary.repo, "nvim-telescope/telescope.nvim")
+  eq(res.primary.tag, "0.1.8")
+  eq(res.primary.build, ":UpdateRemotePlugins")
+  eq(res.primary.cmd, "Telescope")
+  eq(res.primary.ft, "lua, python")
+  eq(res.primary.dependencies, "nvim-lua/plenary.nvim")
+end)
+
+test("parser parses mini.deps, vim.pack, pckr, paq, dein, vundle, rocks, git clone & MasonInstall", function()
+  local Parser = require("installer.parser")
+
+  -- mini.deps
+  local r_mini = Parser.parse([[
+MiniDeps.add({
+  source = 'nvim-treesitter/nvim-treesitter',
+  depends = { 'nvim-lua/plenary.nvim' },
+  checkout = 'main',
+  hooks = { post_checkout = function() vim.cmd('TSUpdate') end },
+})
+]])
+  eq(r_mini.primary_manager, "mini.deps")
+  eq(r_mini.primary.repo, "nvim-treesitter/nvim-treesitter")
+  eq(r_mini.primary.branch, "main")
+  eq(r_mini.primary.build, ":TSUpdate")
+  eq(r_mini.primary.dependencies, "nvim-lua/plenary.nvim")
+
+  -- vim.pack
+  local r_vpack = Parser.parse([[
+vim.pack.add({
+  {
+    src = 'https://github.com/nvim-treesitter/nvim-treesitter',
+    version = 'main',
+  },
+})
+]])
+  eq(r_vpack.primary_manager, "vim.pack")
+  eq(r_vpack.primary.repo, "nvim-treesitter/nvim-treesitter")
+  eq(r_vpack.primary.version, "main")
+
+  -- pckr.nvim
+  local r_pckr = Parser.parse([[
+require('pckr').add{
+  { 'iamcco/markdown-preview.nvim', run = 'cd app && yarn install', cond = cmd('MarkdownPreview') };
+}
+]])
+  eq(r_pckr.primary_manager, "pckr")
+  eq(r_pckr.primary.repo, "iamcco/markdown-preview.nvim")
+  eq(r_pckr.primary.build, "cd app && yarn install")
+  eq(r_pckr.primary.cmd, "MarkdownPreview")
+
+  -- dein.vim
+  local r_dein = Parser.parse([[call dein#add('Shougo/deoplete.nvim', { 'build': ':UpdateRemotePlugins', 'rev': 'master' })]])
+  eq(r_dein.primary_manager, "dein")
+  eq(r_dein.primary.repo, "Shougo/deoplete.nvim")
+  eq(r_dein.primary.build, ":UpdateRemotePlugins")
+  eq(r_dein.primary.branch, "master")
+
+  -- Vundle
+  local r_vundle = Parser.parse([[Plugin 'tpope/vim-surround']])
+  eq(r_vundle.primary_manager, "vundle")
+  eq(r_vundle.primary.repo, "tpope/vim-surround")
+
+  -- rocks.nvim + git clone + MasonInstall + standalone setup()
+  local r_combo = Parser.parse([[
+```sh
+git clone -b release https://github.com/neoclide/coc.nvim.git
+```
+```vim
+:MasonInstall lua-language-server stylua
+```
+```lua
+require("coc").setup({ suggest = { noselect = true } })
+```
+]])
+  eq(r_combo.primary.repo, "neoclide/coc.nvim")
+  eq(r_combo.primary.branch, "release")
+  eq(r_combo.primary.opts, "{ suggest = { noselect = true } }")
+  eq(table.concat(r_combo.mason, ","), "lua-language-server,stylua")
+end)
+
+-- Autocomplete & Form sanitization ---------------------------------------------
+test("complete field & cmdline completion", function()
+  local Complete = require("installer.complete")
+  local Form = require("installer.form")
+
+  -- Form.sanitize_value prevents newline crashes in nvim_buf_set_lines
+  local sanitized = Form.sanitize_value("function()\n  require('x').setup({})\nend")
+  assert(not sanitized:find("\n"), "sanitize_value must remove newlines")
+  local g = assert(Spec.generate({ repo = "a/b", config = sanitized }, { header = false }))
+  assert(loadstring(g.source))
+
+  -- Field completion
+  local evs = Complete.complete_field("event", "Very")
+  eq(evs[1].word, "VeryLazy")
+  local deps = Complete.complete_field("dependencies", "plenary")
+  eq(deps[1].word, "nvim-lua/plenary.nvim")
+  local fts = Complete.complete_field("ft", "type")
+  assert(#fts >= 2 and fts[1].word:find("typescript"), "expected typescript filetype completion")
+
+  -- CSV-aware start column
+  local start_col, key, base = Complete.find_form_start("  Event         : BufReadPre, Very", 34, 5)
+  eq(key, "event")
+  eq(base, "Very")
+  eq(start_col, 30)
+
+  -- Command-line completion
+  local subs = Complete.cmdline("", "Installer ", 10)
+  assert(vim.tbl_contains(subs, "parse") and vim.tbl_contains(subs, "starsky") and vim.tbl_contains(subs, "mason") and vim.tbl_contains(subs, "save") and vim.tbl_contains(subs, "clina"))
+  local m_lsps = Complete.cmdline("lua_ls", "Installer mason install lua_ls", 30)
+  eq(m_lsps[1], "lua_ls")
+  local sftp_acts = Complete.cmdline("up", "Installer sftp up", 17)
+  eq(sftp_acts[1], "upload")
+  local sftp_ui = Complete.cmdline("ui", "Installer sftp ui", 17)
+  eq(sftp_ui[1], "ui")
+  local clina_acts = Complete.clina_cmdline("", "Clina ", 6)
+  assert(vim.tbl_contains(clina_acts, "ide") and vim.tbl_contains(clina_acts, "agent") and vim.tbl_contains(clina_acts, "mcp"))
+end)
+
+-- Spec saving & validation fixes -----------------------------------------------
+test("spec validation with uninstalled require/vim.cmd and saving spec to disk", function()
+  -- Quoted/comma-suffixed repo pasted from README
+  local parsed_repo = assert(Spec.parse_repo("'folke/noice.nvim',"))
+  eq(parsed_repo.short, "folke/noice.nvim")
+
+  -- opts/keys referencing require('uninstalled_module') or vim.cmd.*
+  local gen = assert(Spec.generate({
+    repo = '"hrsh7th/nvim-cmp",',
+    opts = '{ mapping = require("cmp").mapping.preset.insert({}), dir = vim.fn.stdpath("data") }',
+    keys = '{ { "<leader>e", vim.cmd.Neotree, desc = "Explorer" } }',
+    config = "false",
+  }, { header = false }))
+  assert(gen.source:find("config = false", 1, true), "expected config = false in rendered spec")
+  assert(loadstring(gen.source), "generated spec must be valid Lua")
+
+  -- Saving spec to disk via Installer.save
+  local Installer = require("installer")
+  local Lazy = require("installer.lazy")
+  local tmp_plugins = "/tmp/installer-test-plugins-" .. tostring(os.time())
+  Installer.setup({ plugins_dir = tmp_plugins, confirm_overwrite = false })
+  local ok, saved_path, saved_gen = Installer.save({
+    repo = "folke/snacks.nvim",
+    event = "VeryLazy",
+    opts = "{ notifier = { enabled = true } }",
+  })
+  eq(ok, true)
+  eq(saved_path, tmp_plugins .. "/snacks.lua")
+  eq(saved_gen.file, "snacks")
+  local fd = assert(io.open(saved_path, "r"))
+  local disk_content = fd:read("*a")
+  fd:close()
+  assert(disk_content:find('"folke/snacks.nvim"', 1, true))
+  Lazy.invalidate_spec_cache("snacks")
+  os.remove(saved_path)
+end)
+
+-- SFTP UI, Clina NeoCodeium, MusicPlayer 2-Neovim, ASCII Boot & mason-registry.dev
+test("sftp ui helpers and clina neocodeium integration", function()
+  local Sftp = require("installer.sftp")
+  assert(type(Sftp.ui) == "function", "Sftp.ui must be a function")
+  assert(type(Sftp.list_local_dir) == "function", "Sftp.list_local_dir must be a function")
+
+  local Clina = require("installer.clina")
+  eq(Clina.NEOCODEIUM_REPO, "monkoose/neocodeium")
+  eq(Clina.providers[1].id, "neocodeium")
+  local nc_spec = Clina.neocodeium_spec()
+  eq(nc_spec.repo, "monkoose/neocodeium")
+  eq(nc_spec.cmd, "NeoCodeium")
+  local gen = assert(Spec.generate(nc_spec, { header = false }))
+  assert(gen.source:find('"monkoose/neocodeium"', 1, true))
+  assert(loadstring(gen.source), "NeoCodeium spec must be valid Lua")
+
+  local syn = Clina._fallback_synthesize({ prompt = "Configure monkoose/neocodeium", mode = "agent" })
+  eq(syn.ok, true)
+  assert(syn.proposal and syn.proposal.code:find("monkoose/neocodeium", 1, true))
+end)
+
+test("github api dynamic plugin autocomplete, musicplayer 2-nvim & ascii boot", function()
+  local Complete = require("installer.complete")
+  Complete.add_github_results("neocodeium", {
+    { full_name = "monkoose/neocodeium", description = "Free AI completion plugin", stargazers_count = 1420 },
+    { full_name = "Exafunction/windsurf.nvim", description = "Windsurf Neovim", stargazers_count = 2900 },
+  })
+  local repo_cands = Complete.complete_field("repo", "monkoose/")
+  assert(#repo_cands >= 1 and repo_cands[1].word == "monkoose/neocodeium")
+
+  local music_subs = Complete.music_cmdline("", "MusicPlayer ", 12)
+  assert(vim.tbl_contains(music_subs, "server") and vim.tbl_contains(music_subs, "connect") and vim.tbl_contains(music_subs, "eq"))
+  local eq_cands = Complete.music_cmdline("lofi", "MusicPlayer eq lofi", 19)
+  eq(eq_cands[1], "lofi-coding")
+
+  local Music = require("installer.music")
+  eq(#Music.eq_frequencies, 10)
+  assert(#Music.stations >= 7)
+  Music.action("eq_preset", { preset = "synthwave" })
+  eq(Music.state.eq_preset, "synthwave")
+  eq(Music.state.eq_bands[1], 6)
+  local vis_lines = Music.render_visualizer(80)
+  eq(#vis_lines, 3)
+  local eq_lines = Music.render_eq()
+  eq(#eq_lines, 3)
+  local snap = Music.get_snapshot()
+  eq(snap.eq_preset, "synthwave")
+  Music.action("eq_preset", { preset = "flat" })
+  eq(Music.state.eq_preset, "flat")
+  Music.apply_snapshot(snap)
+  eq(Music.state.eq_preset, "synthwave")
+
+  local Boot = require("installer.boot")
+  local frame = Boot.render_frame(4, 88)
+  assert(#frame >= 14, "expected ASCII boot frame lines")
+
+  local Mason = require("installer.mason")
+  eq(Mason.REGISTRY_WEB_URL, "https://mason-registry.dev")
+  eq(Mason.package_url("lua-language-server"), "https://mason-registry.dev/registry/list#/lua-language-server")
 end)
 
 print(("\n%d passed, %d failed"):format(pass, fail))

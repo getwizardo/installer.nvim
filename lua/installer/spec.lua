@@ -23,6 +23,8 @@ local M = {}
 ---@field config? string        "true" | "false" | "" | "function" | raw `function(...) ... end` source
 ---@field init? string          raw `function() ... end` source
 ---@field pin? string           "true" | "false" | ""
+---@field cond? string          "true" | "false" | raw `function() ... end`
+---@field enabled? string       "true" | "false" | raw `function() ... end`
 ---
 --- `keys`, `dependencies` and `build` may also be given as raw Lua (`{ ... }`),
 --- which is emitted verbatim.
@@ -30,6 +32,8 @@ local M = {}
 --- A raw chunk of Lua source that should be emitted verbatim by `M.render`.
 ---@class InstallerRaw
 ---@field raw string
+
+local load_lua = loadstring or load
 
 ---@param s? string
 ---@return string
@@ -59,6 +63,9 @@ end
 ---@param s? string
 ---@return boolean|nil
 local function tobool(s)
+  if type(s) == "boolean" then
+    return s
+  end
   s = trim(s):lower()
   if s == "true" or s == "yes" or s == "y" or s == "1" or s == "on" then
     return true
@@ -75,6 +82,13 @@ end
 ---@return {short?: string, url?: string, base: string}|nil, string? err
 function M.parse_repo(input)
   input = trim(input)
+  -- Strip trailing commas/semicolons and surrounding quotes when pasted from a README
+  input = input:gsub("[,;]+$", "")
+  input = trim(input)
+  if (input:sub(1, 1) == '"' and input:sub(-1) == '"') or (input:sub(1, 1) == "'" and input:sub(-1) == "'") then
+    input = trim(input:sub(2, -2))
+  end
+
   if input == "" then
     return nil, "Repository is required (owner/repo or a git URL)"
   end
@@ -93,6 +107,7 @@ function M.parse_repo(input)
   -- owner/repo
   owner, repo = input:match("^([%w_.-]+)/([%w_.-]+)$")
   if owner then
+    repo = repo:gsub("%.git$", "")
     return { short = owner .. "/" .. repo, base = repo }
   end
 
@@ -110,16 +125,63 @@ end
 ---@param base string
 ---@return string
 function M.default_filename(base)
-  local name = base:lower()
+  local name = tostring(base or ""):lower()
   name = name:gsub("%.n?vim$", ""):gsub("^n?vim%-", ""):gsub("%-n?vim$", "")
   name = name:gsub("[^%w_%-]", "-"):gsub("%-+", "-"):gsub("^%-", ""):gsub("%-$", "")
   if name == "" then
-    name = base:gsub("[^%w_%-]", "-")
+    name = tostring(base or ""):gsub("[^%w_%-]", "-")
   end
   if name == "" then
     name = "plugin"
   end
   return name
+end
+
+--- Build a safe proxy environment for evaluating table/function expressions during spec validation
+--- so expressions referencing uninstalled plugins (`require("cmp")`) or `vim.cmd.*` / `vim.fn.*`
+--- inside `opts` or `keys` do not fail validation before the plugin is installed.
+local function make_validation_env()
+  local proxy
+  local mt = {
+    __index = function()
+      return proxy
+    end,
+    __call = function()
+      return proxy
+    end,
+    __concat = function()
+      return ""
+    end,
+    __tostring = function()
+      return ""
+    end,
+  }
+  proxy = setmetatable({}, mt)
+  return setmetatable({
+    vim = proxy,
+    require = function()
+      return proxy
+    end,
+     pairs = pairs,
+    ipairs = ipairs,
+    tostring = tostring,
+    tonumber = tonumber,
+    table = table,
+    string = string,
+    math = math,
+    os = os,
+  }, {
+    __index = function()
+      return proxy
+    end,
+  })
+end
+
+local function eval_chunk(chunk)
+  if setfenv then
+    pcall(setfenv, chunk, make_validation_env())
+  end
+  return pcall(chunk)
 end
 
 --- Validate that `text` is a Lua expression of the given type and return it trimmed.
@@ -129,11 +191,11 @@ end
 ---@return string|nil, string? err
 function M.validate_raw(text, kind, what)
   text = trim(text)
-  local chunk, err = loadstring("return " .. text)
+  local chunk, err = load_lua("return " .. text)
   if not chunk then
     return nil, ("Invalid Lua for %s: %s"):format(what, tostring(err))
   end
-  local ok, val = pcall(chunk)
+  local ok, val = eval_chunk(chunk)
   if not ok or type(val) ~= kind then
     return nil, ("`%s` must be a Lua %s"):format(what, kind)
   end
@@ -179,11 +241,11 @@ function M.validate_table(text)
   if not text:match("^{") then
     text = "{ " .. text .. " }"
   end
-  local chunk, err = loadstring("return " .. text)
+  local chunk, err = load_lua("return " .. text)
   if not chunk then
     return nil, "Invalid Lua table: " .. tostring(err)
   end
-  local ok, val = pcall(chunk)
+  local ok, val = eval_chunk(chunk)
   if not ok or type(val) ~= "table" then
     return nil, "`opts` must evaluate to a Lua table"
   end
@@ -199,6 +261,9 @@ end
 ---@param form InstallerForm
 ---@return {entries: {[1]: string|nil, [2]: any}[], name: string, file: string, short?: string}|nil, string? err
 function M.build(form)
+  if type(form) ~= "table" then
+    return nil, "Spec form must be a table"
+  end
   local repo, err = M.parse_repo(form.repo)
   if not repo then
     return nil, err
@@ -252,14 +317,43 @@ function M.build(form)
     end
   end
   local pin = tobool(form.pin)
-  if pin then
-    add("pin", true)
+  if pin ~= nil then
+    if pin then
+      add("pin", true)
+    end
+  end
+
+  for _, key in ipairs({ "enabled", "cond" }) do
+    if not blank(form[key]) then
+      local v = trim(form[key])
+      local b = tobool(v)
+      if b ~= nil then
+        add(key, b)
+      elseif v:match("^function") then
+        local text, ferr = M.validate_raw(v, "function", key)
+        if ferr then
+          return nil, ferr
+        end
+        add(key, raw(reindent(text)))
+      end
+    end
   end
 
   for _, key in ipairs({ "event", "cmd", "ft" }) do
     if not blank(form[key]) then
-      local list = csv(form[key])
-      add(key, #list == 1 and list[1] or list)
+      local val = form[key]
+      if type(val) == "table" then
+        add(key, #val == 1 and val[1] or val)
+      elseif trim(val):match("^{") then
+        local text, terr = M.validate_raw(val, "table", key)
+        if terr then
+          return nil, terr
+        end
+        add(key, raw(reindent(text)))
+      else
+        local list = csv(val)
+        add(key, #list == 1 and list[1] or list)
+      end
     end
   end
 
@@ -297,6 +391,12 @@ function M.build(form)
         return nil, berr
       end
       add("build", raw(reindent(text)))
+    elseif trim(form.build):match("^function") then
+      local text, berr = M.validate_raw(form.build, "function", "build")
+      if berr then
+        return nil, berr
+      end
+      add("build", raw(reindent(text)))
     else
       add("build", trim(form.build))
     end
@@ -307,7 +407,7 @@ function M.build(form)
     if terr then
       return nil, terr
     end
-    add("opts", raw(text))
+    add("opts", raw(reindent(text)))
   end
 
   if not blank(form.init) then
@@ -328,8 +428,8 @@ function M.build(form)
       return nil, cerr
     end
     add("config", raw(reindent(text)))
-  elseif tobool(config) == true then
-    add("config", true)
+  elseif tobool(config) ~= nil then
+    add("config", tobool(config))
   end
 
   local file = trim(form.file)

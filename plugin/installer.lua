@@ -8,18 +8,13 @@ if vim.fn.has("nvim-0.8") ~= 1 then
   return
 end
 
-local subcommands = { "modal", "browse", "search", "add", "dir", "ai", "login", "logout", "whoami", "sftp", "cache", "config", "mason" }
-local mason_actions = {
-  "pick", "install", "uninstall", "update", "upgrade", "ensure", "export", "list", "ft",
-  "lsp", "dap", "linter", "formatter", "compiler", "runtime", "scaffold", "ui",
-}
-local mason_scaffolds = { "lsp", "dap", "tools" }
-local sftp_actions = {
-  "upload", "upload-project", "sync", "download", "download-project", "init", "status", "select", "browse", "diff", "test",
-  "shell", "ssh", "run", "exec", "ls", "mkdir", "rmdir", "rm", "rename", "chmod", "chown", "chgrp", "ln", "symlink", "df", "pwd", "version",
-}
-local cache_actions = { "pack", "restore", "list", "remove", "clean", "dir" }
-local config_actions = { "edit", "project", "reload", "show", "dump" }
+local Complete = require("installer.complete")
+local mason_actions = Complete.mason_actions
+local mason_scaffolds = Complete.mason_scaffolds
+local sftp_actions = Complete.sftp_actions
+local cache_actions = Complete.cache_actions
+local config_actions = Complete.config_actions
+local starsky_actions = Complete.starsky_actions
 
 vim.api.nvim_create_user_command("Installer", function(cmd)
   local installer = require("installer")
@@ -39,11 +34,31 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
       return
     end
     installer.add({ repo = args[2] }, { force = cmd.bang })
+  elseif sub == "save" then
+    if not args[2] then
+      vim.notify(":Installer save requires owner/repo", vim.log.levels.ERROR, { title = "installer.nvim" })
+      return
+    end
+    installer.save({ repo = args[2] }, { force = cmd.bang })
+  elseif sub == "clina" then
+    require("installer.clina").dispatch(vim.list_slice(args, 2), nil, cmd.bang)
+  elseif sub == "music" then
+    require("installer.music").dispatch(vim.list_slice(args, 2))
+  elseif sub == "boot" then
+    require("installer.boot").play()
+  elseif sub == "parse" or sub == "readme" then
+    local target = table.concat(args, " ", 2)
+    require("installer.parser").command(target, {
+      bang = cmd.bang,
+      range = cmd.range and cmd.range > 0 and { line1 = cmd.line1, line2 = cmd.line2 } or nil,
+    })
   elseif sub == "dir" then
     vim.notify("Spec files are written to " .. installer.plugins_dir(), vim.log.levels.INFO, { title = "installer.nvim" })
   elseif sub == "ai" then
     local ai = require("installer.ai")
-    if args[2] then
+    if args[2] == "ide" or args[2] == "clina" then
+      return require("installer.clina").dispatch(vim.list_slice(args, 3))
+    elseif args[2] then
       local preset = ai.get(args[2])
       if not preset then
         return vim.notify("Unknown AI preset: " .. args[2], vim.log.levels.ERROR, { title = "installer.nvim" })
@@ -67,10 +82,13 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
     require("installer.account").whoami()
   elseif sub == "sftp" then
     local sftp = require("installer.sftp")
-    local action = args[2] or "upload"
+    local action = args[2] or "ui"
     local rest = vim.list_slice(args, 3)
     local raw = table.concat(rest, " ")
     local actions = {
+      ui = function()
+        sftp.ui(rest[1])
+      end,
       upload = function()
         if rest[1] then
           sftp.upload_path(rest[1])
@@ -148,8 +166,15 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
       vim.notify(msg, ok and vim.log.levels.INFO or vim.log.levels.ERROR, { title = "installer.nvim" })
     end
     local action = args[2] or "pick"
-    local rest = { unpack(args, 3) }
-    if action ~= "scaffold" and not mason.available() then
+    local rest = vim.list_slice(args, 3)
+    if action == "registry" then
+      local url = "https://mason-registry.dev/registry/list"
+      if vim.ui and vim.ui.open then
+        vim.ui.open(url)
+      end
+      return notify(true, "Opened " .. url .. " (601 Mason packages built-in)")
+    end
+    if action ~= "scaffold" and action ~= "pick" and action ~= "list" and action ~= "ft" and not mason.available() then
       return notify(false, "mason.nvim is not installed. Run `:Installer mason scaffold lsp` to add it to your lazy.nvim specs.")
     end
     local category_map = { lsp = "LSP", dap = "DAP", linter = "Linter", formatter = "Formatter", compiler = "Compiler", runtime = "Runtime" }
@@ -220,6 +245,22 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
     else
       vim.notify("Unknown config action: " .. action .. "\nUse: " .. table.concat(config_actions, ", "), vim.log.levels.ERROR, { title = "installer.nvim" })
     end
+  elseif sub == "starsky" or sub == "web" then
+    local starsky = require("installer.starsky")
+    local action = args[2] or "start"
+    if action == "start" then
+      starsky.start({ open = not cmd.bang })
+    elseif action == "stop" then
+      starsky.stop()
+    elseif action == "open" then
+      starsky.open_browser()
+    elseif action == "status" then
+      starsky.status()
+    elseif action == "build" then
+      starsky.build()
+    else
+      vim.notify("Unknown starsky action: " .. action .. "\nUse: " .. table.concat(starsky_actions, ", "), vim.log.levels.ERROR, { title = "installer.nvim" })
+    end
   elseif sub:find("/", 1, true) or sub:find("://", 1, true) then
     -- `:Installer folke/noice.nvim` opens the modal prefilled
     installer.open({ repo = sub })
@@ -229,52 +270,45 @@ vim.api.nvim_create_user_command("Installer", function(cmd)
 end, {
   nargs = "*",
   bang = true,
+  range = true,
   desc = "installer.nvim: add plugins to lazy.nvim",
-  complete = function(arglead, cmdline)
-    local words = vim.split(cmdline, "%s+")
-    local function filter(list)
-      return vim.tbl_filter(function(s)
-        return s:find(arglead, 1, true) == 1
-      end, list)
-    end
-    if #words <= 2 then
-      return filter(subcommands)
-    elseif words[2] == "sftp" and #words == 3 then
-      return filter(sftp_actions)
-    elseif words[2] == "cache" and #words == 3 then
-      return filter(cache_actions)
-    elseif words[2] == "cache" and #words == 4 then
-      local names = vim.tbl_keys(require("installer.cache").index())
-      local ok, LazyConfig = pcall(require, "lazy.core.config")
-      if ok and LazyConfig.plugins then
-        for name in pairs(LazyConfig.plugins) do
-          names[#names + 1] = name
-        end
-      end
-      table.sort(names)
-      return filter(names)
-    elseif words[2] == "mason" and #words == 3 then
-      return filter(mason_actions)
-    elseif words[2] == "mason" and words[3] == "scaffold" then
-      return filter(mason_scaffolds)
-    elseif words[2] == "mason" and #words >= 4 then
-      local ok, registry = pcall(require, "mason-registry")
-      if not ok then
-        return {}
-      end
-      local names = (words[3] == "uninstall" or words[3] == "update") and registry.get_installed_package_names()
-        or registry.get_all_package_names()
-      table.sort(names)
-      return filter(names)
-    elseif words[2] == "config" and #words == 3 then
-      return filter(config_actions)
-    elseif words[2] == "login" and #words == 3 then
-      return filter({ "gh", "token", "device" })
-    elseif words[2] == "ai" and #words == 3 then
-      return filter(vim.tbl_map(function(p)
-        return p.repo
-      end, require("installer.ai").presets))
-    end
-    return {}
+  complete = function(arglead, cmdline, cursorpos)
+    return Complete.cmdline(arglead, cmdline, cursorpos)
   end,
 })
+
+vim.api.nvim_create_user_command("Clina", function(cmd)
+  local installer = require("installer")
+  installer.ensure_setup()
+  local range_text = nil
+  if cmd.range and cmd.range > 0 then
+    local ok, lines = pcall(vim.api.nvim_buf_get_lines, 0, cmd.line1 - 1, cmd.line2, false)
+    if ok and lines then
+      range_text = table.concat(lines, "\n")
+    end
+  end
+  require("installer.clina").dispatch(cmd.fargs, range_text, cmd.bang)
+end, {
+  nargs = "*",
+  bang = true,
+  range = true,
+  desc = ":Clina — NeoCodeium AI Coding IDE integration for Neovim",
+  complete = function(arglead, cmdline, cursorpos)
+    return Complete.clina_cmdline(arglead, cmdline, cursorpos)
+  end,
+})
+
+vim.api.nvim_create_user_command("MusicPlayer", function(cmd)
+  local installer = require("installer")
+  installer.ensure_setup()
+  require("installer.music").dispatch(cmd.fargs)
+end, {
+  nargs = "*",
+  bang = true,
+  desc = ":MusicPlayer — Built-in Music Player with 10-band EQ, Visualizer, Radio & 2-Neovim Device Controller",
+  complete = function(arglead, cmdline, cursorpos)
+    return Complete.music_cmdline(arglead, cmdline, cursorpos)
+  end,
+})
+
+
