@@ -78,6 +78,10 @@ export interface MediaStatusEntry {
   volume?: { level: number; muted: boolean };
   supportedMediaCommands?: number;
   repeatMode?: string;
+  currentItemId?: number;
+  nextItemId?: number;
+  playbackRate?: number;
+  activeTrackIds?: number[];
 }
 
 export interface MediaStatusPayload {

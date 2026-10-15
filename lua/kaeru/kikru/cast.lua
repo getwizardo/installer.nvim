@@ -22,8 +22,8 @@
 --
 --   3. `:Kikru appcast` reads the *currently playing* item from any MPRIS
 --      player (the YouTube Music desktop app, a Chromium/Brave/Firefox tab,
---      Spotify, VLC, …) and continues it inside Kikru, this is the "cast the
---      app you already have open" path and needs no browser extension.
+--      Spotify, VLC, …) and continues it inside Kikru. This is the "cast the
+--      app you already have open" path, and it needs no browser extension.
 --
 -- Everything network-ish is optional: without yt-dlp the URLs are still
 -- classified, canonicalised and handed to the backend if it can play them.

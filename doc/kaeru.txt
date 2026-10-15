@@ -684,6 +684,14 @@ is handed to Kikru (yt-dlp -> queue -> mpv), and play/pause/stop/seek and the
 progress bar are mirrored both ways. `--fallback mpv|ffplay|none` decides what
 happens when Kikru is not running.
 
+The receiver keeps a queue for the sender. `QUEUE_LOAD`, `QUEUE_INSERT`,
+`QUEUE_REMOVE`, `QUEUE_REORDER`, `QUEUE_UPDATE` (repeat mode, jump),
+`QUEUE_NEXT` and `QUEUE_PREV` edit it, and an item that finishes starts the
+next one. `REPEAT_ALL_AND_SHUFFLE` repeats in queue order (no shuffle).
+Commands for a session that is not loaded, or that name another session, get
+`INVALID_REQUEST`. Verified with mock tests only; a real phone run is still
+needed.
+
 Cast to a real device (sender):                                       ~
 >vim
   :Karu discover                    " mDNS browse

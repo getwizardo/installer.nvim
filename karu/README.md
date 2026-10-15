@@ -86,7 +86,8 @@ karu: bridge → Kikru http://127.0.0.1:8722/cast
   The platform endpoint is `receiver-0`; senders call themselves `sender-<n>`.
 * **Namespaces**, `urn:x-cast:com.google.cast.tp.connection` (CONNECT/CLOSE),
   `…tp.heartbeat` (PING/PONG), `…receiver` (GET_STATUS, LAUNCH, STOP,
-  SET_VOLUME), `…media` (LOAD, PLAY, PAUSE, STOP, SEEK, GET_STATUS),
+  SET_VOLUME), `…media` (LOAD, PLAY, PAUSE, STOP, SEEK, GET_STATUS,
+  SET_PLAYBACK_RATE, EDIT_TRACKS_INFO, and the queue commands below),
   `…tp.deviceauth` (AuthMessage, challenge/response).
 * **Launching**, `LAUNCH` with `appId: CC1AD845` (Default Media Receiver)
   returns a `transportId`; the sender has to open a *second* logical channel by
@@ -97,6 +98,29 @@ karu: bridge → Kikru http://127.0.0.1:8722/cast
   `PAUSED`, `IDLE` + `idleReason`). `supportedMediaCommands` is the bitmask
   `1|2|4|8|16|32|64|128` (pause, seek, volume…), which is what makes the
   scrub bar in the phone app light up.
+* **Queue**, `QUEUE_LOAD { items, startIndex, repeatMode }` replaces the
+  queue; `QUEUE_INSERT`, `QUEUE_REMOVE`, `QUEUE_REORDER`, `QUEUE_UPDATE`
+  (`repeatMode`, relative `jump`), `QUEUE_NEXT`, `QUEUE_PREV`,
+  `QUEUE_GET_ITEM_IDS` and `QUEUE_GET_ITEMS` edit it. `LOAD` replaces the
+  queue with one item. When an item finishes (`IDLE` + `FINISHED`) the receiver
+  starts the next one by itself. `REPEAT_OFF` stops after the last item,
+  `REPEAT_ALL` wraps, `REPEAT_SINGLE` replays the item. `REPEAT_ALL_AND_SHUFFLE`
+  behaves like `REPEAT_ALL`: shuffle order is not implemented, so the queue
+  plays in order. Status reports `currentItemId`, `nextItemId`, `repeatMode`,
+  `playbackRate` and `activeTrackIds`.
+* **Sessions and errors**, a transport command (`PLAY`, `PAUSE`, `STOP`,
+  `SEEK`, `SET_PLAYBACK_RATE`, `EDIT_TRACKS_INFO`) is refused with
+  `{"type":"INVALID_REQUEST","requestId","reason":"INVALID_MEDIA_SESSION_ID"}`
+  when nothing is loaded or when it names a `mediaSessionId` other than the
+  current one. A command the receiver does not know gets
+  `reason: "INVALID_COMMAND"`; a malformed queue or rate request gets
+  `"INVALID_PARAMS"`. These reason strings are Karu's own choice, not taken from
+  a device. A refused `LOAD` or queue item answers `LOAD_FAILED` (code 103) with
+  the item id, and the state goes to `IDLE` with `idleReason: "ERROR"`.
+* **Broadcasts**, state changes from `STOP` and `SET_VOLUME` go to every
+  connected sender, not only the one that asked, so each phone sees the same
+  volume. The requesting sender gets its own reply as well, so it can receive
+  the same status twice; senders match replies by `requestId`.
 * **mDNS**, a query for `_googlecast._tcp.local` PTR; answers carry PTR +
   SRV (port 8009) + TXT + A records. TXT keys: `id` (12 hex), `fn` (friendly
   name), `md` (model), `ca` (2800), `ic`, `ve`, `st`, `rs`.
@@ -267,5 +291,11 @@ round-trips, and the `karu lyrics` CLI itself as a child process).
 * The receiver signs device-auth challenges with its own self-signed
   certificate, not a Google-issued one, so DRM/protected content will not play.
 * IPv4 mDNS is implemented (AAAA records are parsed but not advertised).
+* The queue and the media commands are covered by in-process mock tests
+  (`receiver_queue.test.ts`, `receiver_media.test.ts`). The basic session is
+  also tested over real TLS in `integration.test.ts`. No real phone or TV has
+  been used to check these, so sender compatibility is not yet verified.
+* `QUEUE_GET_ITEM_RANGE` is not implemented. It gets `INVALID_COMMAND`.
+* Shuffle is not implemented (see the queue notes above).
 
 MIT, same as kaeru.nvim.
