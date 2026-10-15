@@ -288,6 +288,8 @@ vim.api.nvim_create_user_command("Kaeru", function(cmd)
     else
       vim.notify("Unknown config action: " .. action .. "\nUse: " .. table.concat(config_actions, ", "), vim.log.levels.ERROR, { title = "kaeru.nvim" })
     end
+  elseif sub == "cve" then
+    require("kaeru.cve").command({ unpack(args, 2) })
   elseif sub == "starsky" or sub == "web" then
     local starsky = require("kaeru.starsky")
     local action = args[2] or "start"

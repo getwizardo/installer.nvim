@@ -1112,6 +1112,62 @@ test("kikru receive: toggling the Karu receiver bridges casts into the cast serv
   assert(ok, err)
 end)
 
+test("cve: parses npm lock v3, requirements, Cargo.lock and go.sum", function()
+  local Cve = require("kaeru.cve")
+  local pkgs = assert(Cve.parse_npm_lock('{"lockfileVersion":3,"packages":{"":{"name":"app"},"node_modules/lodash":{"version":"4.17.20"},"node_modules/a/node_modules/@s/b":{"version":"1.0.0"}}}'))
+  eq(#pkgs, 2)
+  eq(pkgs[1].name, "@s/b")
+  eq(pkgs[2].name, "lodash")
+  eq(pkgs[2].version, "4.17.20")
+  local _, bad = Cve.parse_npm_lock("not json")
+  assert(bad, "invalid lock must report an error")
+
+  local req, unpinned = Cve.parse_requirements("# comment\nDjango==3.0.1\nrequests[socks]==2.31.0 ; python_version>'3'\nflask>=2\n-r other.txt\n")
+  eq(#req, 2)
+  eq(req[1].name, "django")
+  eq(req[2].name, "requests")
+  eq(req[2].version, "2.31.0")
+  eq(unpinned, 1, "range pins are counted, not guessed")
+
+  local crates = Cve.parse_cargo_lock('[[package]]\nname = "serde"\nversion = "1.0.130"\n\n[[package]]\nname = "tokio"\nversion = "1.2.0"\n')
+  eq(#crates, 2)
+  eq(crates[2].name, "tokio")
+
+  local gomods = Cve.parse_gosum("github.com/a/b v1.2.3 h1:AAA=\ngithub.com/a/b v1.2.3/go.mod h1:BBB=\n")
+  eq(#gomods, 1)
+  eq(gomods[1].version, "v1.2.3")
+end)
+
+test("cve: query URL, findings order and report rendering", function()
+  local Cve = require("kaeru.cve")
+  local url = Cve.query_url("npm", "lodash", "4.17.20")
+  assert(url:find("ecosystem=npm", 1, true), "ecosystem")
+  assert(url:find("affects=lodash%404.17.20", 1, true), "affects must be name@version, encoded")
+  assert(Cve.query_url("pip", "django"):find("affects", 1, true) == nil, "no affects without a version")
+
+  local findings = Cve.findings({
+    { ghsa_id = "GHSA-1", cve_id = "CVE-2020-1", severity = "LOW", summary = "minor", html_url = "https://x/1" },
+    { ghsa_id = "GHSA-2", cve_id = "CVE-2020-2", severity = "critical", summary = "bad", html_url = "https://x/2" },
+  })
+  eq(findings[1].cve, "CVE-2020-2", "critical sorts first")
+  local live = Cve.findings({
+    { ghsa_id = "GHSA-W", severity = "high", withdrawn_at = "2024-01-01T00:00:00Z" },
+    { ghsa_id = "GHSA-K", severity = "high" },
+  })
+  eq(#live, 1, "withdrawn advisories are dropped")
+  eq(live[1].id, "GHSA-K")
+  eq(findings[2].severity, "low")
+
+  local lines = Cve.render({
+    packages = 3, checked = 2, skipped = 1, notes = {}, errors = {},
+    vulnerable = { { ecosystem = "npm", name = "lodash", version = "4.17.20", findings = findings } },
+  })
+  local text = table.concat(lines, "\n")
+  assert(text:find("lodash 4.17.20 (npm)", 1, true), "package heading")
+  assert(text:find("CVE-2020-2", 1, true), "finding id")
+  assert(text:find("skipped 1", 1, true), "skip notice")
+end)
+
 -- SFTP UI, NeoCodeium AI preset, Kikru 2-Neovim, ASCII Boot & mason-registry.dev
 test("sftp ui helpers and the NeoCodeium AI preset", function()
   local Sftp = require("kaeru.sftp")
