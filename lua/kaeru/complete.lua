@@ -1,4 +1,4 @@
--- kaeru.nvim — autocomplete for everything the plugin exposes.
+-- kaeru.nvim: autocomplete for everything the plugin exposes.
 --
 --   1. `:` command-line completion (`:Kaeru <Tab>`, `:Kikru <Tab>`, …)
 --      * fuzzy, case- and separator-insensitive matching (`fole/laz` → `folke/lazy.nvim`)
@@ -274,7 +274,7 @@ M.command_specs = {
     usage = ":Kaeru <subcommand> [args]",
   },
   Kikru = {
-    desc = ":Kikru — Winamp-style player: 10-band EQ, NodeLink filters, radio & 2-Neovim sync",
+    desc = ":Kikru: Winamp-style player: 10-band EQ, NodeLink filters, radio & 2-Neovim sync",
     usage = ":Kikru <subcommand> [args]",
   },
 }
@@ -307,7 +307,7 @@ M.subcommands = {
   { word = "web", menu = "alias of starsky", info = ":Kaeru web [action]" },
   { word = "pick", menu = "open a picker in telescope / fzf-lua / snacks / mini.pick", info = ":Kaeru pick [plugins|mason|sftp|cache|radio|queue|cast]" },
   { word = "integrations", menu = "what is installed and wired up", info = ":Kaeru integrations" },
-  { word = "complete", menu = "complete *anything* — pick from every candidate and run it", info = ":Kaeru complete [partial command line]" },
+  { word = "complete", menu = "complete *anything*, pick from every candidate and run it", info = ":Kaeru complete [partial command line]" },
 }
 
 M.mason_actions = {
@@ -426,7 +426,7 @@ M.karu_actions = {
   { word = "volume", menu = "device volume", info = ":Karu volume <0-100|+10|-10|mute|unmute> [device]" },
   { word = "status", menu = "what the device is playing" },
   { word = "probe", menu = "reachability test", info = ":Karu probe <host[:port]>" },
-  { word = "receive", menu = "be a Cast device — casts land in Kikru", info = ":Karu receive [--name N] [--port P] [--no-mdns]" },
+  { word = "receive", menu = "be a Cast device, casts land in Kikru", info = ":Karu receive [--name N] [--port P] [--no-mdns]" },
   { word = "off", menu = "stop the receiver" },
   { word = "bridge", menu = "receiver + Kikru bridge status" },
   { word = "info", menu = "protocol/environment report" },
@@ -855,7 +855,7 @@ end
 
 --- Candidates straight out of Neovim (`getcompletion`), so our popup can offer
 --- files, buffers, options, events, colorschemes, help tags, … exactly like
---- `:e <Tab>` does — but fuzzy ranked and described.
+--- `:e <Tab>` does: but fuzzy ranked and described.
 ---@param category string
 ---@param base string
 ---@return KaeruCompletionItem[]
@@ -1198,7 +1198,7 @@ local function resolve_kaeru(tokens)
   elseif sub == "integrations" then
     return {}
   elseif sub == "complete" then
-    -- `:Kaeru complete <partial command line>` — complete the partial line.
+    -- `:Kaeru complete <partial command line>`: complete the partial line.
     local partial = table.concat(Compat.list_slice(tokens, 3), " ")
     return M.everything(partial)
   elseif sub == "config" and argc <= 3 then
@@ -1408,7 +1408,7 @@ function M.resolve_karu(tokens)
   local argc = #tokens -- tokens[1] = command, tokens[#tokens] = arglead
   local sub = tokens[2]
   if sub == nil or sub == "" or (argc == 2 and previous(tokens) == nil) then
-    -- `:Karu <Tab>` — offer the actions plus the devices found last time.
+    -- `:Karu <Tab>`: offer the actions plus the devices found last time.
     local items = {}
     vim.list_extend(items, M.karu_actions)
     vim.list_extend(items, M.karu_devices())

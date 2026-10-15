@@ -2,7 +2,7 @@
 
 Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **from inside Neovim**.
 
-- `:Kaeru` opens a modal — fill in the repository and any lazy.nvim spec fields (`event`, `cmd`, `ft`, `keys`, `opts`, …) with **context-aware autocomplete** (`omnifunc` / live popup).
+- `:Kaeru` opens a modal, fill in the repository and any lazy.nvim spec fields (`event`, `cmd`, `ft`, `keys`, `opts`, …) with **context-aware autocomplete** (`omnifunc` / live popup).
 - **Universal `README.md` & snippet parser** (`:Kaeru parse [owner/repo|README.md]`, `<C-r>` in modal, `p` in browser): parses installation snippets from **lazy.nvim, packer.nvim, vim-plug, pckr.nvim, mini.deps, vim.pack, paq-nvim, dein.vim, Vundle, rocks.nvim, `git clone`, `:MasonInstall`, and `require(...).setup(...)`** into a ready-to-install `lazy.nvim` spec.
 - A `lua/plugins/<name>.lua` spec file is written for you.
 - lazy.nvim reloads its specs and installs the plugin immediately, no restart needed.
@@ -12,12 +12,12 @@ Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **fro
 - **SFTP & SFTP Studio UI** (`:Kaeru sftp` / `:Kaeru sftp ui`): dual-pane floating Local Project ↔ Remote Server SFTP Studio UI inside Neovim and in the SvelteKit Webclient, plus parallel `sftp` workers, upload-on-save, every sftp command, remote file browser, and multiple SSH keys / ssh-config / ProxyJump.
 - **`kaeru.yaml`**: all configuration in a global or per-project YAML file (built-in parser, no dependencies).
 - **Mason (all 601 servers built-in)**: install LSP servers, DAP adapters, linters, formatters, compilers and runtimes from the [mason.nvim](https://github.com/mason-org/mason.nvim) registry (with built-in catalog of all 601 Mason packages & 296 `lspconfig` server mappings for offline/instant autocomplete), `ensure_installed` in `kaeru.yaml`, and one-command scaffolds for lspconfig / nvim-dap / conform + nvim-lint.
-- **Autocomplete for *everything*** (`:Kaeru complete`, `complete.any`): fuzzy `:` command-line completion for `:Kaeru` and `:Kikru` — every subcommand, argument, repository, Mason package, radio station, EQ preset, filter, theme, playlist, file, directory, buffer, option, event, colorscheme, help tag and environment variable — with descriptions in the popup, live GitHub search, `<Tab>` cycling and ready-made [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) / [blink.cmp](https://github.com/Saghen/blink.cmp) cmdline sources.
-- **`:Kikru` — a Winamp-style player in Lua** (inspired by [cliamp](https://github.com/bjarneo/cliamp) and [NodeLink](https://github.com/PerformanC/NodeLink)): LCD marquee, FFT spectrum / wave / VU / matrix analyzers, 10-band EQ (31 Hz – 16 kHz) with per-band editing and presets, LavaLink-style filter chain (timescale, tremolo, vibrato, 8D rotation, karaoke, lowpass, echo, reverb, chorus, phaser, compressor, distortion, channel mix), internet radio (curated + 30 000 Radio Browser stations), synced **and word-level karaoke** lyrics ([lrc.red](https://lrc.red) · [LRCLIB](https://lrclib.net) · NetEase · SyncLRC · lyrics.ovh, with translations and a disk cache), M3U/PLS/TOML/JSON playlists, file-library indexing, MPRIS/MPD control, multi-engine backends (mpv · ffplay · VLC), a headless IPC daemon and 2-Neovim remote — all inside Neovim.
+- **Autocomplete for *everything*** (`:Kaeru complete`, `complete.any`): fuzzy `:` command-line completion for `:Kaeru` and `:Kikru`, every subcommand, argument, repository, Mason package, radio station, EQ preset, filter, theme, playlist, file, directory, buffer, option, event, colorscheme, help tag and environment variable, with descriptions in the popup, live GitHub search, `<Tab>` cycling and ready-made [nvim-cmp](https://github.com/hrsh7th/nvim-cmp) / [blink.cmp](https://github.com/Saghen/blink.cmp) cmdline sources.
+- **`:Kikru`, a Winamp-style player in Lua** (inspired by [cliamp](https://github.com/bjarneo/cliamp) and [NodeLink](https://github.com/PerformanC/NodeLink)): LCD marquee, FFT spectrum / wave / VU / matrix analyzers, 10-band EQ (31 Hz – 16 kHz) with per-band editing and presets, LavaLink-style filter chain (timescale, tremolo, vibrato, 8D rotation, karaoke, lowpass, echo, reverb, chorus, phaser, compressor, distortion, channel mix), internet radio (curated + 30 000 Radio Browser stations), synced **and word-level karaoke** lyrics ([lrc.red](https://lrc.red) · [LRCLIB](https://lrclib.net) · NetEase · SyncLRC · lyrics.ovh, with translations and a disk cache), M3U/PLS/TOML/JSON playlists, file-library indexing, MPRIS/MPD control, multi-engine backends (mpv · ffplay · VLC), a headless IPC daemon and 2-Neovim remote, all inside Neovim.
 - **Cast YouTube & YouTube Music into Neovim**: `:Kikru cast <url|search>`, `:Kikru youtube …`, `:Kikru ytmusic …`, plus a built-in cast server (`:Kikru cast server`) with a phone/bookmarklet page, a `kikru://` URL-scheme handler for "Open with Kikru" and `:Kikru appcast`, which picks up whatever the YouTube/YT Music app (or any MPRIS player: Spotify, browser tab, VLC) is playing right now and continues it with your EQ.
-- **`:Karu` — Google Cast, implemented in TypeScript** (`karu/`, no runtime dependencies): `karu receive` makes Neovim itself a Cast target that the **YouTube / YouTube Music / Chrome** apps can cast to (mDNS `_googlecast._tcp`, CASTV2 over TLS 8009, `CC1AD845` Default Media Receiver, device auth), and every cast is bridged straight into Kikru; the sender side (`:Karu discover` / `:Karu cast`) drives real Chromecasts on your LAN.
+- **`:Karu`: Google Cast, implemented in TypeScript** (`karu/`, no runtime dependencies): `karu receive` makes Neovim itself a Cast target that the **YouTube / YouTube Music / Chrome** apps can cast to (mDNS `_googlecast._tcp`, CASTV2 over TLS 8009, `CC1AD845` Default Media Receiver, device auth), and every cast is bridged straight into Kikru; the sender side (`:Karu discover` / `:Karu cast`) drives real Chromecasts on your LAN.
 - **Integrations with the ecosystem you already use**: [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) extension (`:Telescope kaeru …`), [fzf-lua](https://github.com/ibhagwan/fzf-lua), [snacks.nvim](https://github.com/folke/snacks.nvim) picker, [mini.pick](https://github.com/echasnovski/mini.nvim), [lualine](https://github.com/nvim-lualine/lualine.nvim) component, [nvim-notify](https://github.com/rcarriga/nvim-notify), [fidget.nvim](https://github.com/j-hui/fidget.nvim), [plenary.nvim](https://github.com/nvim-lua/plenary.nvim) jobs, plus detection of every external binary (`yt-dlp`, `mpv`, `ffmpeg`, `vlc`, `playerctl`, `mpc`, `gh`, `fzf`, `node`/`deno`/`bun`, …). `:Kaeru integrations` prints the report.
-- **Plugin cache**: installed plugins archived as `cache/<name>.nvimpack` (zip, `.git` included) or `.pack` (git bundle for large repos) and restored before install — offline re-installs.
+- **Plugin cache**: installed plugins archived as `cache/<name>.nvimpack` (zip, `.git` included) or `.pack` (git bundle for large repos) and restored before install, offline re-installs.
 - **Starsky for Neovim Webclient** (`:Kaeru starsky` / `starsky/`): **SvelteKit 3 (Svelte 5, TypeScript, Vite 8, mobile-first)** web IDE on remote Neovim (open, save and `:` commands through the Node `neovim` client), Solar icons, the `:Kaeru` spec saver, SFTP Studio UI, all 601 Mason servers, 296 LSPconfig servers, and the universal 11-manager README parser.
 
 ```
@@ -62,13 +62,13 @@ return {
 - lazy.nvim using the [structured setup](https://lazy.folke.io/installation) (`spec = { { import = "plugins" } }`)
 - `curl` (for the GitHub browser)
 
-Optional — each one unlocks more, everything degrades gracefully without them:
+Optional, each one unlocks more, everything degrades gracefully without them:
 
 | Binary | Unlocks |
 | --- | --- |
 | `mpv` (or `ffplay` / `vlc`) | Kikru playback, the EQ and the filter chain (`:Kikru engine` shows what is used) |
 | `yt-dlp` | YouTube / YouTube Music / SoundCloud / Bandcamp / Mixcloud / Bilibili casting and search |
-| `playerctl` | `:Kikru appcast` — continue the YouTube Music app, Spotify or a browser tab (MPRIS) |
+| `playerctl` | `:Kikru appcast`, continue the YouTube Music app, Spotify or a browser tab (MPRIS) |
 | `mpc` | MPD control |
 | `gh` | GitHub sign-in without pasting a token |
 | `fzf`, `telescope.nvim`, `fzf-lua`, `snacks.nvim`, `mini.pick` | Picker backends for `:Kaeru pick`, `:Kaeru complete`, the Mason picker, … |
@@ -106,14 +106,14 @@ return {
 | `:Kaeru ai [preset]`        | Curated AI coding plugins (NeoCodeium, Copilot, avante, …)              |
 | `:Kaeru login\|logout\|whoami` | GitHub account                                                     |
 | `:Kaeru sftp [action]`      | `ui` (dual-pane SFTP Studio), transfers, every sftp command, remote browser, shell |
-| `:Kaeru config [...]`       | `edit`, `project`, `reload`, `show` — manage `kaeru.yaml`           |
+| `:Kaeru config [...]`       | `edit`, `project`, `reload`, `show`, manage `kaeru.yaml`           |
 | `:Kaeru cache [...]`        | `list`, `pack [name\|all]`, `restore <name>`, `remove`, `clean`, `dir`   |
-| `:Kaeru mason [...]`        | Mason picker, `lsp\|dap\|linter\|formatter`, `install`, `ensure`, `export`, `scaffold` — see below |
-| `:Kaeru starsky [...]`      | `start`, `stop`, `open`, `status`, `build`, `info` — SvelteKit TypeScript Starsky Webclient |
+| `:Kaeru mason [...]`        | Mason picker, `lsp\|dap\|linter\|formatter`, `install`, `ensure`, `export`, `scaffold`, see below |
+| `:Kaeru starsky [...]`      | `start`, `stop`, `open`, `status`, `build`, `info`. SvelteKit TypeScript Starsky Webclient |
 | `:Kaeru pick [source]`      | Open a picker (telescope / fzf-lua / snacks / mini.pick / `vim.ui.select`) over `plugins`, `mason`, `sftp`, `cache`, `radio`, `queue`, `cast` |
 | `:Kaeru complete [partial]` | **Complete anything**: pick from every candidate for a partial command line and run it |
 | `:Kaeru integrations`       | Report every detected picker, plugin and external binary |
-| `:Kikru [...]`              | The player — see [Kikru](#:kikru--the-player) below |
+| `:Kikru [...]`              | The player, see [Kikru](#:kikru--the-player) below |
 | `:MusicPlayer [...]`        | Legacy alias of `:Kikru` (kept so old keymaps keep working) |
 
 ### Modal keys
@@ -151,8 +151,8 @@ GitHub allows 10 unauthenticated searches per minute; signed-in users get 30.
 
 ## Autocomplete everything
 
-kaeru.nvim ships its own completion engine — no dependency on cmp, blink or
-anything else — and then *also* plugs into them.
+kaeru.nvim ships its own completion engine, no dependency on cmp, blink or
+anything else, and then *also* plugs into them.
 
 **On the `:` command line** (for `:Kaeru` and `:Kikru`):
 
@@ -173,7 +173,7 @@ anything else — and then *also* plugs into them.
 - `complete.any` (on by default) extends the popup to **any** other `:` command
   through every `getcompletion` category (files, buffers, options, events,
   filetypes, colorschemes, help tags, mappings, environment variables, shell
-  commands, augroups, tags) — a superset of Neovim's own `<Tab>`
+  commands, augroups, tags), a superset of Neovim's own `<Tab>`
 
 ```lua
 require("kaeru").setup({
@@ -197,20 +197,20 @@ require("blink.cmp").setup({
 })
 ```
 
-**Everywhere else** — the modal form uses the same engine as
+**Everywhere else**: the modal form uses the same engine as
 `omnifunc`/`completefunc` (auto-triggered while typing, `<C-Space>` on demand)
 including the live GitHub repository lookup.
 
 **`:Kaeru complete`** is the escape hatch: it fuzzy-completes *anything*
 (commands, files, options, our own subcommands, …) in a picker and runs the
-chosen line — a discoverability browser for the whole editor:
+chosen line, a discoverability browser for the whole editor:
 
 ```vim
 :Kaeru complete Kikru ca        " → :Kikru cast … / :Kikru cast server …
 :Kaeru complete Kaeru mason i   " → :Kaeru mason install …
 ```
 
-## `:Kikru` — the player
+## `:Kikru`: the player
 
 `:Kikru` opens a floating, Winamp-2.x-inspired player (the layout and feature
 set follow [cliamp](https://github.com/bjarneo/cliamp); the filter vocabulary
@@ -237,7 +237,7 @@ follows LavaLink/[NodeLink](https://github.com/PerformanC/NodeLink)).
 | `R` | radio browser (curated + Radio Browser search) |
 | `/` | search (YouTube, YouTube Music, SoundCloud, …) |
 | `P` | playlist / queue pane |
-| `l` | lyrics pane — synced / word-level karaoke (lrc.red · LRCLIB · NetEase), translations |
+| `l` | lyrics pane, synced / word-level karaoke (lrc.red · LRCLIB · NetEase), translations |
 | `c` | cast pane (link, server, appcast) |
 | `?` | help · `q` close |
 
@@ -307,7 +307,7 @@ a cast box plus transport buttons. Endpoints (CORS-enabled, JSON):
 Once the scheme handler is installed, "Open with Kikru" / `xdg-open
 "kikru://cast?url=<link>"` plays the link in Neovim.
 
-**Cast the app that is playing** — no extension needed:
+**Cast the app that is playing**: no extension needed:
 
 ```vim
 :Kikru appcast      " reads the current item of the YouTube Music app, a
@@ -318,7 +318,7 @@ Once the scheme handler is installed, "Open with Kikru" / `xdg-open
 YouTube Music specifics: `watch?v=…&list=RD…` mixes are treated as a video with
 YouTube's radio following it, `playlist?list=PL…` expands to a full queue with
 `yt-dlp --flat-playlist`, `shorts/`, `live/`, `youtu.be/`, `m.youtube.com`,
-timestamps (`&t=1m30s`) and `@handle` / `channel/` links are all classified —
+timestamps (`&t=1m30s`) and `@handle` / `channel/` links are all classified, 
 `:Kaeru complete Kikru cast` shows what is recognised.
 
 ```yaml
@@ -333,16 +333,16 @@ kikru:
 
 Phone on the same Wi-Fi: the server binds `127.0.0.1` only. To reach it from a
 phone, forward the port (`ssh -L 8722:127.0.0.1:8722 you@laptop`) or add an
-iOS/Android shortcut that posts to the URL — or simply use the `kikru://`
+iOS/Android shortcut that posts to the URL, or simply use the `kikru://`
 handler on the machine that runs Neovim.
 
-## `:Karu` — Google Cast, in TypeScript
+## `:Karu`: Google Cast, in TypeScript
 
 `karu/` is a dependency-free TypeScript implementation of the protocol behind
 Google Cast (the thing a Chromecast speaks). It works in **both directions**,
 which is what makes casting into Neovim possible at all.
 
-### Be a Cast device — cast from the YouTube app
+### Be a Cast device: cast from the YouTube app
 
 ```vim
 :Karu receive                          " start the receiver (port 8009 + mDNS)
@@ -353,7 +353,7 @@ which is what makes casting into Neovim possible at all.
 ```
 
 Once it is running your machine shows up as a cast target (`Vim TV`) in the
-**YouTube Music**, **YouTube**, **Chrome** and iOS Cast lists — the same list
+**YouTube Music**, **YouTube**, **Chrome** and iOS Cast lists, the same list
 your TV and speakers appear in. Tap the Cast button, pick `Vim TV`, and the
 track is handed to Neovim: the URL goes through Kikru's yt-dlp pipeline, lands
 in the queue and plays with your EQ, analyzer and lyrics. Transport buttons
@@ -376,13 +376,13 @@ karu:
   device_name: Karu · Neovim   # what the Cast list shows
   port: 8009                   # CASTV2 (fixed by the protocol)
   mdns: true                   # advertise _googlecast._tcp (needs a LAN, not a VPN)
-  fallback: none               # mpv | ffplay | none — play locally when Kikru is down
+  fallback: none               # mpv | ffplay | none, play locally when Kikru is down
   bridge: null                 # where casts are handed over (default 127.0.0.1:8722)
   autostart: false             # start the receiver with Neovim
   devices: []                  # extra host[:port] Cast devices to probe
 ```
 
-### Cast to a real device — the sender side
+### Cast to a real device: the sender side
 
 ```vim
 :Karu discover                 " who is on the network (mDNS browse)
@@ -399,21 +399,21 @@ karu:
 `:Karu cast` launches the Default Media Receiver on the device, resolves the
 target (a direct media URL, or a YouTube/YT Music search or link via `yt-dlp
 -g`), and `LOAD`s it. That means a Neovim command can put a YouTube video on
-the TV in the living room — and, because it is the same protocol, anything that
+the TV in the living room, and, because it is the same protocol, anything that
 can cast can also *be* cast to.
 
 ### Requirements & notes
 
-- Node ≥ 22.6 (the TypeScript is run directly — no build step). `:Karu info`
+- Node ≥ 22.6 (the TypeScript is run directly, no build step). `:Karu info`
   prints the CLI, the Node version, the port and the namespaces.
 - Nothing else: no `npm install` needed at runtime (dev dependencies are only
   TypeScript and `@types/node`). `karu/node_modules` is not required.
 - The receiver and the sender can run at the same time (a receiver on 8009 plus
   outgoing control connections).
 - The `:Karu` command is complete on the `:` line: subcommands, flags, device
-  names from the last discovery, and hosts — `:Kaeru complete Karu ca` also works.
+  names from the last discovery, and hosts, `:Kaeru complete Karu ca` also works.
 
-## Lyrics — lrc.red, karaoke & translations
+## Lyrics: lrc.red, karaoke & translations
 
 The lyrics pane (`l`) resolves the current track through local sources first and
 then a configurable provider chain:
@@ -433,7 +433,7 @@ tags (.flac/.mp3 USLT, Vorbis LYRICS)  →  <track>.lrc  →  cache  →  provid
 The chain stops at the first **synced** hit and remembers the first **plain**
 hit as a fallback (`sync_first = false` takes the first hit of any kind). Every
 provider is optional: `:Kikru lyrics providers` lists the chain and what is
-enabled, and the pane footer shows where the current lyrics came from —
+enabled, and the pane footer shows where the current lyrics came from, 
 `lrc.red · Bohemian Rhapsody (word-synced, translated)`.
 
 Because lrc.red, SyncLRC and many LRCLIB rows ship *enhanced* LRC
@@ -453,11 +453,11 @@ written next to the audio file:
 :Kikru lyrics save ~/Music/Queen/bohemian.ttml   " Apple-style TTML (needs Karu)
 ```
 
-### TTML — Apple Music, QQ/NetEase and YouTube lyrics
+### TTML: Apple Music, QQ/NetEase and YouTube lyrics
 
-`.ttml` files are first-class too. TTML carries what LRC cannot — per-syllable
+`.ttml` files are first-class too. TTML carries what LRC cannot, per-syllable
 timing, `<br/>` breaks, duet agents (`ttm:agent`, `itunes:songPart`), translation
-and transliteration tracks, background vocals (`ttm:role="x-bg"`) — so the parser
+and transliteration tracks, background vocals (`ttm:role="x-bg"`), so the parser
 lives in TypeScript (`karu/src/lyrics/ttml.ts`, built for
 `itunes:timing="Word"|"Line"`, the AMLL/QQ/NetEase dialect, and YouTube's legacy
 `<timedtext format="3">`) and normalises everything to enhanced LRC plus an
@@ -472,7 +472,7 @@ lrc.red hit: word-level karaoke, translations in the pane, one cache, one
 :Kikru lyrics save ~/Music/Queen/bohemian.ttml   " write the current lyrics as TTML
 ```
 
-TTML needs the Karu CLI (Node ≥ 22.6 or a compiled `karu`) — `:Kikru lyrics
+TTML needs the Karu CLI (Node ≥ 22.6 or a compiled `karu`), `:Kikru lyrics
 providers` says whether it is available, and without it `.ttml` files are
 skipped (never half-parsed). The converter is usable on its own:
 
@@ -577,7 +577,7 @@ For NeoCodeium, pick the `neocodeium` preset, then use the plugin's own commands
 :Kaeru sftp download-project " whole remote tree (scp -r)
 :Kaeru sftp diff             " buffer vs remote copy (diffsplit)
 
-" every sftp command — paths are relative to remotePath unless absolute
+" every sftp command, paths are relative to remotePath unless absolute
 :Kaeru sftp ls [path]        :Kaeru sftp mkdir|rmdir|rm <path>
 :Kaeru sftp rename <a> <b>   :Kaeru sftp chmod|chown|chgrp <v> <path>
 :Kaeru sftp ln [-s] <a> <b>  :Kaeru sftp symlink <a> <b>
@@ -609,9 +609,9 @@ For NeoCodeium, pick the `neocodeium` preset, then use the plugin's own commands
 }
 ```
 
-Keys are tried in order (`-i` each); `sftp.keys` / `sftp.options` in `kaeru.yaml` provide defaults for every profile, and `host` may be an alias from your ssh config. The file may be an array of profiles; profiles can also live in `sftp.profiles` (JSON or YAML). Uploads are git-aware (`git ls-files` + ignore globs), split round-robin across `sftp.concurrency` concurrent `sftp -b` processes, and create remote directories as needed. `password` works when `sshpass` is installed, but keys / ssh-agent are recommended. The config file is never uploaded — gitignore it if it holds secrets.
+Keys are tried in order (`-i` each); `sftp.keys` / `sftp.options` in `kaeru.yaml` provide defaults for every profile, and `host` may be an alias from your ssh config. The file may be an array of profiles; profiles can also live in `sftp.profiles` (JSON or YAML). Uploads are git-aware (`git ls-files` + ignore globs), split round-robin across `sftp.concurrency` concurrent `sftp -b` processes, and create remote directories as needed. `password` works when `sshpass` is installed, but keys / ssh-agent are recommended. The config file is never uploaded, gitignore it if it holds secrets.
 
-## Configuration — `kaeru.yaml`
+## Configuration: `kaeru.yaml`
 
 Everything below can be written in YAML instead of Lua. `:Kaeru config` creates and opens the global file (`~/.config/nvim/kaeru.yaml`); `:Kaeru config project` creates `./kaeru.yaml` for the current project (read via `vim.secure.read`, so you trust it once). Precedence: defaults < global < project < `setup()` opts. `:Kaeru config reload` / `show` re-read and print the effective configuration.
 
@@ -643,9 +643,9 @@ Installed plugins are archived under `~/.cache/nvim/kaeru/`:
 
 | File | Content | Used when |
 | --- | --- | --- |
-| `<name>.nvimpack` | zip of the whole plugin directory — every file and folder, `.git` included (tar.gz fallback) | default |
-| `<name>.pack` | `git bundle --all` — only git objects, much smaller | directory larger than `cache.pack_threshold` (50 MiB) |
-| `index.json` | format, size, commit, url, date | — |
+| `<name>.nvimpack` | zip of the whole plugin directory, every file and folder, `.git` included (tar.gz fallback) | default |
+| `<name>.pack` | `git bundle --all`, only git objects, much smaller | directory larger than `cache.pack_threshold` (50 MiB) |
+| `index.json` | format, size, commit, url, date | none |
 
 `auto_pack` archives a plugin right after it is installed; `auto_restore` unpacks a cached plugin into the lazy.nvim root *before* `:Lazy install` runs, so re-installs need no network. Bundles get their `origin` reset to the real URL so `:Lazy update` keeps working.
 
@@ -814,7 +814,7 @@ lazy.nvim merges every `lua/<module>/*.lua` file for each `{ import = "<module>"
 2. writes `<file>.lua` returning a single spec table;
 3. calls `require("lazy.core.plugin").load()` so lazy.nvim re-reads its specs, then `require("lazy").install({ plugins = { name } })`, which opens the lazy.nvim UI and clones the plugin.
 
-Generated files are plain lazy.nvim specs — edit them freely afterwards.
+Generated files are plain lazy.nvim specs, edit them freely afterwards.
 
 ## Universal `README.md` Kaeru Parser
 
@@ -837,7 +837,7 @@ Generated files are plain lazy.nvim specs — edit them freely afterwards.
 :'<,'>Kaeru parse                  " parse selected snippet in current buffer
 ```
 
-## `:Kikru` — Built-in Player with 10-Band EQ, Visualizer, Radio & 2-Neovim Device Controller
+## `:Kikru`: Built-in Player with 10-Band EQ, Visualizer, Radio & 2-Neovim Device Controller
 
 `:Kikru` provides a floating music & radio studio inside Neovim and in the Starsky Web IDE, including a **2-Neovim Device Controller (`Server <-> Client`)** over TCP (`vim.uv.new_tcp()`):
 
@@ -849,7 +849,7 @@ Generated files are plain lazy.nvim specs — edit them freely afterwards.
 :Kikru visualizer spectrum       " switch real-time ASCII visualizer (spectrum, wave, vu, matrix, starfield)
 ```
 
-## `:Kaeru boot` — ASCII Boot Animation
+## `:Kaeru boot`: ASCII Boot Animation
 
 ```vim
 :Kaeru boot                        " play the interactive STARSKY / INSTALLER.NVIM ASCII boot sequence

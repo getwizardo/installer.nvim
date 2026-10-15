@@ -1,9 +1,9 @@
--- kaeru.nvim · :Kikru — remote control.
+-- kaeru.nvim · :Kikru: remote control.
 --
 -- Two transports, one protocol:
 --
 --   * a local unix socket (`$XDG_RUNTIME_DIR/nvim-kaeru-kikru.sock`) for
---     headless/daemon mode — `:Kikru ipc play`, exactly like cliamp's
+--     headless/daemon mode: `:Kikru ipc play`, exactly like cliamp's
 --     `cliamp ipc <command>` remote control;
 --   * TCP for the **2-Neovim** setup: one Neovim instance is the server and
 --     owns the audio output, any number of other instances connect as clients,
@@ -323,7 +323,7 @@ function M.start_server(opts)
   local server = uv.new_tcp()
   local ok_bind, bind_err = server:bind(host, port)
   if not ok_bind then
-    return false, ("could not bind %s:%d — %s"):format(host, port, tostring(bind_err))
+    return false, ("could not bind %s:%d, %s"):format(host, port, tostring(bind_err))
   end
   M.server = server
   M.role = "server"
@@ -424,7 +424,7 @@ function M.connect_client(opts)
       if err then
         M.client = nil
         M.role = "none"
-        M.emit_error(("could not connect to %s:%d — %s"):format(host, port, tostring(err)))
+        M.emit_error(("could not connect to %s:%d, %s"):format(host, port, tostring(err)))
         return
       end
       connected = true

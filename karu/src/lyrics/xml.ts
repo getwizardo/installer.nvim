@@ -2,7 +2,7 @@
  * A tiny namespace-aware XML parser.
  *
  * TTML (Apple Music / lrc.red / AMLL / YouTube) needs element structure,
- * attributes with prefixes and entities — not XSLT. This is a hand-written
+ * attributes with prefixes and entities, not XSLT. This is a hand-written
  * scanner: no dependencies, no DOM, ~200 lines, and it keeps the prefixes
  * (`ttm:agent`, `itunes:key`, `amll:meta`) instead of resolving them, which is
  * exactly how the TTML profiles are read in practice.

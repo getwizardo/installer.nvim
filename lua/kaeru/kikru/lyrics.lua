@@ -1,4 +1,4 @@
--- kaeru.nvim · :Kikru — lyrics.
+-- kaeru.nvim · :Kikru: lyrics.
 --
 -- Local sources first, then a chain of online providers:
 --
@@ -7,16 +7,16 @@
 --   3. the on-disk cache (`stdpath("cache")/kaeru/lyrics`)
 --   4. providers, in the order configured by `kikru.lyrics.providers`:
 --
---        lrc.red    https://lrc.red/docs — 29.8M tracks, 12.5M synced.
+--        lrc.red    https://lrc.red/docs: 29.8M tracks, 12.5M synced.
 --                   `GET /s/<ISRC>.lrc` (word-level timestamps), `GET
 --                   /match.json?track=&artist=&album=&duration=` (scored hits),
 --                   `GET /search.json?q=` as a free-text fallback.
---        LRCLIB     https://lrclib.net/docs — `GET /api/get` + `/api/search`.
+--        LRCLIB     https://lrclib.net/docs: `GET /api/get` + `/api/search`.
 --        NetEase    `music.163.com/api/search/get` → `/api/song/lyric`
 --                   (also carries translations in `tlyric`).
---        SyncLRC    https://synclrc.dev — `api.synclrc.dev/lyrics`,
+--        SyncLRC    https://synclrc.dev: `api.synclrc.dev/lyrics`,
 --                   karaoke / synced / plain, 30 requests per minute.
---        lyrics.ovh https://lyrics.ovh — plain text only, last resort.
+--        lyrics.ovh https://lyrics.ovh: plain text only, last resort.
 --
 -- lrc.red, SyncLRC and many LRCLIB rows ship *enhanced* LRC with word-level
 -- `[00:01.22]<00:01.22>word` timing. `parse_lrc` keeps those in `line.words`,
@@ -65,31 +65,31 @@ M.endpoints = {
 M.provider_list = {
   {
     name = "lrc.red",
-    label = "lrc.red — 29.8M tracks, word-level timing",
+    label = "lrc.red, 29.8M tracks, word-level timing",
     home = "https://lrc.red",
     synced = true,
   },
   {
     name = "lrclib",
-    label = "LRCLIB — free synced lyrics API",
+    label = "LRCLIB, free synced lyrics API",
     home = "https://lrclib.net",
     synced = true,
   },
   {
     name = "netease",
-    label = "NetEase Cloud Music — synced + translations",
+    label = "NetEase Cloud Music, synced + translations",
     home = "https://music.163.com",
     synced = true,
   },
   {
     name = "synclrc",
-    label = "SyncLRC — karaoke/synced/plain API",
+    label = "SyncLRC, karaoke/synced/plain API",
     home = "https://synclrc.dev",
     synced = true,
   },
   {
     name = "lyrics.ovh",
-    label = "lyrics.ovh — plain text, last resort",
+    label = "lyrics.ovh, plain text, last resort",
     home = "https://lyrics.ovh",
     synced = false,
   },
@@ -512,7 +512,7 @@ end
 -- and the UI need no TTML knowledge at all.
 --
 -- Requires the Karu CLI (Node ≥ 22 or a compiled `karu`); without it TTML files
--- are skipped and `M.ttml_error` explains why — never half-parsed.
+-- are skipped and `M.ttml_error` explains why, never half-parsed.
 
 ---@param text string|nil
 ---@return boolean
@@ -1078,7 +1078,7 @@ function M.provider_fetch(name, track, opts, cb)
   end
 end
 
---- The request each provider would make first — handy for tests and `:Kikru lyrics`.
+--- The request each provider would make first: handy for tests and `:Kikru lyrics`.
 ---@param name string
 ---@param track MusicTagTrack
 ---@return string|nil url, string kind

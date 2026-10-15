@@ -1,5 +1,5 @@
 /**
- * Multicast DNS (`_googlecast._tcp.local`) — responder + browser.
+ * Multicast DNS (`_googlecast._tcp.local`), responder + browser.
  *
  * Cast devices are discovered over mDNS: a sender multicasts a PTR query for
  * `_googlecast._tcp.local`, and each device answers with PTR (instance name),
@@ -138,11 +138,11 @@ export function browseQuery(id = 0): Uint8Array {
 }
 
 export interface CastDevice {
-  /** TXT `id` — the stable device id senders also use. */
+  /** TXT `id`, the stable device id senders also use. */
   id: string;
   /** TXT `fn`, falling back to the mDNS instance name. */
   name: string;
-  /** TXT `md` — model name. */
+  /** TXT `md`, model name. */
   model: string;
   address: string;
   port: number;
@@ -350,7 +350,7 @@ export class MdnsBrowser {
     await new Promise<void>((resolve) => socket.close(() => resolve()));
   }
 
-  /** Feed a raw mDNS packet — exposed for tests. */
+  /** Feed a raw mDNS packet, exposed for tests. */
   handleMessage(message: Uint8Array): void {
     let packet;
     try {

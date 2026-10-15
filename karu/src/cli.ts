@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Karu CLI — the surface Neovim talks to.
+ * Karu CLI, the surface Neovim talks to.
  *
  * Every command prints either human text or, with `--json`, exactly one JSON
  * object per line (`{"event":"ready",…}` for long-running mode), so
@@ -109,7 +109,7 @@ function emitter(json: boolean): Emitter {
   };
 }
 
-const HELP = `karu ${VERSION} — Google Cast for Neovim (Kikru)
+const HELP = `karu ${VERSION}. Google Cast for Neovim (Kikru)
 
   karu receive [--name NAME] [--port 8009] [--no-mdns] [--bridge URL]
                [--token T] [--fallback mpv|ffplay|none] [--cert-dir DIR]
@@ -135,8 +135,8 @@ const HELP = `karu ${VERSION} — Google Cast for Neovim (Kikru)
   karu lyrics FILE|- [--format lrc|ttml|srt|vtt|json|plain|summary] [--lang CODE]
                      [--offset MS] [--out FILE] [--json]
       Parse Apple Music / AMLL (QQ, NetEase) / YouTube TTML and convert it.
-      Default output is enhanced LRC — the format Kikru's karaoke renderer
-      understands — so \`karu lyrics song.ttml > song.lrc\` is a whole pipeline.
+      Default output is enhanced LRC, the format Kikru's karaoke renderer
+      understands, so \`karu lyrics song.ttml > song.lrc\` is a whole pipeline.
 
 Flags: --json machine-readable output (one object per line).`;
 
@@ -153,7 +153,7 @@ async function resolveMediaTarget(target: string, log: (message: string) => void
   // Not a URL: hand it to yt-dlp (the same resolver Kikru uses) to get a stream.
   const ytdlp = await resolveWithYtDlp(target, log);
   if (ytdlp) return { url: ytdlp };
-  throw new Error("not a URL and yt-dlp is unavailable — pass a direct media URL");
+  throw new Error("not a URL and yt-dlp is unavailable, pass a direct media URL");
 }
 
 function resolveWithYtDlp(query: string, log: (message: string) => void): Promise<string | null> {
@@ -214,7 +214,7 @@ async function withDevice<T>(
   if (!device) {
     throw new Error(
       devices.length === 0
-        ? "no Cast devices found — pass --address HOST[:PORT] or check the network"
+        ? "no Cast devices found, pass --address HOST[:PORT] or check the network"
         : `no device matches “${wanted}” (found: ${devices.map((entry) => entry.name).join(", ")})`
     );
   }
@@ -399,7 +399,7 @@ async function main(): Promise<void> {
       } else {
         devices.forEach((device, index) => {
           const volume = device.status ? ` · ${Math.round((device.status.volume ?? 0) * 100)}%` : "";
-          out.line(`${index + 1}. ${device.name} — ${device.address}:${device.port} (${device.model}${volume})`);
+          out.line(`${index + 1}. ${device.name}, ${device.address}:${device.port} (${device.model}${volume})`);
         });
       }
       return;
@@ -497,7 +497,7 @@ async function main(): Promise<void> {
     }
 
     case "status": {
-      // `karu status [DEVICE]` — the device is the *first* positional here.
+      // `karu status [DEVICE]`: the device is the *first* positional here.
       const { device, result } = await withDevice(args, args.positionals[0], async (client) => {
         const status = await client.getStatus();
         await client.launch();
@@ -515,7 +515,7 @@ async function main(): Promise<void> {
     }
 
     default:
-      out.error(`unknown command “${args.command}” — try: karu help`);
+      out.error(`unknown command “${args.command}”, try: karu help`);
   }
 }
 

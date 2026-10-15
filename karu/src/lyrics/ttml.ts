@@ -1,11 +1,11 @@
 /**
- * TTML parser — Apple Music, lrc.red, AMLL (QQ/NCM), and legacy YouTube captions.
+ * TTML parser. Apple Music, lrc.red, AMLL (QQ/NCM), and legacy YouTube captions.
  *
  * The plugin's lyrics pipeline speaks one shape (see `lua/kaeru/kikru/lyrics.lua`):
  *
  *   { synced: [{time, text, words: [{t, text}]}], plain, source, offset, meta, raw }
  *
- * `time` is seconds, `words[].t` is a per-word offset **inside the line** — the
+ * `time` is seconds, `words[].t` is a per-word offset **inside the line**, the
  * same convention the enhanced-LRC parser produces (`[mm:ss.xx]<mm:ss.xx>word`).
  * Everything here normalises to that, so a TTML hit drives karaoke exactly like
  * an LRC hit does, and it can be rendered back as enhanced LRC for the Lua side.
@@ -42,7 +42,7 @@ export interface TtmlLine {
   agent?: number;
   /** Raw agent id (`v1`, `v1000`, …). */
   agentId?: string;
-  /** `itunes:key` — Apple's stable line id, used to attach translations. */
+  /** `itunes:key`. Apple's stable line id, used to attach translations. */
   key?: string;
   /** `itunes:songPart` of the enclosing `<div>` (`Chorus`, `Bridge`, …). */
   part?: string;
@@ -58,24 +58,24 @@ export interface LyricsDoc {
   translations: Record<string, string>;
   /** `xml:lang` of each translation, in the order they were declared. */
   translationLangs: string[];
-  /** Transliteration (romanisation) tracks — word timed when the source is. */
+  /** Transliteration (romanisation) tracks, word timed when the source is. */
   transliterations: { lang?: string; lines: Record<string, { text: string; words: TtmlWord[] }> }[];
   /** Per-line singer index for duets (1-based), keyed by `itunes:key` or index. */
   agents: number[];
   /** `itunes:key` per line index. */
   keys: string[];
   meta: Record<string, string | string[]>;
-  /** `<div begin>` — the master tempo/offset, in **milliseconds**. */
+  /** `<div begin>`, the master tempo/offset, in **milliseconds**. */
   offset: number;
   /** True when any line carries per-word timing. */
   wordSync: boolean;
   /** True when `ttm:role="x-bg"` lines or spans were present. */
   hasBackground: boolean;
-  /** 0..1 — how much of the timeline is covered by `<p>` elements. */
+  /** 0..1, how much of the timeline is covered by `<p>` elements. */
   coverage: number;
 }
 
-/** Historical name — a parsed document from any supported source. */
+/** Historical name, a parsed document from any supported source. */
 export type ParsedTtml = LyricsDoc;
 
 export interface ParseOptions {
@@ -161,7 +161,7 @@ interface WordDraft {
 
 /**
  * Flatten a `<p>`'s content into word drafts in document order, preserving the
- * whitespace that separates fragments — that whitespace is meaningful
+ * whitespace that separates fragments, that whitespace is meaningful
  * (`<span>Hush,</span> <span>little</span>`).
  */
 function collectWords(node: XmlNode, inheritedRole: string | undefined, out: WordDraft[]): void {
@@ -382,7 +382,7 @@ function toMs(seconds: number | undefined): number {
 }
 
 /**
- * Text of an element keeping the whitespace between child elements — needed for
+ * Text of an element keeping the whitespace between child elements, needed for
  * `<text for="L1"><span>Is</span> <span>this</span></text>`, where `textOf`
  * would glue the words together.
  */
@@ -573,7 +573,7 @@ function parseAppleLike(root: XmlNode, options: ParseOptions): LyricsDoc {
 }
 
 /**
- * Legacy YouTube timed-text (`<timedtext format="3">`) — paragraph `t`/`d` in
+ * Legacy YouTube timed-text (`<timedtext format="3">`), paragraph `t`/`d` in
  * milliseconds and `<s>` spans with *relative* `t` offsets.
  */
 function parseYoutube(root: XmlNode): LyricsDoc {
@@ -886,7 +886,7 @@ function subtitleTime(seconds: number, comma = true): string {
 }
 
 /**
- * Subtitles (`srt`) or WebVTT (`vtt`) — handy for showing lyrics through
+ * Subtitles (`srt`) or WebVTT (`vtt`), handy for showing lyrics through
  * `mpv --sub-file`, and the one format every player understands.
  */
 export function toSubtitles(doc: LyricsDoc, opts: { format?: "srt" | "vtt"; offsetMs?: number; translations?: boolean } = {}): string {

@@ -319,7 +319,7 @@ export class CastClient {
 
   private appDestination(): string {
     const destination = this.transportId ?? this.app?.transportId;
-    if (!destination) throw new Error("sender: no media receiver session — call launch() first");
+    if (!destination) throw new Error("sender: no media receiver session, call launch() first");
     return destination;
   }
 

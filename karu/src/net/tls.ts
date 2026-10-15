@@ -4,7 +4,7 @@
  * Real Cast devices present a certificate signed by Google's device CA, but
  * senders talk to them with certificate validation disabled (the transport is
  * TLS for confidentiality, authentication happens in the `deviceauth`
- * namespace). Every open-source receiver — and pychromecast, VLC, Chromium —
+ * namespace). Every open-source receiver, and pychromecast, VLC, Chromium, 
  * therefore works with a self-signed certificate. We build one from scratch:
  * X.509 v3 DER assembled by hand and signed with ECDSA P-256 via node:crypto,
  * so there is no dependency on `openssl` or a pre-baked certificate.

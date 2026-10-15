@@ -71,7 +71,7 @@ their READMEs and install them with a single key.
                                                           *:Kaeru-pick*
 :Kaeru pick [source]     Open a picker over plugins, mason, sftp, cache, radio,
                          queue or cast. Uses telescope.nvim, fzf-lua, snacks.nvim,
-                         mini.pick or |vim.ui.select| — whichever is installed.
+                         mini.pick or |vim.ui.select|, whichever is installed.
 :Kaeru complete [text]   Fuzzy-complete *anything* (our subcommands, commands,
                          files, options, events, colorschemes, help tags, …) in
                          a picker and run the selected line.
@@ -476,7 +476,7 @@ Lua API: `require("kaeru").mason.pick{category="LSP"}`, `.install(name)`,
 kaeru.nvim has its own completion engine (no plugin needed) and plugs into the
 ones you may already use.
 
-On the `:` command line — for `:Kaeru` and `:Kikru`:                    *:Kaeru-Tab*
+On the `:` command line, for `:Kaeru` and `:Kikru`:                    *:Kaeru-Tab*
 
   - fuzzy matching that ignores case and separators                                 ~
       `fole/laz`   -> folke/lazy.nvim
@@ -657,8 +657,8 @@ Recognised links: `youtube.com/watch`, `youtu.be`, `/shorts/`, `/live/`,
 Vimeo, archive.org, Spotify/Deezer/Apple/Yandex pages and any direct audio
 stream or Icecast URL. Timestamps (`&t=1m30s`) are kept.
 
-`:Kikru appcast` reads the currently playing item over MPRIS — the YouTube
-Music desktop app, a Chromium/Brave/Firefox tab, Spotify, VLC, mpv — and plays
+`:Kikru appcast` reads the currently playing item over MPRIS, the YouTube
+Music desktop app, a Chromium/Brave/Firefox tab, Spotify, VLC, mpv, and plays
 it here with the EQ and analyzer.
 
 Options: `kikru.cast = { port = 8722, token = nil, auto_start = false, ui = true }`.
@@ -790,7 +790,7 @@ skipped rather than half-parsed. The converter is also a standalone command:
     },
   })
 <
-Lua API: `require("kaeru.kikru.lyrics")` — `resolve(track, opts, cb)`,
+Lua API: `require("kaeru.kikru.lyrics")`, `resolve(track, opts, cb)`,
 `fetch_remote`, `search`, `providers()`, `parse_lrc`, `window`,
 `karaoke_state`, `save`, `cache_read`/`cache_write`.
 
@@ -816,7 +816,7 @@ Lua API: `require("kaeru.kikru.lyrics")` — `resolve(track, opts, cb)`,
   require("kaeru.integrations").setup({ notify = true, scheme = true })
 <
 
-Lua API: `require("kaeru.integrations")` — `.pick(items, opts)`,
+Lua API: `require("kaeru.integrations")`, `.pick(items, opts)`,
 `.best_picker()`, `.statusline({width})`, `.lualine()`, `.job(args, opts, cb)`,
 `.with_progress(msg, fn)`, `.report()`, `.report_text()`, `.theme_for_colorscheme()`.
 

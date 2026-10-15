@@ -86,7 +86,7 @@ M.defaults = {
   },
 
   -- `:` command-line autocomplete.
-  -- Google Cast (`:Karu`) — the TypeScript implementation in karu/.
+  -- Google Cast (`:Karu`): the TypeScript implementation in karu/.
   -- `karu/` is written in TypeScript and run either compiled (npm run build)
   -- or directly by Node ≥ 22.6 (type stripping), so nothing has to be built.
   karu = {
@@ -128,7 +128,7 @@ M.defaults = {
     -- every built-in command with its own argument shape, then every
     -- `getcompletion` category (files, buffers, options, events, filetypes,
     -- colorschemes, help tags, mappings, environment variables, augroups,
-    -- tags, …) — a superset of Neovim's own `<Tab>`. Set to false to leave
+    -- tags, …): a superset of Neovim's own `<Tab>`. Set to false to leave
     -- unknown command lines to Neovim itself.
     any = true,
   },
@@ -459,17 +459,17 @@ function M.template()
     "  auto_pack: true",
     "  auto_restore: true",
     "",
-    "# Karu — Google Cast (`:Karu`), the TypeScript receiver/sender in karu/.",
+    "# Karu: Google Cast (`:Karu`), the TypeScript receiver/sender in karu/.",
     "karu:",
     "  enabled: true",
     "  device_name: Karu · Neovim   # what phones show in their Cast list",
     "  port: 8009                   # CASTV2 port (fixed by the protocol)",
     "  mdns: true                   # advertise _googlecast._tcp so apps find us",
-    "  fallback: none               # mpv | ffplay | none — play locally when Kikru is down",
+    "  fallback: none               # mpv | ffplay | none, play locally when Kikru is down",
     "  devices: []                  # extra host[:port] Cast devices to probe",
     "  # bridge: http://127.0.0.1:8722   # where cast media is handed to Kikru",
     "",
-    "# Kikru — the player (`:Kikru`). `music:` is accepted as an alias of this block.",
+    "# Kikru: the player (`:Kikru`). `music:` is accepted as an alias of this block.",
     "kikru:",
     "  engine: auto            # auto | mpv | ffplay | vlc | mpd | mpris",
     "  volume: 78",

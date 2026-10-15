@@ -1,12 +1,12 @@
--- kaeru.nvim · :Karu — Google Cast, powered by the TypeScript implementation
+-- kaeru.nvim · :Karu: Google Cast, powered by the TypeScript implementation
 -- in `karu/` (see `karu/README.md`).
 --
 -- Two directions:
---   * **receiver** — `:Karu receive` makes this machine show up in the Cast
+--   * **receiver**: `:Karu receive` makes this machine show up in the Cast
 --     list of the YouTube / YouTube Music apps (mDNS `_googlecast._tcp`,
 --     CASTV2 over TLS on port 8009). Every LOAD is bridged into Kikru through
 --     the cast server (`:Kikru cast server`), so the phone streams into Neovim.
---   * **sender** — `:Karu discover` / `:Karu cast <url> [device]` controls real
+--   * **sender**: `:Karu discover` / `:Karu cast <url> [device]` controls real
 --     Chromecast / Google TV / Nest devices: launch the Default Media
 --     Receiver, LOAD a stream, transport, volume.
 --
@@ -135,7 +135,7 @@ function M.available()
   end
   local version = M.node_version()
   if not version then
-    return false, "node is not installed — Karu needs Node ≥ 22.6 (or a compiled karu/dist)"
+    return false, "node is not installed. Karu needs Node ≥ 22.6 (or a compiled karu/dist)"
   end
   local needed = M.min_node
   if version[1] < needed[1] or (version[1] == needed[1] and version[2] < needed[2]) then
@@ -144,7 +144,7 @@ function M.available()
     if dist and executable_file(dist) then
       return true
     end
-    return false, ("node %d.%d is too old — Karu needs ≥ %d.%d (or run `npm run build` in karu/)"):format(version[1], version[2], needed[1], needed[2])
+    return false, ("node %d.%d is too old. Karu needs ≥ %d.%d (or run `npm run build` in karu/)"):format(version[1], version[2], needed[1], needed[2])
   end
   return true
 end
@@ -515,7 +515,7 @@ function M.receive(opts, on_ready)
     if payload.event == "ready" then
       M._receiver.info = payload
       notify(
-        ("Karu is a Cast device now: “%s” on %s:%d — cast from the YouTube Music app"):format(payload.name, payload.address, payload.port),
+        ("Karu is a Cast device now: “%s” on %s:%d, cast from the YouTube Music app"):format(payload.name, payload.address, payload.port),
         vim.log.levels.INFO
       )
       if on_ready then
@@ -589,7 +589,7 @@ end
 -- ---------------------------------------------------------------------------
 
 local HELP = {
-  "Karu — Google Cast (karu/, TypeScript)",
+  "Karu: Google Cast (karu/, TypeScript)",
   "",
   "  :Karu                        status of the first device",
   "  :Karu discover [host:port]   list Cast devices on the network",
@@ -866,7 +866,7 @@ function M.dispatch(args, opts)
     -- `:Karu <url|query> [device]` casts straight away
     M.cast(sub, { device = args[2] })
   else
-    report("Karu: unknown subcommand “" .. tostring(sub) .. "” — try `:Karu help`", vim.log.levels.ERROR)
+    report("Karu: unknown subcommand “" .. tostring(sub) .. "”, try `:Karu help`", vim.log.levels.ERROR)
   end
 end
 

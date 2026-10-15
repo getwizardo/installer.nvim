@@ -1,5 +1,5 @@
 /**
- * Karu — Google Cast (CASTV2) in TypeScript.
+ * Karu: Google Cast (CASTV2) in TypeScript.
  *
  * Two directions, one implementation:
  *   - `CastReceiverServer` makes this machine appear in the Cast list of the

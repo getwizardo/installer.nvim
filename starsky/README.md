@@ -29,9 +29,9 @@ From Neovim: `:Kaeru starsky start`.
 
 ## Layout
 
-- `src/routes/` — tabbed shell (`+page.svelte`) and `api/*/+server.ts` routes
-- `src/lib/components/` — IDE, Spec, Parser, GitHub, Mason, SFTP, and Music panels
-- `src/lib/server/` — Neovim bridge (`nvim.ts`, `luaBridge.ts`), Clina, SFTP, music
-- `src/lib/client/` — browser helpers and Web Components (registered in `onMount`)
+- `src/routes/`: tabbed shell (`+page.svelte`) and `api/*/+server.ts` routes
+- `src/lib/components/`: IDE, Spec, Parser, GitHub, Mason, SFTP, and Music panels
+- `src/lib/server/`: Neovim bridge (`nvim.ts`, `luaBridge.ts`), Clina, SFTP, music
+- `src/lib/client/`: browser helpers and Web Components (registered in `onMount`)
 
 Imports use the `#lib/*` alias (declared in `package.json` `imports` and `tsconfig.json` `paths`).

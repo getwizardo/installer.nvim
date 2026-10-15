@@ -353,7 +353,7 @@ vim.api.nvim_create_user_command("Kikru", function(cmd)
 end, {
   nargs = "*",
   bang = true,
-  desc = ":Kikru — Built-in Kikru Player with 10-band EQ, Visualizer, Radio & 2-Neovim Device Controller",
+  desc = ":Kikru: Built-in Kikru Player with 10-band EQ, Visualizer, Radio & 2-Neovim Device Controller",
   complete = function(_, cmdline, cursorpos)
     return complete(cmdline, cursorpos)
   end,
@@ -410,5 +410,5 @@ vim.api.nvim_create_user_command("KeruOS", function()
   require("kaeru").ensure_setup()
   require("kaeru.keruos").open()
 end, {
-  desc = ":KeruOS — launcher dashboard for Kikru, Winso, Starsky, CVE, Upgrator, plugins and the Cast receiver",
+  desc = ":KeruOS, launcher dashboard for Kikru, Winso, Starsky, CVE, Upgrator, plugins and the Cast receiver",
 })

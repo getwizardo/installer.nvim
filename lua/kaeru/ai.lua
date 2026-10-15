@@ -433,7 +433,7 @@ function M.pick()
     local p = current()
     if p then
       local src = require("kaeru").preview(p.form)
-      UI.notify(("%s — %s\nNeeds: %s\n\n%s"):format(p.title, p.desc, p.needs, src or ""))
+      UI.notify(("%s, %s\nNeeds: %s\n\n%s"):format(p.title, p.desc, p.needs, src or ""))
     end
   end)
   -- skip headers when moving

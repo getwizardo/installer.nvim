@@ -1,5 +1,5 @@
 /**
- * The Cast receiver state machine — sockets and TLS live in `server.ts`, so
+ * The Cast receiver state machine, sockets and TLS live in `server.ts`, so
  * everything here is a pure `handle()` call that can be unit-tested.
  *
  * Two endpoints are modelled, exactly like a real device:

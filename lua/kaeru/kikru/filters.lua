@@ -1,8 +1,8 @@
--- kaeru.nvim · :Kikru — audio filter graph (10-band EQ + lavalink/NodeLink
+-- kaeru.nvim · :Kikru: audio filter graph (10-band EQ + lavalink/NodeLink
 -- style effects) rendered down to whatever the active backend understands.
 --
 -- The filter vocabulary follows the LavaLink / NodeLink "filters" object
--- (https://github.com/PerformanC/NodeLink — equalizer, timescale, tremolo,
+-- (https://github.com/PerformanC/NodeLink: equalizer, timescale, tremolo,
 -- vibrato, rotation, distortion, channelMix, lowPass, karaoke, compressor,
 -- reverb, echo, chorus, phaser) so that the same preset names work in the
 -- Neovim UI, the 2-Neovim remote and the Starsky web client.
@@ -21,7 +21,7 @@ M.frequencies = { 31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000 }
 ---@type string[]
 M.frequency_labels = { "31Hz", "62Hz", "125Hz", "250Hz", "500Hz", "1kHz", "2kHz", "4kHz", "8kHz", "16kHz" }
 
---- Q (bandwidth) per band — wide at the low end, narrower higher up so the
+--- Q (bandwidth) per band: wide at the low end, narrower higher up so the
 --- bands do not smear into each other.
 ---@type number[]
 M.q = { 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 }

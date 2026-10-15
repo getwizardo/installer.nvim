@@ -1,9 +1,9 @@
--- kaeru.nvim — tiny compatibility shims.
+-- kaeru.nvim: tiny compatibility shims.
 --
 -- The plugin targets Neovim 0.8+, but a surprising amount of the `vim.*`
 -- helpers people take for granted only landed in 0.9/0.10 (`vim.list_slice`,
 -- `vim.tbl_get`, …). Everything is resolved once here so the rest of the
--- code base can use a single, predictable API — and so the pure-Lua test
+-- code base can use a single, predictable API, and so the pure-Lua test
 -- harness (LuaJIT + a small `vim` stub) can exercise the same code paths.
 
 local M = {}

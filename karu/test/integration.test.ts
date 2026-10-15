@@ -1,6 +1,6 @@
 /**
  * End-to-end: our own receiver and our own sender, over real TLS sockets on
- * 127.0.0.1 — the exact code path that talks to a Chromecast, minus the LAN.
+ * 127.0.0.1, the exact code path that talks to a Chromecast, minus the LAN.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -48,7 +48,7 @@ async function withPairing(fn: (ctx: { server: CastReceiverServer; port: number;
   }
 }
 
-test("integration: sender drives receiver — status, launch, load, transport", async () => {
+test("integration: sender drives receiver, status, launch, load, transport", async () => {
   await withPairing(async ({ server, port, loads, events }) => {
     const client = new CastClient({ host: "127.0.0.1", port, name: "Karu Test", timeoutMs: 4000 });
     await client.connect();

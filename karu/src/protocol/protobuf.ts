@@ -1,5 +1,5 @@
 /**
- * Minimal protobuf wire-format codec (proto3 subset) — no dependencies.
+ * Minimal protobuf wire-format codec (proto3 subset), no dependencies.
  *
  * Google Cast frames are a single `CastMessage` protobuf preceded by a 4-byte
  * big-endian length. We only need: varint, length-delimited (string/bytes and

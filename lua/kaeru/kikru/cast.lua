@@ -1,8 +1,8 @@
--- kaeru.nvim · Kikru — cast YouTube / YouTube Music (and friends) into Neovim.
+-- kaeru.nvim · Kikru: cast YouTube / YouTube Music (and friends) into Neovim.
 --
 -- The workflow this module implements is the one every music player has these
 -- days: you are watching something in the YouTube/YouTube Music app (or in a
--- browser tab) and you want it to keep playing — but through Kikru, with the
+-- browser tab) and you want it to keep playing, but through Kikru, with the
 -- 10-band EQ, the NodeLink filter chain and the spectrum analyzer on top.
 --
 -- Three ways in:
@@ -22,7 +22,7 @@
 --
 --   3. `:Kikru appcast` reads the *currently playing* item from any MPRIS
 --      player (the YouTube Music desktop app, a Chromium/Brave/Firefox tab,
---      Spotify, VLC, …) and continues it inside Kikru — this is the "cast the
+--      Spotify, VLC, …) and continues it inside Kikru, this is the "cast the
 --      app you already have open" path and needs no browser extension.
 --
 -- Everything network-ish is optional: without yt-dlp the URLs are still
@@ -127,7 +127,7 @@ function M.classify(url)
   }
   if not host then
     if raw:match("^%a[%w+.-]*:") and not raw:match("^%s") then
-      -- `mailto:`, `magnet:`, `ftp:` … — a scheme we cannot cast.
+      -- `mailto:`, `magnet:`, `ftp:` and similar are schemes we cannot cast.
       result.kind = "unknown"
       result.app = "unsupported"
       return result
@@ -618,7 +618,7 @@ function M.page()
   small { color:#5f7a70 }
 </style></head><body>
 <h1>▸ Kikru cast</h1>
-<small>Paste a YouTube / YouTube Music / SoundCloud link — it plays in Neovim (mpv + 10&nbsp;band EQ + FFT analyzer).</small>
+<small>Paste a YouTube / YouTube Music / SoundCloud link, it plays in Neovim (mpv + 10&nbsp;band EQ + FFT analyzer).</small>
 <form onsubmit="cast(event)">
   <input id="url" placeholder="https://music.youtube.com/watch?v=…" autofocus>
   <button>Cast</button>
@@ -808,7 +808,7 @@ function M.handler_script()
   local port = M.state.port or M.port()
   return table.concat({
     "#!/bin/sh",
-    "# kaeru.nvim · Kikru cast handler — forwards a kikru:// URL to the cast server.",
+    "# kaeru.nvim · Kikru cast handler, forwards a kikru:// URL to the cast server.",
     '# usage: kaeru-cast "kikru://cast?url=https://music.youtube.com/watch?v=…"',
     'url="$1"',
     'case "$url" in',
@@ -1064,7 +1064,7 @@ function M.play_tracks(tracks, mode, done, info)
   return done(true, ("casting %s"):format(label))
 end
 
---- `:Kikru cast <url|query>` — the friendly entry point.
+--- `:Kikru cast <url|query>`: the friendly entry point.
 ---@param url_or_query string
 ---@param opts? {mode?: string, cb?: fun(ok: boolean, message: string)}
 ---@return boolean started

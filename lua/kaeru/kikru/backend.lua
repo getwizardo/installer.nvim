@@ -1,9 +1,9 @@
--- kaeru.nvim · :Kikru — playback backends.
+-- kaeru.nvim · :Kikru: playback backends.
 --
 -- mpv is the primary engine because its JSON IPC gives us *real* state:
 -- position, duration, ICY metadata, audio parameters and a live `af` chain
 -- (that is how the 10-band EQ and the NodeLink style filters are applied).
--- ffplay, VLC, MPD and MPRIS/playerctl are supported as fallbacks — the
+-- ffplay, VLC, MPD and MPRIS/playerctl are supported as fallbacks, the
 -- capability flags below tell the UI what each engine can actually do, so the
 -- player never claims to do something it cannot.
 local Filters = require("kaeru.kikru.filters")
@@ -96,7 +96,7 @@ function M.available_engines()
   if vim.fn.executable("mpv") == 1 then
     engines[#engines + 1] = {
       id = "mpv",
-      name = "mpv (JSON IPC — full EQ & filters)",
+      name = "mpv (JSON IPC, full EQ & filters)",
       bin = "mpv",
       capabilities = { eq = true, filters = true, seek = true, volume = true, metadata = true, position = true, speed = true },
     }
@@ -473,7 +473,7 @@ function M.start(state, cb)
   state = state or {}
   local engine = M.pick_engine()
   if not engine then
-    local err = "no audio backend found — install mpv (recommended), ffplay or VLC"
+    local err = "no audio backend found, install mpv (recommended), ffplay or VLC"
     if cb then
       cb(false, err)
     end
@@ -588,7 +588,7 @@ function M.load(track, opts, cb)
 
   local engine = opts.engine or M.pick_engine()
   if not engine then
-    local err = "no audio backend found — install mpv, ffplay or VLC (see :Kikru engine)"
+    local err = "no audio backend found, install mpv, ffplay or VLC (see :Kikru engine)"
     M.emit("error", { message = err })
     if cb then
       cb(false, err)

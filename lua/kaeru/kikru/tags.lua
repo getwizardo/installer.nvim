@@ -1,10 +1,10 @@
--- kaeru.nvim · :Kikru — pure-Lua audio metadata reader.
+-- kaeru.nvim · :Kikru: pure-Lua audio metadata reader.
 --
 -- Reads the *headers only* (a few KiB per file, never the whole stream) of
 -- MP3 (ID3v2.2/2.3/2.4 + ID3v1 + Xing/Info VBR), FLAC (STREAMINFO +
 -- VORBIS_COMMENT), Ogg (Vorbis / Opus comments), M4A/AAC (MP4 atoms),
 -- WAV (RIFF/fmt/data) and WavPack/AIFF/APE fallbacks, so a whole music
--- library can be indexed without external binaries — the same trick cliamp
+-- library can be indexed without external binaries: the same trick cliamp
 -- uses for non-Latin metadata (https://github.com/bjarneo/cliamp).
 --
 -- Everything here is plain Lua 5.1 (no `bit`, no FFI) and therefore runs
@@ -1049,13 +1049,29 @@ end
 -- Filename fallback -----------------------------------------------------------
 
 --- "01 - Artist - Title.mp3" -> { track = "01", artist = "Artist", title = "Title" }
+--- Split "Artist - Title" at the first separator found: hyphen, en dash or em dash.
+--- `greedy` splits at the last separator instead. The dashes are UTF-8 byte escapes.
+---@param s string
+---@param greedy? boolean
+---@return string|nil artist, string|nil title
+function M.split_artist_title(s, greedy)
+  local head = greedy and "^(.+)" or "^(.-)"
+  for _, sep in ipairs({ "%-", "\226\128\147", "\226\128\148" }) do
+    local artist, title = s:match(head .. "%s+" .. sep .. "%s+(.+)$")
+    if artist then
+      return artist, title
+    end
+  end
+  return nil
+end
+
 ---@param path string
 ---@return {title: string, artist: string, track: string}
 function M.guess_from_filename(path)
   local base = M.basename(path):gsub("%.[%w]+$", "")
   local track_num, rest = base:match("^(%d+)%s*[-._]%s*(.+)$")
   rest = rest or base
-  local artist, title = rest:match("^(.+)%s+[-–—]%s+(.+)$")
+  local artist, title = M.split_artist_title(rest, true)
   if artist and title and #artist <= 48 then
     return { artist = artist, title = title, track = track_num and tostring(tonumber(track_num)) or "" }
   end
@@ -1187,7 +1203,7 @@ function M.read(path, opts)
   return track
 end
 
---- "Artist — Title (4:03)" display label used across the UI, MPRIS and the
+--- "Artist: Title (4:03)" display label used across the UI, MPRIS and the
 --- 2-Neovim / Web sync snapshots.
 ---@param track table
 ---@return string
@@ -1197,7 +1213,7 @@ function M.label(track)
   end
   local title = track.title or M.basename(track.path or "")
   if track.artist and track.artist ~= "" then
-    return ("%s — %s"):format(track.artist, title)
+    return ("%s: %s"):format(track.artist, title)
   end
   return title
 end

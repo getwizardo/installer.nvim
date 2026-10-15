@@ -94,7 +94,7 @@ export async function discover(options: DiscoveryOptions = {}): Promise<Discover
     if (devices.some((device) => device.address === host && device.port === port)) continue;
     const probed = await probeAddress(host, port);
     if (probed.reachable) devices.push(probed);
-    else log(`discovery: ${host}:${port} — ${probed.error}`);
+    else log(`discovery: ${host}:${port}, ${probed.error}`);
   }
 
   return devices.sort((a, b) => a.name.localeCompare(b.name));
