@@ -78,11 +78,17 @@ Optional — each one unlocks more, everything degrades gracefully without them:
 ```lua
 -- lua/plugins/kaeru.lua
 return {
-  "getwizardo/installer.nvim",
-  cmd = "Kaeru",
+  "getwizardo/installer.nvim", -- the repository is being renamed to kaeru.nvim
+  cmd = { "Kaeru", "Kikru", "Clina" },
   opts = {},
 }
 ```
+
+> **Repo name.** The plugin is *kaeru.nvim*: every module lives in `lua/kaeru`,
+> the commands are `:Kaeru` / `:Kikru` / `:Clina` and the docs are
+> `doc/kaeru.txt`. The GitHub repository still answers to
+> `getwizardo/installer.nvim`; once it is renamed to `getwizardo/kaeru.nvim`
+> (GitHub keeps redirecting the old URL) simply update the spec string.
 
 ## Usage
 
@@ -447,7 +453,7 @@ sftp:
 
 ## Plugin cache
 
-Installed plugins are archived under `~/.cache/nvim/installer/`:
+Installed plugins are archived under `~/.cache/nvim/kaeru/`:
 
 | File | Content | Used when |
 | --- | --- | --- |

@@ -850,7 +850,7 @@ end
 --- `:e <Tab>` does — but fuzzy ranked and described.
 ---@param category string
 ---@param base string
----@return InstallerCompletionItem[]
+---@return KaeruCompletionItem[]
 function M.native_items(category, base, menu)
   local items = {}
   for _, word in ipairs(Compat.getcompletion(base or "", category)) do
@@ -865,7 +865,7 @@ end
 --- then every native category Neovim knows about. This is what
 --- `:Kaeru complete <prefix>` (and `complete.any = true`) uses.
 ---@param prefix? string
----@return InstallerCompletionItem[]
+---@return KaeruCompletionItem[]
 function M.everything(prefix)
   prefix = prefix or ""
   local items = {}
@@ -1817,7 +1817,7 @@ end
 --- `M.everything` / `:Kaeru complete`).
 ---@param name string  "Kaeru" | "Kikru" | "Clina"
 ---@param tokens string[]
----@return (string|InstallerCompletionItem)[]
+---@return (string|KaeruCompletionItem)[]
 function M.resolve_for(name, tokens)
   if name == "Kaeru" then
     return resolve_kaeru(tokens)

@@ -42,7 +42,7 @@ function M.render_frame(step_idx, width)
     lines[#lines + 1] = "  " .. l
   end
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "    ★  INSTALLER.NVIM · STARSKY OS · NEOCODEIUM · MASON-REGISTRY.DEV · MUSICPLAYER  ★"
+  lines[#lines + 1] = "    ★  KAERU.NVIM · STARSKY OS · NEOCODEIUM · MASON-REGISTRY.DEV · KIKRU  ★"
   lines[#lines + 1] = "  " .. string.rep("─", width - 4)
   lines[#lines + 1] = string.format("    BOOT PROGRESS [%s] %3d%%", bar, pct)
   lines[#lines + 1] = ""
