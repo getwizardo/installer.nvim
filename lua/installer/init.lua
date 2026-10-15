@@ -3,6 +3,9 @@
 --   :Installer                 open the modal form
 --   :Installer browse [query]  browse Neovim plugins on GitHub
 --   :Installer add owner/repo  write a bare spec and install right away
+--   :Installer ai              curated AI coding plugins (opt-in)
+--   :Installer login|whoami    GitHub account
+--   :Installer sftp <action>   upload / download / sync over SFTP
 local Config = require("installer.config")
 local Spec = require("installer.spec")
 local Lazy = require("installer.lazy")
@@ -15,7 +18,25 @@ local uv = vim.uv or vim.loop
 ---@param opts? InstallerOptions
 function M.setup(opts)
   Config.setup(opts)
+  require("installer.sftp").setup_autocmd()
 end
+
+--- Lazily loaded sub-modules.
+M.account = setmetatable({}, {
+  __index = function(_, k)
+    return require("installer.account")[k]
+  end,
+})
+M.ai = setmetatable({}, {
+  __index = function(_, k)
+    return require("installer.ai")[k]
+  end,
+})
+M.sftp = setmetatable({}, {
+  __index = function(_, k)
+    return require("installer.sftp")[k]
+  end,
+})
 
 --- Open the modal form. `values` prefill fields (e.g. `{ repo = "folke/noice.nvim" }`).
 ---@param values? InstallerForm

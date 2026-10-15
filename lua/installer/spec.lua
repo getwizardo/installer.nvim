@@ -20,8 +20,12 @@ local M = {}
 ---@field commit? string
 ---@field build? string
 ---@field opts? string          Lua table literal, e.g. `{ foo = "bar" }`
----@field config? string        "true" | "false" | "" | "function"
+---@field config? string        "true" | "false" | "" | "function" | raw `function(...) ... end` source
+---@field init? string          raw `function() ... end` source
 ---@field pin? string           "true" | "false" | ""
+---
+--- `keys`, `dependencies` and `build` may also be given as raw Lua (`{ ... }`),
+--- which is emitted verbatim.
 
 --- A raw chunk of Lua source that should be emitted verbatim by `M.render`.
 ---@class InstallerRaw
@@ -116,6 +120,52 @@ function M.default_filename(base)
     name = "plugin"
   end
   return name
+end
+
+--- Validate that `text` is a Lua expression of the given type and return it trimmed.
+---@param text string
+---@param kind "table"|"function"
+---@param what string
+---@return string|nil, string? err
+function M.validate_raw(text, kind, what)
+  text = trim(text)
+  local chunk, err = loadstring("return " .. text)
+  if not chunk then
+    return nil, ("Invalid Lua for %s: %s"):format(what, tostring(err))
+  end
+  local ok, val = pcall(chunk)
+  if not ok or type(val) ~= kind then
+    return nil, ("`%s` must be a Lua %s"):format(what, kind)
+  end
+  return text
+end
+
+--- Re-indent a multi-line raw snippet so it sits nicely inside the spec table.
+---@param text string
+---@return string
+local function reindent(text)
+  local lines = {}
+  for line in (text .. "\n"):gmatch("(.-)\n") do
+    lines[#lines + 1] = line
+  end
+  if #lines == 1 then
+    return text
+  end
+  -- strip the common indentation of lines 2..n
+  local min
+  for i = 2, #lines do
+    local ws = lines[i]:match("^(%s*)%S")
+    if ws and (not min or #ws < #min) then
+      min = ws
+    end
+  end
+  for i = 2, #lines do
+    if min and #min > 0 then
+      lines[i] = lines[i]:sub(#min + 1)
+    end
+    lines[i] = "  " .. lines[i]
+  end
+  return table.concat(lines, "\n")
 end
 
 --- Validate that `text` is a Lua table literal. Returns the normalised text.
@@ -214,10 +264,24 @@ function M.build(form)
   end
 
   if not blank(form.keys) then
-    add("keys", csv(form.keys))
+    if trim(form.keys):match("^{") then
+      local text, kerr = M.validate_raw(form.keys, "table", "keys")
+      if kerr then
+        return nil, kerr
+      end
+      add("keys", raw(reindent(text)))
+    else
+      add("keys", csv(form.keys))
+    end
   end
 
-  if not blank(form.dependencies) then
+  if not blank(form.dependencies) and trim(form.dependencies):match("^{") then
+    local text, derr = M.validate_raw(form.dependencies, "table", "dependencies")
+    if derr then
+      return nil, derr
+    end
+    add("dependencies", raw(reindent(text)))
+  elseif not blank(form.dependencies) then
     local deps = {}
     for _, dep in ipairs(csv(form.dependencies)) do
       local parsed = M.parse_repo(dep)
@@ -227,7 +291,15 @@ function M.build(form)
   end
 
   if not blank(form.build) then
-    add("build", trim(form.build))
+    if trim(form.build):match("^{") then
+      local text, berr = M.validate_raw(form.build, "table", "build")
+      if berr then
+        return nil, berr
+      end
+      add("build", raw(reindent(text)))
+    else
+      add("build", trim(form.build))
+    end
   end
 
   if not blank(form.opts) then
@@ -238,9 +310,24 @@ function M.build(form)
     add("opts", raw(text))
   end
 
-  local config = trim(form.config):lower()
-  if config == "function" or config == "fn" or config == "func" then
+  if not blank(form.init) then
+    local text, ierr = M.validate_raw(form.init, "function", "init")
+    if ierr then
+      return nil, ierr
+    end
+    add("init", raw(reindent(text)))
+  end
+
+  local config = trim(form.config)
+  local lconfig = config:lower()
+  if lconfig == "function" or lconfig == "fn" or lconfig == "func" then
     add("config", raw("function(_, opts)\n    -- require(\"" .. M.default_filename(repo.base) .. "\").setup(opts)\n  end"))
+  elseif lconfig:match("^function") then
+    local text, cerr = M.validate_raw(config, "function", "config")
+    if cerr then
+      return nil, cerr
+    end
+    add("config", raw(reindent(text)))
   elseif tobool(config) == true then
     add("config", true)
   end

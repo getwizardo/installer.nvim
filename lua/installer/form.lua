@@ -27,7 +27,8 @@ M.fields = {
   { key = "priority", label = "Priority", hint = "number, e.g. 1000 for colorschemes" },
   { key = "build", label = "Build", hint = ":TSUpdate, make, ...  (runs after install/update)" },
   { key = "opts", label = "Opts", hint = "{ } Lua table -> require(main).setup(opts)" },
-  { key = "config", label = "Config", hint = "true, or `function` for a config() skeleton" },
+  { key = "config", label = "Config", hint = "true, `function` for a skeleton, or raw function(...) end" },
+  { key = "init", label = "Init", hint = "raw function() ... end, runs at startup (vim.g.* settings)" },
   { key = "pin", label = "Pin", hint = "true to exclude from updates" },
 }
 

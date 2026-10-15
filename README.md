@@ -6,6 +6,9 @@ Add plugins to your [lazy.nvim](https://github.com/folke/lazy.nvim) config **fro
 - A `lua/plugins/<name>.lua` spec file is written for you.
 - lazy.nvim reloads its specs and installs the plugin immediately, no restart needed.
 - `:Installer browse` searches **all Neovim plugins on GitHub** (`topic:neovim-plugin`), with README preview and one-key install.
+- **GitHub account**: sign in (gh CLI / token / device flow) for higher rate limits, starring and your starred list.
+- **AI coding presets** (opt-in): curated specs for copilot.lua, codecompanion, avante, CopilotChat, supermaven, minuet, sidekick, claudecode, opencode, mcphub and more.
+- **SFTP**: upload / download / sync projects to remote hosts with parallel `sftp` workers and upload-on-save.
 
 ```
 ╭──────────────────── installer.nvim · add a plugin to lazy.nvim ────────────────────╮
@@ -70,6 +73,9 @@ return {
 | `:Installer search [query]`     | Search GitHub and pick with `vim.ui.select` (telescope/fzf-lua/…)      |
 | `:Installer add owner/repo`     | Write a bare `{ "owner/repo" }` spec and install right away            |
 | `:Installer dir`                | Show where spec files are written                                      |
+| `:Installer ai [preset]`        | Curated AI coding plugins (opt-in, see below)                          |
+| `:Installer login\|logout\|whoami` | GitHub account                                                     |
+| `:Installer sftp <action>`      | `upload`, `upload-project`, `sync`, `download`, `download-project`, `status`, `select`, `init` |
 
 ### Modal keys
 
@@ -91,12 +97,69 @@ return {
 | `o`           | Open on GitHub                                             |
 | `y`           | Yank `owner/repo`                                          |
 | `]` / `[`     | Next / previous page                                       |
+| `*`           | Star / unstar (needs `:Installer login`)                   |
+| `S`           | Toggle your starred repositories                           |
 | `s`           | Cycle sort: stars → updated → best-match                   |
 | `t`           | Toggle scope: `topic:neovim-plugin` ↔ all of GitHub        |
 | `/` / `<Tab>` | Focus the search prompt (`<C-n>`/`<C-p>` move while typing) |
 | `q` / `<Esc>` | Close                                                      |
 
-GitHub allows 10 unauthenticated searches per minute. Set `$GITHUB_TOKEN` (or `github.token`) to get 30.
+GitHub allows 10 unauthenticated searches per minute; signed-in users get 30.
+
+## GitHub account
+
+```vim
+:Installer login          " pick: GitHub CLI · paste a token · browser (device flow)
+:Installer whoami         " user + remaining search quota
+:Installer logout
+```
+
+Token resolution order: `github.token` → token saved by `:Installer login` → `$GITHUB_TOKEN`/`$GH_TOKEN` → `gh auth token`.
+The browser device flow needs your own OAuth app (`github.client_id`, with *Device Flow* enabled). Starring requires the `public_repo` scope (or the fine-grained *Starring* permission).
+
+## AI coding plugins (opt-in)
+
+```lua
+require("installer").setup({ ai = { enabled = true } })
+```
+
+`:Installer ai` lists ready-made lazy.nvim specs, grouped by what they do:
+
+| Category | Presets |
+| --- | --- |
+| Inline completion | [copilot.lua](https://github.com/zbirenbaum/copilot.lua), [copilot.vim](https://github.com/github/copilot.vim), [supermaven-nvim](https://github.com/supermaven-inc/supermaven-nvim), [windsurf.nvim](https://github.com/Exafunction/windsurf.nvim), [minuet-ai.nvim](https://github.com/milanglacier/minuet-ai.nvim) |
+| Chat & inline edits | [codecompanion.nvim](https://github.com/olimorris/codecompanion.nvim), [avante.nvim](https://github.com/avante-corp/avante.nvim), [CopilotChat.nvim](https://github.com/CopilotC-Nvim/CopilotChat.nvim), [gp.nvim](https://github.com/Robitx/gp.nvim), [parrot.nvim](https://github.com/frankroeder/parrot.nvim), [gen.nvim](https://github.com/David-Kunz/gen.nvim) |
+| Coding agents | [sidekick.nvim](https://github.com/folke/sidekick.nvim), [claudecode.nvim](https://github.com/coder/claudecode.nvim), [opencode.nvim](https://github.com/nickjvandyke/opencode.nvim), [claude-code.nvim](https://github.com/greggh/claude-code.nvim), [nvim-aider](https://github.com/GeorgesAlkhouri/nvim-aider) |
+| Add-ons | [mcphub.nvim](https://github.com/ravitemer/mcphub.nvim), [copilot-cmp](https://github.com/zbirenbaum/copilot-cmp), [blink-copilot](https://github.com/fang2hou/blink-copilot) |
+
+`<CR>` opens the modal with the preset filled in so you can review it, `i` installs immediately, `K` shows the generated spec. Presets mirror each project's README install snippet (e.g. avante's `build = "make"`, CopilotChat's `make tiktoken`); API keys, CLIs and subscriptions remain yours to set up.
+
+## SFTP
+
+```vim
+:Installer sftp init             " creates .nvim-sftp.json in the cwd
+:Installer sftp upload           " current file
+:Installer sftp upload-project   " all project files, N parallel sftp workers
+:Installer sftp sync             " only files changed since the last sync
+:Installer sftp download         " current file
+:Installer sftp download-project " whole remote tree (scp -r)
+:Installer sftp status | select
+```
+
+```json
+{
+  "name": "production",
+  "host": "example.com",
+  "port": 22,
+  "username": "deploy",
+  "remotePath": "/var/www/app",
+  "privateKeyPath": "~/.ssh/id_ed25519",
+  "ignore": [".git", "node_modules", "dist"],
+  "uploadOnSave": false
+}
+```
+
+The file may be an array of profiles; profiles can also live in `sftp.profiles`. Uploads are git-aware (`git ls-files` + ignore globs), split round-robin across `sftp.concurrency` concurrent `sftp -b` processes, and create remote directories as needed. `password` works when `sshpass` is installed, but keys / ssh-agent are recommended. The config file is never uploaded — gitignore it if it holds secrets.
 
 ## Configuration
 
@@ -116,6 +179,17 @@ require("installer").setup({
     per_page = 30,
     sort = "stars", -- "stars" | "updated" | "best-match"
     debounce = 450,
+    client_id = nil, -- OAuth app id for browser sign-in (device flow)
+    auto_login = true, -- use any available token when the browser opens
+  },
+  ai = { enabled = false, exclude = {} },
+  sftp = {
+    concurrency = 4,
+    config_file = ".nvim-sftp.json",
+    profiles = {}, -- global profiles keyed by name
+    ignore = { ".git", "node_modules", ".DS_Store", "*.swp" },
+    upload_on_save = false,
+    extra_args = {},
   },
 })
 ```
@@ -129,6 +203,9 @@ installer.browse({ query = "telescope" })            -- GitHub browser
 installer.search("colorscheme")                      -- vim.ui.select picker
 installer.add({ repo = "folke/todo-comments.nvim", event = "VeryLazy", opts = "{}" })
 print(installer.preview({ repo = "folke/flash.nvim", keys = "s, S" }))
+installer.account.login("gh")                        -- or "token" / "device"
+installer.ai.pick()                                  -- AI presets picker
+installer.sftp.upload_project()                      -- parallel upload
 ```
 
 ## How it works

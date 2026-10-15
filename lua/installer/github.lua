@@ -6,6 +6,9 @@ local Config = require("installer.config")
 
 local M = {}
 
+-- Base URL (also used by account.lua)
+
+
 local API = "https://api.github.com"
 
 ---@class InstallerRepo
@@ -31,82 +34,27 @@ end
 
 ---@return string|nil
 function M.token()
-  local t = Config.options.github.token
-  if type(t) == "function" then
-    t = t()
-  end
-  t = t or vim.env.GITHUB_TOKEN or vim.env.GH_TOKEN
-  if t and t ~= "" then
-    return t
-  end
-  return nil
+  return (require("installer.account").token())
 end
 
 ---@param url string
 ---@param extra_headers? string[]
 ---@return string[]
 local function curl_args(url, extra_headers)
-  local args = {
-    "curl",
-    "-sS",
-    "-L",
-    "--max-time",
-    "20",
-    "-H",
-    "Accept: application/vnd.github+json",
-    "-H",
-    "X-GitHub-Api-Version: 2022-11-28",
-    "-H",
-    "User-Agent: installer.nvim",
-  }
-  local token = M.token()
-  if token then
-    vim.list_extend(args, { "-H", "Authorization: Bearer " .. token })
-  end
+  local extra = {}
   for _, h in ipairs(extra_headers or {}) do
-    vim.list_extend(args, { "-H", h })
+    vim.list_extend(extra, { "-H", h })
   end
-  args[#args + 1] = url
-  return args
+  return require("installer.account").curl_args(url, extra)
 end
 
 --- Run a command asynchronously and call `cb(code, stdout, stderr)` on the main loop.
 ---@param args string[]
 ---@param cb fun(code: integer, stdout: string, stderr: string)
 function M.run(args, cb)
-  if vim.fn.executable(args[1]) ~= 1 then
-    vim.schedule(function()
-      cb(127, "", args[1] .. " is not executable. Install curl to browse GitHub.")
-    end)
-    return
-  end
-
-  if vim.system then
-    vim.system(args, { text = true }, function(res)
-      vim.schedule(function()
-        cb(res.code, res.stdout or "", res.stderr or "")
-      end)
-    end)
-    return
-  end
-
-  -- Neovim < 0.10 fallback
-  local out, err = {}, {}
-  vim.fn.jobstart(args, {
-    stdout_buffered = true,
-    stderr_buffered = true,
-    on_stdout = function(_, data)
-      out = data
-    end,
-    on_stderr = function(_, data)
-      err = data
-    end,
-    on_exit = function(_, code)
-      vim.schedule(function()
-        cb(code, table.concat(out, "\n"), table.concat(err, "\n"))
-      end)
-    end,
-  })
+  require("installer.process").run(args, function(res)
+    cb(res.code, res.stdout, res.stderr)
+  end)
 end
 
 --- GET a JSON endpoint.
@@ -135,7 +83,7 @@ end
 
 ---@param item table
 ---@return InstallerRepo
-local function to_repo(item)
+function M.to_repo(item)
   return {
     full_name = item.full_name,
     description = item.description or "",
@@ -201,7 +149,7 @@ function M.search(opts, cb)
     end
     local items = {}
     for _, item in ipairs(data.items or {}) do
-      items[#items + 1] = to_repo(item)
+      items[#items + 1] = M.to_repo(item)
     end
     M._cache[url] = { items = items, total = data.total_count or #items }
     cb(nil, { items = items, total = data.total_count or #items, page = page })

@@ -35,9 +35,18 @@ M.defaults = {
   -- GitHub search settings (used by `:Installer browse`).
   github = {
     -- Token used for the GitHub REST API. Raises the search rate limit from
-    -- 10 to 30 requests/minute. Falls back to $GITHUB_TOKEN / $GH_TOKEN.
-    ---@type string|nil
+    -- 10 to 30 requests/minute. Resolution order: this option, the token saved
+    -- by `:Installer login`, $GITHUB_TOKEN / $GH_TOKEN, `gh auth token`.
+    ---@type string|fun():string|nil
     token = nil,
+    -- OAuth app client id for `:Installer login` -> "Browser sign-in" (device flow).
+    -- Create one at https://github.com/settings/developers and enable "Device Flow".
+    ---@type string|nil
+    client_id = nil,
+    -- Scopes requested by the device flow (public_repo is needed to star repos).
+    scope = "public_repo read:user",
+    -- Sign in automatically (using any available token) when the browser opens.
+    auto_login = true,
     -- Appended to every search query unless `broad` mode is toggled on.
     -- See https://docs.github.com/en/search-github/searching-on-github/searching-for-repositories
     topic_query = "topic:neovim-plugin",
@@ -49,6 +58,32 @@ M.defaults = {
     sort = "stars",
     -- Debounce (ms) between typing in the prompt and sending a request.
     debounce = 450,
+  },
+
+  -- AI coding presets (`:Installer ai`). Disabled by default.
+  ai = {
+    enabled = false,
+    -- Hide presets from the list by repo name, e.g. { "github/copilot.vim" }.
+    ---@type string[]
+    exclude = {},
+  },
+
+  -- SFTP upload / download / sync (`:Installer sftp`).
+  sftp = {
+    -- Number of concurrent sftp processes used for project uploads/syncs.
+    concurrency = 4,
+    -- Per-project config file, looked up from the current file upwards.
+    config_file = ".nvim-sftp.json",
+    -- Global profiles (same shape as the config file entries), keyed by name.
+    ---@type table<string, InstallerSftpProfile>
+    profiles = {},
+    -- Directories / globs never uploaded.
+    ignore = { ".git", "node_modules", ".DS_Store", "*.swp" },
+    -- Upload the buffer after every :write (can also be set per profile).
+    upload_on_save = false,
+    -- Extra arguments for every sftp/ssh invocation.
+    ---@type string[]
+    extra_args = {},
   },
 }
 

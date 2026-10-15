@@ -2,6 +2,7 @@
 local UI = require("installer.ui")
 local Config = require("installer.config")
 local GitHub = require("installer.github")
+local Account = require("installer.account")
 
 local M = {}
 
@@ -27,6 +28,7 @@ local SORTS = { "stars", "updated", "best-match" }
 ---@field timer? uv_timer_t
 ---@field on_choose fun(repo: InstallerRepo)
 ---@field closing boolean
+---@field mode "search"|"starred"
 local State = nil
 
 local function valid()
@@ -51,20 +53,25 @@ end
 
 local function status_text()
   local s = State
+  local who = Account.user and (" · @" .. Account.user.login) or " · not signed in (:Installer login)"
   if s.loading then
-    return "  Searching GitHub…"
+    return "  Searching GitHub…" .. who
   elseif s.error then
     return "  " .. s.error
+  end
+  if s.mode == "starred" then
+    return string.format("  ★ starred by @%s · page %d%s", Account.user and Account.user.login or "?", s.page, "")
   end
   local per_page = math.min(Config.options.github.per_page, 100)
   local pages = math.max(1, math.ceil(math.min(s.total, 1000) / per_page))
   return string.format(
-    "  %s results · page %d/%d · sort: %s · scope: %s",
+    "  %s results · page %d/%d · sort: %s · scope: %s%s",
     thousands(s.total),
     s.page,
     pages,
     s.sort,
-    s.broad and "all of GitHub" or Config.options.github.topic_query
+    s.broad and "all of GitHub" or Config.options.github.topic_query,
+    who
   )
 end
 
@@ -118,6 +125,13 @@ local function render()
         strict = false,
       })
     end
+    if Account.starred[item.full_name] then
+      vim.api.nvim_buf_set_extmark(s.list_buf, UI.ns, row, 1, { end_col = 7, hl_group = "Special" })
+      vim.api.nvim_buf_set_extmark(s.list_buf, UI.ns, row, 0, {
+        virt_text = { { "★", "Special" } },
+        virt_text_pos = "overlay",
+      })
+    end
   end
 
   -- keep cursor on a result row
@@ -137,6 +151,19 @@ local function search()
   s.loading = true
   s.error = nil
   render()
+  if s.mode == "starred" then
+    Account.list_starred(s.page, function(err, items)
+      if not valid() or State.request ~= id then
+        return
+      end
+      State.loading = false
+      State.error = err
+      State.items = items or {}
+      State.total = #State.items
+      render()
+    end)
+    return
+  end
   GitHub.search({ query = s.query, page = s.page, sort = s.sort, broad = s.broad }, function(err, result)
     if not valid() or State.request ~= id then
       return
@@ -242,6 +269,9 @@ local function change_page(delta)
   local s = State
   local per_page = math.min(Config.options.github.per_page, 100)
   local pages = math.max(1, math.ceil(math.min(s.total, 1000) / per_page))
+  if s.mode == "starred" then
+    pages = #s.items < per_page and s.page or s.page + 1
+  end
   local page = math.max(1, math.min(s.page + delta, pages))
   if page ~= s.page then
     s.page = page
@@ -362,6 +392,63 @@ local function toggle_broad()
   search()
 end
 
+local function toggle_star()
+  local repo = current()
+  if not repo then
+    return
+  end
+  local function go()
+    Account.is_starred(repo.full_name, function(err, starred)
+      if err then
+        return UI.notify(err, vim.log.levels.ERROR)
+      end
+      Account.set_star(repo.full_name, not starred, function(serr)
+        if serr then
+          return UI.notify(serr, vim.log.levels.ERROR)
+        end
+        UI.notify((starred and "Unstarred " or "Starred ") .. repo.full_name)
+        render()
+      end)
+    end)
+  end
+  if Account.logged_in() then
+    return go()
+  end
+  Account.fetch_user(function(_, user)
+    if user then
+      go()
+    else
+      UI.notify("Sign in first: :Installer login", vim.log.levels.WARN)
+    end
+  end)
+end
+
+local function toggle_starred_view()
+  if not valid() then
+    return
+  end
+  if State.mode == "starred" then
+    State.mode = "search"
+    State.page = 1
+    return search()
+  end
+  local function go()
+    State.mode = "starred"
+    State.page = 1
+    search()
+  end
+  if Account.logged_in() then
+    return go()
+  end
+  Account.fetch_user(function(_, user)
+    if user and valid() then
+      go()
+    else
+      UI.notify("Sign in first: :Installer login", vim.log.levels.WARN)
+    end
+  end)
+end
+
 local function show_help()
   UI.notify(table.concat({
     "GitHub browser keys:",
@@ -371,6 +458,8 @@ local function show_help()
     "  o         open on GitHub",
     "  y         yank owner/repo",
     "  ]  / [    next / previous page",
+    "  *         star / unstar (needs :Installer login)",
+    "  S         toggle: your starred repositories",
     "  s         cycle sort (stars, updated, best-match)",
     "  t         toggle scope (topic:neovim-plugin / all of GitHub)",
     "  / <Tab>   focus the search prompt",
@@ -431,6 +520,7 @@ function M.open(opts)
     loading = false,
     request = 0,
     closing = false,
+    mode = "search",
     on_choose = opts.on_choose or function(repo)
       require("installer").open({ repo = repo.full_name })
     end,
@@ -476,6 +566,8 @@ function M.open(opts)
     change_page(-1)
   end, "Previous page")
   lmap("s", cycle_sort, "Cycle sort")
+  lmap("*", toggle_star, "Star / unstar")
+  lmap("S", toggle_starred_view, "Your starred repositories")
   lmap("t", toggle_broad, "Toggle scope")
   lmap("/", focus_prompt, "Focus prompt")
   lmap("<Tab>", focus_prompt, "Focus prompt")
@@ -520,6 +612,14 @@ function M.open(opts)
 
   focus_prompt()
   search()
+
+  if Config.options.github.auto_login and not Account.logged_in() then
+    Account.fetch_user(function()
+      if valid() then
+        render()
+      end
+    end)
+  end
 end
 
 function M.is_open()

@@ -12,6 +12,9 @@ CONTENTS                                                   *installer-contents*
   7. Configuration ................................ |installer-configuration|
   8. Lua API ...................................... |installer-api|
   9. How it works ................................. |installer-internals|
+ 10. GitHub account ............................... |installer-account|
+ 11. AI coding plugins ............................ |installer-ai|
+ 12. SFTP ......................................... |installer-sftp|
 
 ==============================================================================
 1. INTRODUCTION                                        *installer-introduction*
@@ -65,6 +68,17 @@ their READMEs and install them with a single key.
 :Installer dir                                                *:Installer-dir*
     Show the directory spec files are written to.
 
+:Installer ai [preset]                                         *:Installer-ai*
+    Curated AI coding plugins (see |installer-ai|). Opt-in.
+
+:Installer login [gh|token|device]                          *:Installer-login*
+:Installer logout                                          *:Installer-logout*
+:Installer whoami                                          *:Installer-whoami*
+    GitHub account (see |installer-account|).
+
+:Installer sftp {action}                                     *:Installer-sftp*
+    SFTP upload / download / sync (see |installer-sftp|).
+
 ==============================================================================
 5. THE MODAL                                                  *installer-modal*
 
@@ -104,6 +118,8 @@ of GitHub). Typing `owner/repo` looks that repository up directly.
   <CR>        open the modal prefilled with the selected plugin
   i           quick install with a bare spec
   K           preview the README
+  *           star / unstar the repository (needs |:Installer-login|)
+  S           toggle a list of your starred repositories
   o           open the repository in your web browser
   y           yank `owner/repo`
   ] / [       next / previous page
@@ -159,5 +175,91 @@ entry in your spec. installer.nvim:
   3. calls `require("lazy.core.plugin").load()` to re-read all specs, then
      `require("lazy").install({ plugins = { name } })`, which opens the
      lazy.nvim UI and clones the plugin.
+
+==============================================================================
+10. GITHUB ACCOUNT                                          *installer-account*
+
+Signing in raises the search rate limit (10 -> 30 requests/minute), lets you
+star plugins from the browser and shows your starred repositories.
+
+Token resolution order: >
+  1. github.token from setup()
+  2. the token saved by :Installer login   (stdpath("data")/installer/github_token)
+  3. $GITHUB_TOKEN / $GH_TOKEN
+  4. `gh auth token` (GitHub CLI)
+<
+`:Installer login` offers three methods:
+
+  gh      reuse the GitHub CLI session (`gh auth login` first)
+  token   paste a personal access token (classic: `public_repo`; fine-grained:
+          "Starring" read/write). Stored with mode 0600.
+  device  browser sign-in through the OAuth device flow. Requires your own
+          OAuth app: set `github.client_id` (enable "Device Flow" on the app).
+
+`:Installer whoami` shows the signed-in user and the remaining search quota.
+`:Installer logout` deletes the saved token only.
+
+==============================================================================
+11. AI CODING PLUGINS                                            *installer-ai*
+
+`:Installer ai` opens a list of well-known AI coding plugins with ready-made
+lazy.nvim specs, grouped as: inline completion (copilot.lua, copilot.vim,
+supermaven, windsurf/codeium, minuet-ai), chat & inline edits (codecompanion,
+avante, CopilotChat, gp, parrot, gen), coding agents (sidekick, claudecode,
+opencode, claude-code, nvim-aider) and add-ons (mcphub, copilot-cmp,
+blink-copilot).
+
+The feature is OFF by default. Enable it with: >lua
+  require("installer").setup({ ai = { enabled = true } })
+<
+Keys: `<CR>` review the spec in the modal, `i` install right away, `K` show
+details and the generated spec, `o` open on GitHub. A `●` marks plugins that
+are already in your config. `:Installer ai owner/repo` opens one preset
+directly (`:Installer! ai owner/repo` installs it).
+
+Presets only write the spec; API keys, CLIs and subscriptions (shown on the
+right of each row) are still up to you.
+
+==============================================================================
+12. SFTP                                                       *installer-sftp*
+
+Upload, download and sync project files with OpenSSH `sftp`/`scp`. Project
+uploads are split across `sftp.concurrency` parallel sftp processes.
+
+Create a profile with `:Installer sftp init`, which writes
+`.nvim-sftp.json` into the current directory: >json
+  {
+    "name": "production",
+    "host": "example.com",
+    "port": 22,
+    "username": "deploy",
+    "remotePath": "/var/www/app",
+    "privateKeyPath": "~/.ssh/id_ed25519",
+    "ignore": [".git", "node_modules", "dist"],
+    "uploadOnSave": false
+  }
+<
+The file may hold an array of profiles. Profiles can also be defined globally
+in `sftp.profiles`. `password` is supported when `sshpass` is installed, but
+keys / ssh-agent are recommended. The config file itself is never uploaded;
+add it to `.gitignore` when it contains secrets.
+
+Actions: >
+  :Installer sftp upload            upload the current file
+  :Installer sftp upload-project    upload every project file (git-aware)
+  :Installer sftp sync              upload files changed since the last sync
+  :Installer sftp download          download the current file
+  :Installer sftp download-project  download the whole remote tree (scp -r)
+  :Installer sftp status            list profiles and last sync times
+  :Installer sftp select            choose the active profile
+  :Installer sftp init              create .nvim-sftp.json
+<
+With `uploadOnSave` (per profile) or `sftp.upload_on_save` (global) every
+`:write` uploads the file (requires `require("installer").setup()`).
+
+File lists come from `git ls-files --cached --others --exclude-standard` when
+the project is a git repository, otherwise from a recursive glob, then filtered
+by `sftp.ignore` + the profile's `ignore` (globs matched against the relative
+path and every path segment).
 
 vim:tw=78:ts=8:ft=help:norl:
